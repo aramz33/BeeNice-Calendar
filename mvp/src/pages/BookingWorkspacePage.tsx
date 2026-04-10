@@ -24,6 +24,7 @@ import { formatDateTime, formatRelativeShort } from "@mvp/lib/time";
 import type {
   AvailabilityResponse,
   BookingLinkResponse,
+  BookingStatus,
   CallerBookingsResponse,
 } from "@mvp/lib/types";
 
@@ -36,11 +37,20 @@ const COMPANY_SIZE_OPTIONS = [
 
 const CALLER_STORAGE_KEY = "benice-mvp-caller";
 
+const ACTION_STATUSES: BookingStatus[] = [
+  "no_show",
+  "cancelled",
+  "rescheduled",
+];
+
 export function BookingWorkspacePage() {
   const { slug = "teamstarter-discovery" } = useParams();
   const [payload, setPayload] = useState<BookingLinkResponse | null>(null);
-  const [availability, setAvailability] = useState<AvailabilityResponse | null>(null);
-  const [recentBookings, setRecentBookings] = useState<CallerBookingsResponse | null>(null);
+  const [availability, setAvailability] = useState<AvailabilityResponse | null>(
+    null,
+  );
+  const [recentBookings, setRecentBookings] =
+    useState<CallerBookingsResponse | null>(null);
   const [loadingMeta, setLoadingMeta] = useState(true);
   const [loadingAvailability, setLoadingAvailability] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -67,9 +77,10 @@ export function BookingWorkspacePage() {
         }
         setPayload(data);
         const stored = window.localStorage.getItem(CALLER_STORAGE_KEY);
-        const firstCaller = stored && data.callers.some((caller) => caller.id === stored)
-          ? stored
-          : data.callers[0]?.id ?? "";
+        const firstCaller =
+          stored && data.callers.some((caller) => caller.id === stored)
+            ? stored
+            : (data.callers[0]?.id ?? "");
         setCallerId(firstCaller);
       })
       .catch((error) => toast.error(error.message))
@@ -172,6 +183,15 @@ export function BookingWorkspacePage() {
       : "Pool complet";
   }, [companySize, payload]);
 
+  const sortedRecentBookings = useMemo(() => {
+    if (!recentBookings?.bookings) return [];
+    return [...recentBookings.bookings].sort((a, b) => {
+      const aAction = ACTION_STATUSES.includes(a.status) ? 0 : 1;
+      const bAction = ACTION_STATUSES.includes(b.status) ? 0 : 1;
+      return aAction - bAction;
+    });
+  }, [recentBookings]);
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
 
@@ -180,7 +200,13 @@ export function BookingWorkspacePage() {
       return;
     }
 
-    if (!callerId || !companySize || !prospectName || !prospectEmail || !companyName) {
+    if (
+      !callerId ||
+      !companySize ||
+      !prospectName ||
+      !prospectEmail ||
+      !companyName
+    ) {
       toast.error("Complétez les informations prospect obligatoires.");
       return;
     }
@@ -188,21 +214,21 @@ export function BookingWorkspacePage() {
     setSubmitting(true);
 
     try {
-      const result = await apiFetch<{ bookingId: string; assignedRepName: string }>(
-        `/api/book/${slug}/bookings`,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            callerId,
-            companySize: Number(companySize),
-            companyName,
-            prospectName,
-            prospectEmail,
-            notes,
-            slotStart: selectedSlot,
-          }),
-        },
-      );
+      const result = await apiFetch<{
+        bookingId: string;
+        assignedRepName: string;
+      }>(`/api/book/${slug}/bookings`, {
+        method: "POST",
+        body: JSON.stringify({
+          callerId,
+          companySize: Number(companySize),
+          companyName,
+          prospectName,
+          prospectEmail,
+          notes,
+          slotStart: selectedSlot,
+        }),
+      });
 
       toast.success(`Rendez-vous réservé chez ${result.assignedRepName}.`);
       setProspectName("");
@@ -364,7 +390,9 @@ export function BookingWorkspacePage() {
                   className="w-full rounded-full"
                   disabled={submitting || !selectedSlot}
                 >
-                  {submitting ? "Réservation en cours..." : "Réserver le rendez-vous"}
+                  {submitting
+                    ? "Réservation en cours..."
+                    : "Réserver le rendez-vous"}
                 </Button>
               </form>
             </CardContent>
@@ -384,26 +412,40 @@ export function BookingWorkspacePage() {
               </Badge>
             </CardHeader>
             <CardContent className="space-y-3">
-              {recentBookings?.bookings.length ? (
-                recentBookings.bookings.map((booking) => (
-                  <div
-                    key={booking.id}
-                    className="rounded-[1.25rem] border border-white/10 bg-background/25 px-4 py-3"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="font-medium">{booking.companyName}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {booking.prospectName} · {booking.assignedRepName}
-                        </p>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {formatRelativeShort(booking.startAt)}
-                        </p>
+              {sortedRecentBookings.length ? (
+                sortedRecentBookings.map((booking) => {
+                  const needsAction = ACTION_STATUSES.includes(booking.status);
+                  return (
+                    <div
+                      key={booking.id}
+                      className={`rounded-[1.25rem] border px-4 py-3 ${
+                        needsAction
+                          ? "border-amber-400/30 bg-amber-400/5"
+                          : "border-white/10 bg-background/25"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium">{booking.companyName}</p>
+                            {needsAction && (
+                              <Badge className="border-amber-400/40 bg-amber-400/10 text-amber-400 text-xs">
+                                À relancer
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-sm text-muted-foreground">
+                            {booking.prospectName} · {booking.assignedRepName}
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {formatRelativeShort(booking.startAt)}
+                          </p>
+                        </div>
+                        <StatusBadge status={booking.status} />
                       </div>
-                      <StatusBadge status={booking.status} />
                     </div>
-                  </div>
-                ))
+                  );
+                })
               ) : (
                 <div className="rounded-[1.25rem] border border-dashed border-white/10 px-4 py-6 text-sm text-muted-foreground">
                   Aucun rendez-vous récent pour ce caller sur ce client.
@@ -454,8 +496,8 @@ export function BookingWorkspacePage() {
                 <div className="flex items-start gap-3">
                   <CalendarClock className="mt-0.5 h-4 w-4 text-primary" />
                   <p>
-                    Le slot affiché est recalculé à partir du pool éligible selon la
-                    taille de société.
+                    Le slot affiché est recalculé à partir du pool éligible
+                    selon la taille de société.
                   </p>
                 </div>
                 <div className="flex items-start gap-3">
@@ -468,8 +510,8 @@ export function BookingWorkspacePage() {
                 <div className="flex items-start gap-3">
                   <Users className="mt-0.5 h-4 w-4 text-primary" />
                   <p>
-                    Le rep est choisi automatiquement. Le caller ne voit jamais la
-                    complexité de dispatch.
+                    Le rep est choisi automatiquement. Le caller ne voit jamais
+                    la complexité de dispatch.
                   </p>
                 </div>
               </CardContent>
