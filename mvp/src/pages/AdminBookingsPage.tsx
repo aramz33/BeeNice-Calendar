@@ -28,16 +28,21 @@ import type {
 
 export function AdminBookingsPage() {
   const [payload, setPayload] = useState<AdminBookingsResponse | null>(null);
-  const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
+  const [selectedBookingId, setSelectedBookingId] = useState<string | null>(
+    null,
+  );
   const [detail, setDetail] = useState<BookingDetailResponse | null>(null);
   const [statusReason, setStatusReason] = useState("");
   const [loadingList, setLoadingList] = useState(true);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [connectingRepId, setConnectingRepId] = useState<string | null>(null);
-  const [providerChoiceByRep, setProviderChoiceByRep] = useState<Record<string, string>>({});
+  const [providerChoiceByRep, setProviderChoiceByRep] = useState<
+    Record<string, string>
+  >({});
   const [filters, setFilters] = useState({
     status: "all",
+    clientId: "all",
     callerId: "all",
     repId: "all",
     query: "",
@@ -49,6 +54,9 @@ export function AdminBookingsPage() {
       const params = new URLSearchParams();
       if (filters.status !== "all") {
         params.set("status", filters.status);
+      }
+      if (filters.clientId !== "all") {
+        params.set("clientId", filters.clientId);
       }
       if (filters.callerId !== "all") {
         params.set("callerId", filters.callerId);
@@ -65,7 +73,10 @@ export function AdminBookingsPage() {
       );
       setPayload(data);
       setSelectedBookingId((current) => {
-        if (current && data.bookings.some((booking) => booking.id === current)) {
+        if (
+          current &&
+          data.bookings.some((booking) => booking.id === current)
+        ) {
           return current;
         }
         return data.bookings[0]?.id ?? null;
@@ -80,7 +91,9 @@ export function AdminBookingsPage() {
   const fetchDetail = async (bookingId: string) => {
     setLoadingDetail(true);
     try {
-      const data = await apiFetch<BookingDetailResponse>(`/api/admin/bookings/${bookingId}`);
+      const data = await apiFetch<BookingDetailResponse>(
+        `/api/admin/bookings/${bookingId}`,
+      );
       setDetail(data);
     } catch (error) {
       toast.error((error as Error).message);
@@ -91,7 +104,7 @@ export function AdminBookingsPage() {
 
   useEffect(() => {
     void fetchBookings();
-  }, [filters.status, filters.callerId, filters.repId]);
+  }, [filters.status, filters.clientId, filters.callerId, filters.repId]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -163,7 +176,10 @@ export function AdminBookingsPage() {
   };
 
   const liveConnectedCount = useMemo(
-    () => payload?.filters.reps.filter((rep) => rep.connectionStatus === "connected").length ?? 0,
+    () =>
+      payload?.filters.reps.filter(
+        (rep) => rep.connectionStatus === "connected",
+      ).length ?? 0,
     [payload],
   );
   const integrationMode = payload?.integrations.providerMode ?? "mock";
@@ -197,7 +213,11 @@ export function AdminBookingsPage() {
       toast.success("Connexion calendrier terminée.");
       params.delete("connected");
       const next = params.toString();
-      window.history.replaceState({}, "", next ? `/admin/bookings?${next}` : "/admin/bookings");
+      window.history.replaceState(
+        {},
+        "",
+        next ? `/admin/bookings?${next}` : "/admin/bookings",
+      );
       void fetchBookings();
     }
 
@@ -205,7 +225,11 @@ export function AdminBookingsPage() {
       toast.error(connectionError);
       params.delete("connectionError");
       const next = params.toString();
-      window.history.replaceState({}, "", next ? `/admin/bookings?${next}` : "/admin/bookings");
+      window.history.replaceState(
+        {},
+        "",
+        next ? `/admin/bookings?${next}` : "/admin/bookings",
+      );
     }
   }, []);
 
@@ -227,7 +251,9 @@ export function AdminBookingsPage() {
         />
         <MetricCard
           label="À replacer"
-          value={(payload?.counts.no_show ?? 0) + (payload?.counts.cancelled ?? 0)}
+          value={
+            (payload?.counts.no_show ?? 0) + (payload?.counts.cancelled ?? 0)
+          }
           helper="No-show + annulations à relancer."
         />
         <MetricCard
@@ -243,7 +269,7 @@ export function AdminBookingsPage() {
             <CardHeader>
               <CardTitle>Filtres</CardTitle>
             </CardHeader>
-            <CardContent className="grid gap-4 md:grid-cols-4">
+            <CardContent className="grid gap-4 md:grid-cols-5">
               <div className="space-y-2">
                 <Label htmlFor="query">Recherche</Label>
                 <Input
@@ -251,9 +277,33 @@ export function AdminBookingsPage() {
                   placeholder="Société, prospect..."
                   value={filters.query}
                   onChange={(event) =>
-                    setFilters((current) => ({ ...current, query: event.target.value }))
+                    setFilters((current) => ({
+                      ...current,
+                      query: event.target.value,
+                    }))
                   }
                 />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="client-filter">Client</Label>
+                <Select
+                  value={filters.clientId}
+                  onValueChange={(value) =>
+                    setFilters((current) => ({ ...current, clientId: value }))
+                  }
+                >
+                  <SelectTrigger id="client-filter">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tous les clients</SelectItem>
+                    {payload?.filters.clients.map((client) => (
+                      <SelectItem key={client.id} value={client.id}>
+                        {client.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="status-filter">Statut</Label>
@@ -326,7 +376,8 @@ export function AdminBookingsPage() {
               <div>
                 <CardTitle>Bookings</CardTitle>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Attribution caller + rep, statut courant et heure de rendez-vous.
+                  Attribution caller + rep, statut courant et heure de
+                  rendez-vous.
                 </p>
               </div>
               <div className="rounded-full border border-white/10 px-3 py-1 text-xs text-muted-foreground">
@@ -363,7 +414,8 @@ export function AdminBookingsPage() {
                             <StatusBadge status={booking.status} />
                           </div>
                           <p className="text-sm text-muted-foreground">
-                            {booking.prospectName} · {booking.callerName} → {booking.assignedRepName}
+                            {booking.prospectName} · {booking.callerName} →{" "}
+                            {booking.assignedRepName}
                           </p>
                           <p className="text-xs text-muted-foreground">
                             {formatRelativeShort(booking.startAt)}
@@ -457,7 +509,9 @@ export function AdminBookingsPage() {
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="google">Google</SelectItem>
-                              <SelectItem value="microsoft">Microsoft</SelectItem>
+                              <SelectItem value="microsoft">
+                                Microsoft
+                              </SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
@@ -466,7 +520,11 @@ export function AdminBookingsPage() {
                       <Button
                         type="button"
                         className="w-full rounded-full"
-                        variant={rep.connectionStatus === "connected" ? "outline" : "default"}
+                        variant={
+                          rep.connectionStatus === "connected"
+                            ? "outline"
+                            : "default"
+                        }
                         disabled={
                           connectingRepId === rep.id ||
                           (integrationMode === "nylas" && !nylasConfigured)
@@ -509,15 +567,20 @@ export function AdminBookingsPage() {
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <div className="flex items-center gap-2">
-                          <p className="text-lg font-semibold">{detail.booking.companyName}</p>
+                          <p className="text-lg font-semibold">
+                            {detail.booking.companyName}
+                          </p>
                           <StatusBadge status={detail.booking.status} />
                         </div>
                         <p className="mt-1 text-sm text-muted-foreground">
-                          {detail.booking.prospectName} · {detail.booking.prospectEmail}
+                          {detail.booking.prospectName} ·{" "}
+                          {detail.booking.prospectEmail}
                         </p>
                       </div>
                       <div className="text-right text-sm text-muted-foreground">
-                        <p className="font-medium text-foreground">{detail.booking.callerName}</p>
+                        <p className="font-medium text-foreground">
+                          {detail.booking.callerName}
+                        </p>
                         <p>{detail.booking.assignedRepName}</p>
                       </div>
                     </div>
@@ -525,7 +588,10 @@ export function AdminBookingsPage() {
                       <MetaLine
                         icon={<Clock3 className="h-4 w-4 text-primary" />}
                         label="Date"
-                        value={formatDateTime(detail.booking.startAt, detail.booking.timezone)}
+                        value={formatDateTime(
+                          detail.booking.startAt,
+                          detail.booking.timezone,
+                        )}
                       />
                       <MetaLine
                         icon={<Filter className="h-4 w-4 text-primary" />}
@@ -534,12 +600,22 @@ export function AdminBookingsPage() {
                       />
                     </div>
                     <div className="mt-4 rounded-[1rem] border border-white/10 bg-background/25 p-3 text-sm text-muted-foreground">
-                      <p className="font-medium text-foreground">Raison d’assignation</p>
+                      <p className="font-medium text-foreground">
+                        Raison d’assignation
+                      </p>
                       <p className="mt-2">
-                        Pool: {detail.booking.assignmentReason.seniorityPool}. Rôle retenu:{" "}
-                        {detail.booking.assignmentReason.chosenRole}. Déficits: senior{" "}
-                        {detail.booking.assignmentReason.roleDeficits.senior?.toFixed(2)} / junior{" "}
-                        {detail.booking.assignmentReason.roleDeficits.junior?.toFixed(2)}.
+                        Pool: {detail.booking.assignmentReason.seniorityPool}.
+                        Rôle retenu:{" "}
+                        {detail.booking.assignmentReason.chosenRole}. Déficits:
+                        senior{" "}
+                        {detail.booking.assignmentReason.roleDeficits.senior?.toFixed(
+                          2,
+                        )}{" "}
+                        / junior{" "}
+                        {detail.booking.assignmentReason.roleDeficits.junior?.toFixed(
+                          2,
+                        )}
+                        .
                       </p>
                     </div>
                   </div>
@@ -568,8 +644,14 @@ export function AdminBookingsPage() {
                       <Button
                         key={status}
                         type="button"
-                        variant={detail.booking.status === status ? "default" : "outline"}
-                        disabled={updatingStatus || detail.booking.status === status}
+                        variant={
+                          detail.booking.status === status
+                            ? "default"
+                            : "outline"
+                        }
+                        disabled={
+                          updatingStatus || detail.booking.status === status
+                        }
                         onClick={() => void handleStatusChange(status)}
                       >
                         {status}
