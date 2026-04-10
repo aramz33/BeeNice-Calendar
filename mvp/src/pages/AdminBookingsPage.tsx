@@ -263,6 +263,49 @@ export function AdminBookingsPage() {
         />
       </div>
 
+      {payload?.clientStats && payload.clientStats.length > 0 && (
+        <div className="mt-6">
+          <Card className="glass-card rounded-[1.5rem] border-white/10">
+            <CardHeader>
+              <CardTitle>Supervision par client</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-3 md:grid-cols-2">
+              {payload.clientStats.map((stat) => (
+                <div
+                  key={stat.clientId}
+                  className="space-y-3 rounded-[1.25rem] border border-white/10 bg-background/20 px-4 py-4"
+                >
+                  <div className="flex items-center justify-between">
+                    <p className="font-medium">{stat.clientName}</p>
+                    <span className="text-xs text-muted-foreground">
+                      {stat.total} booking{stat.total > 1 ? "s" : ""}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <StatPill
+                      label="Validés"
+                      value={`${stat.completedPct}%`}
+                      tone="green"
+                    />
+                    <StatPill
+                      label="No-show"
+                      value={`${stat.noShowPct}%`}
+                      tone={stat.noShowPct > 25 ? "red" : "neutral"}
+                    />
+                    <StatPill
+                      label="À replacer"
+                      value={`${stat.toReplacePct}%`}
+                      tone={stat.toReplacePct > 30 ? "amber" : "neutral"}
+                    />
+                    <StatPill label="En attente" value={stat.pendingCount} />
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       <div className="mt-6 grid gap-6 xl:grid-cols-[1.08fr_0.92fr]">
         <div className="space-y-6">
           <Card className="glass-card rounded-[1.5rem] border-white/10">
@@ -696,6 +739,30 @@ export function AdminBookingsPage() {
         </div>
       </div>
     </AppChrome>
+  );
+}
+
+function StatPill({
+  label,
+  value,
+  tone = "neutral",
+}: {
+  label: string;
+  value: string | number;
+  tone?: "neutral" | "green" | "red" | "amber";
+}) {
+  const toneClass = {
+    neutral: "border-white/10 text-muted-foreground",
+    green: "border-emerald-500/30 text-emerald-400",
+    red: "border-red-400/30 text-red-400",
+    amber: "border-amber-400/30 text-amber-400",
+  }[tone];
+  return (
+    <span
+      className={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${toneClass}`}
+    >
+      {label}: {value}
+    </span>
   );
 }
 
