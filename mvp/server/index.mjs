@@ -1,0 +1,295 @@
+import http from "node:http";
+import { URL } from "node:url";
+import { createCalendarProvider } from "./lib/provider.mjs";
+import { createStore } from "./lib/state.mjs";
+
+const provider = createCalendarProvider();
+const store = createStore(provider);
+const PORT = Number(process.env.MVP_API_PORT ?? 8787);
+const HOST = process.env.MVP_API_HOST ?? "127.0.0.1";
+
+const server = http.createServer(async (request, response) => {
+  try {
+    const url = new URL(request.url, `http://${request.headers.host}`);
+    const pathname = url.pathname;
+
+    if (pathname.startsWith("/api/book/") && pathname.endsWith("/stream")) {
+      return handleStream(pathname, request, response);
+    }
+
+    if (request.method === "GET" && match(pathname, /^\/api\/book\/([^/]+)$/)) {
+      const slug = pathname.split("/").at(-1);
+      return json(response, 200, store.getPublicBookingPayload(slug));
+    }
+
+    if (
+      request.method === "GET" &&
+      match(pathname, /^\/api\/book\/([^/]+)\/availability$/)
+    ) {
+      const slug = pathname.split("/")[3];
+      return json(
+        response,
+        200,
+        await store.listAvailability(slug, url.searchParams.get("companySize")),
+      );
+    }
+
+    if (
+      request.method === "GET" &&
+      match(pathname, /^\/api\/book\/([^/]+)\/callers\/([^/]+)\/bookings$/)
+    ) {
+      const [, , , slug, , callerId] = pathname.split("/");
+      return json(response, 200, store.listCallerBookings(slug, callerId));
+    }
+
+    if (
+      request.method === "POST" &&
+      match(pathname, /^\/api\/book\/([^/]+)\/bookings$/)
+    ) {
+      const slug = pathname.split("/")[3];
+      const body = await parseBody(request);
+      return json(response, 201, await store.createBooking(slug, body));
+    }
+
+    if (request.method === "GET" && pathname === "/api/admin/reps") {
+      return json(response, 200, {
+        reps: store.listReps(),
+        integrations: provider.getOverview(),
+      });
+    }
+
+    if (request.method === "GET" && pathname === "/api/admin/bookings") {
+      return json(
+        response,
+        200,
+        store.listAdminBookings({
+          status: url.searchParams.get("status"),
+          callerId: url.searchParams.get("callerId"),
+          repId: url.searchParams.get("repId"),
+          query: url.searchParams.get("query"),
+        }),
+      );
+    }
+
+    if (
+      request.method === "GET" &&
+      match(pathname, /^\/api\/admin\/bookings\/([^/]+)$/)
+    ) {
+      return json(response, 200, store.getBookingDetail(pathname.split("/").at(-1)));
+    }
+
+    if (
+      request.method === "PATCH" &&
+      match(pathname, /^\/api\/admin\/bookings\/([^/]+)\/status$/)
+    ) {
+      const bookingId = pathname.split("/")[4];
+      const body = await parseBody(request);
+      await store.updateBookingStatus(bookingId, body.status, body.reason);
+      return json(response, 200, { ok: true });
+    }
+
+    if (
+      request.method === "POST" &&
+      match(pathname, /^\/api\/admin\/reps\/([^/]+)\/connect-nylas\/start$/)
+    ) {
+      const repId = pathname.split("/")[4];
+      const body = await parseBody(request);
+      return json(response, 200, await store.startRepConnection(repId, body));
+    }
+
+    if (
+      request.method === "POST" &&
+      match(pathname, /^\/api\/admin\/reps\/([^/]+)\/connect-nylas$/)
+    ) {
+      const repId = pathname.split("/")[4];
+      const body = await parseBody(request);
+      return json(response, 200, await store.connectRep(repId, body));
+    }
+
+    if (
+      request.method === "GET" &&
+      pathname === "/api/admin/integrations/nylas/callback"
+    ) {
+      try {
+        const result = await store.finalizeRepConnection(url.searchParams);
+        return html(
+          response,
+          200,
+          renderCallbackPage({
+            title: "Connexion calendrier active",
+            description:
+              "La connexion Nylas est terminée. Vous pouvez revenir à la console admin.",
+            target: `/admin/bookings?connected=${encodeURIComponent(result.repId)}`,
+          }),
+        );
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Connexion Nylas impossible.";
+        return html(
+          response,
+          400,
+          renderCallbackPage({
+            title: "Connexion calendrier échouée",
+            description: message,
+            target: `/admin/bookings?connectionError=${encodeURIComponent(message)}`,
+          }),
+        );
+      }
+    }
+
+    if (request.method === "GET" && pathname === "/api/webhooks/nylas") {
+      const challenge = url.searchParams.get("challenge");
+      if (challenge) {
+        response.writeHead(200, {
+          "Content-Type": "text/plain",
+          "Access-Control-Allow-Origin": "*",
+        });
+        response.end(challenge);
+        return;
+      }
+      return json(response, 200, { ok: true });
+    }
+
+    if (request.method === "POST" && pathname === "/api/webhooks/nylas") {
+      const body = await parseBody(request);
+      return json(response, 202, store.handleWebhook(body));
+    }
+
+    return json(response, 404, { error: "Route introuvable." });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Une erreur serveur est survenue.";
+    const status = message.includes("plus disponible") ? 409 : 400;
+    return json(response, status, { error: message });
+  }
+});
+
+server.listen(PORT, HOST, () => {
+  console.log(`[mvp-api] listening on http://${HOST}:${PORT} (${provider.mode})`);
+});
+
+function handleStream(pathname, request, response) {
+  const slug = pathname.split("/")[3];
+  response.writeHead(200, {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache, no-transform",
+    Connection: "keep-alive",
+    "Access-Control-Allow-Origin": "*",
+  });
+  response.write(`event: availability.updated\ndata: ${JSON.stringify({ slug, at: new Date().toISOString() })}\n\n`);
+
+  const heartbeat = setInterval(() => {
+    response.write(`event: ping\ndata: ${Date.now()}\n\n`);
+  }, 15000);
+
+  store.addSseClient(slug, response);
+
+  request.on("close", () => {
+    clearInterval(heartbeat);
+    store.removeSseClient(slug, response);
+  });
+}
+
+function json(response, status, payload) {
+  response.writeHead(status, {
+    "Content-Type": "application/json",
+    "Access-Control-Allow-Origin": "*",
+  });
+  response.end(JSON.stringify(payload));
+}
+
+function html(response, status, payload) {
+  response.writeHead(status, {
+    "Content-Type": "text/html; charset=utf-8",
+    "Access-Control-Allow-Origin": "*",
+  });
+  response.end(payload);
+}
+
+async function parseBody(request) {
+  const chunks = [];
+  for await (const chunk of request) {
+    chunks.push(chunk);
+  }
+
+  if (chunks.length === 0) {
+    return {};
+  }
+
+  return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+}
+
+function match(value, pattern) {
+  return pattern.test(value);
+}
+
+function renderCallbackPage({ title, description, target }) {
+  return `<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${escapeHtml(title)}</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background:
+          radial-gradient(circle at top, rgba(174, 221, 203, 0.22), transparent 36%),
+          linear-gradient(160deg, #05161b 0%, #0b2128 54%, #09151b 100%);
+        color: #ecf8f4;
+      }
+      main {
+        width: min(34rem, calc(100vw - 2rem));
+        padding: 2rem;
+        border-radius: 1.5rem;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: rgba(8, 25, 31, 0.84);
+        box-shadow: 0 30px 80px rgba(0, 0, 0, 0.3);
+      }
+      h1 {
+        margin: 0 0 0.75rem;
+        font-size: 1.5rem;
+      }
+      p {
+        margin: 0 0 1rem;
+        line-height: 1.6;
+        color: rgba(236, 248, 244, 0.78);
+      }
+      a {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 999px;
+        padding: 0.8rem 1.2rem;
+        background: #7be0af;
+        color: #082019;
+        font-weight: 700;
+        text-decoration: none;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>${escapeHtml(title)}</h1>
+      <p>${escapeHtml(description)}</p>
+      <a href="${escapeHtml(target)}">Retourner à la console admin</a>
+    </main>
+  </body>
+</html>`;
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
