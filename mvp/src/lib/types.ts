@@ -69,11 +69,24 @@ export interface BookingSummary {
   notes?: string;
 }
 
+export interface ClientStat {
+  clientId: string;
+  clientName: string;
+  total: number;
+  byStatus: Record<BookingStatus, number>;
+  completedPct: number;
+  noShowPct: number;
+  toReplacePct: number;
+  pendingCount: number;
+}
+
 export interface AdminBookingsResponse {
   timezone: string;
   counts: Record<BookingStatus, number>;
+  clientStats: ClientStat[];
   bookings: BookingSummary[];
   filters: {
+    clients: Array<{ id: string; name: string }>;
     callers: Array<{ id: string; name: string }>;
     reps: Array<{
       id: string;
