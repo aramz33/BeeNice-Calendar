@@ -383,6 +383,7 @@ export function createStore(provider) {
       return {
         timezone: "Europe/Paris",
         counts,
+        clientStats: this.getClientStats(),
         bookings: bookings.map((booking) => ({
           id: booking.id,
           status: booking.status,
@@ -974,6 +975,65 @@ export function createStore(provider) {
     getBooking(bookingId) {
       const row = db.prepare("SELECT * FROM bookings WHERE id = ?").get(bookingId);
       return row ? fromBookingRow(row) : null;
+    },
+
+    getClientStats() {
+      const rows = db
+        .prepare(
+          `SELECT client_id, status, COUNT(*) AS count
+           FROM bookings
+           GROUP BY client_id, status`,
+        )
+        .all();
+
+      const byClient = new Map();
+      rows.forEach(({ client_id, status, count }) => {
+        if (!byClient.has(client_id)) {
+          const client = this.getClient(client_id);
+          byClient.set(client_id, {
+            clientId: client_id,
+            clientName: client?.name ?? "Client inconnu",
+            total: 0,
+            byStatus: {
+              booked: 0,
+              completed: 0,
+              no_show: 0,
+              cancelled: 0,
+              rescheduled: 0,
+              not_qualified: 0,
+            },
+          });
+        }
+        const entry = byClient.get(client_id);
+        entry.total += count;
+        if (Object.prototype.hasOwnProperty.call(entry.byStatus, status)) {
+          entry.byStatus[status] = count;
+        }
+      });
+
+      return Array.from(byClient.values()).map((entry) => ({
+        clientId: entry.clientId,
+        clientName: entry.clientName,
+        total: entry.total,
+        byStatus: entry.byStatus,
+        completedPct:
+          entry.total > 0
+            ? Math.round((entry.byStatus.completed / entry.total) * 100)
+            : 0,
+        noShowPct:
+          entry.total > 0
+            ? Math.round((entry.byStatus.no_show / entry.total) * 100)
+            : 0,
+        toReplacePct:
+          entry.total > 0
+            ? Math.round(
+                ((entry.byStatus.no_show + entry.byStatus.cancelled) /
+                  entry.total) *
+                  100,
+              )
+            : 0,
+        pendingCount: entry.byStatus.booked,
+      }));
     },
   };
 
