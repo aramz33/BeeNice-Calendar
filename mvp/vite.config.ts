@@ -3,6 +3,9 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 
+const apiPort = Number(process.env.MVP_API_PORT ?? 8787);
+const webPort = Number(process.env.MVP_WEB_PORT ?? 5174);
+
 export default defineConfig({
   root: path.resolve(__dirname),
   plugins: [react(), tailwindcss()],
@@ -14,10 +17,10 @@ export default defineConfig({
     },
   },
   server: {
-    port: 5174,
+    port: webPort,
     proxy: {
       "/api": {
-        target: "http://localhost:8787",
+        target: `http://localhost:${apiPort}`,
         changeOrigin: true,
       },
     },
