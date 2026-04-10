@@ -64,6 +64,7 @@ const server = http.createServer(async (request, response) => {
         200,
         store.listAdminBookings({
           status: url.searchParams.get("status"),
+          clientId: url.searchParams.get("clientId"),
           callerId: url.searchParams.get("callerId"),
           repId: url.searchParams.get("repId"),
           query: url.searchParams.get("query"),

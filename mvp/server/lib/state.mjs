@@ -359,6 +359,9 @@ export function createStore(provider) {
       if (filters.repId) {
         bookings = bookings.filter((booking) => booking.assignedRepId === filters.repId);
       }
+      if (filters.clientId) {
+        bookings = bookings.filter((booking) => booking.clientId === filters.clientId);
+      }
       if (filters.query) {
         const query = filters.query.toLowerCase();
         bookings = bookings.filter(
@@ -392,6 +395,11 @@ export function createStore(provider) {
           notes: booking.notes,
         })),
         filters: {
+          clients: db
+            .prepare("SELECT * FROM clients ORDER BY name ASC")
+            .all()
+            .map(fromClientRow)
+            .map((client) => ({ id: client.id, name: client.name })),
           callers: this.listActiveCallers().map((caller) => ({
             id: caller.id,
             name: caller.name,
