@@ -16,6 +16,9 @@ const server = http.createServer(async (request, response) => {
     if (pathname.startsWith("/api/book/") && pathname.endsWith("/stream")) {
       return handleStream(pathname, request, response);
     }
+    if (pathname === "/api/admin/stream") {
+      return handleAdminStream(request, response);
+    }
 
     if (request.method === "GET" && match(pathname, /^\/api\/book\/([^/]+)$/)) {
       const slug = pathname.split("/").at(-1);
@@ -40,6 +43,19 @@ const server = http.createServer(async (request, response) => {
     ) {
       const [, , , slug, , callerId] = pathname.split("/");
       return json(response, 200, store.listCallerBookings(slug, callerId));
+    }
+
+    if (
+      request.method === "GET" &&
+      match(pathname, /^\/api\/book\/([^/]+)\/callers\/([^/]+)\/tasks$/)
+    ) {
+      const [, , , slug, , callerId] = pathname.split("/");
+      const bookingLink = store.getBookingLinkBySlug(slug);
+      return json(
+        response,
+        200,
+        store.listCallerTasks(callerId, bookingLink?.clientId ?? null),
+      );
     }
 
     if (
@@ -72,6 +88,38 @@ const server = http.createServer(async (request, response) => {
       );
     }
 
+    if (request.method === "GET" && pathname === "/api/admin/calendar") {
+      return json(
+        response,
+        200,
+        store.listAdminCalendar({
+          from: url.searchParams.get("from"),
+          to: url.searchParams.get("to"),
+          status: url.searchParams.get("status"),
+          clientId: url.searchParams.get("clientId"),
+          callerId: url.searchParams.get("callerId"),
+          repId: url.searchParams.get("repId"),
+          query: url.searchParams.get("query"),
+        }),
+      );
+    }
+
+    if (request.method === "GET" && pathname === "/api/admin/tasks") {
+      return json(
+        response,
+        200,
+        store.listAdminTasks({
+          clientId: url.searchParams.get("clientId"),
+          callerId: url.searchParams.get("callerId"),
+          query: url.searchParams.get("query"),
+        }),
+      );
+    }
+
+    if (request.method === "GET" && pathname === "/api/admin/settings") {
+      return json(response, 200, store.listSettings());
+    }
+
     if (
       request.method === "GET" &&
       match(pathname, /^\/api\/admin\/bookings\/([^/]+)$/)
@@ -81,12 +129,65 @@ const server = http.createServer(async (request, response) => {
 
     if (
       request.method === "PATCH" &&
-      match(pathname, /^\/api\/admin\/bookings\/([^/]+)\/status$/)
+      match(pathname, /^\/api\/admin\/bookings\/([^/]+)\/outcome$/)
     ) {
       const bookingId = pathname.split("/")[4];
       const body = await parseBody(request);
-      await store.updateBookingStatus(bookingId, body.status, body.reason);
+      await store.updateBookingOutcome(bookingId, body.outcomeState, body.reason);
       return json(response, 200, { ok: true });
+    }
+
+    if (
+      request.method === "PATCH" &&
+      match(pathname, /^\/api\/admin\/bookings\/([^/]+)\/schedule$/)
+    ) {
+      const bookingId = pathname.split("/")[4];
+      const body = await parseBody(request);
+      await store.updateBookingSchedule(
+        bookingId,
+        body.scheduleState,
+        body.reason,
+        body.nextStartAt,
+      );
+      return json(response, 200, { ok: true });
+    }
+
+    if (
+      request.method === "PATCH" &&
+      match(pathname, /^\/api\/admin\/tasks\/([^/]+)$/)
+    ) {
+      const taskId = pathname.split("/")[4];
+      const body = await parseBody(request);
+      await store.updateTask(taskId, body);
+      return json(response, 200, { ok: true });
+    }
+
+    if (request.method === "POST" && pathname === "/api/admin/settings/clients") {
+      const body = await parseBody(request);
+      return json(response, 201, store.createClient(body));
+    }
+
+    if (
+      request.method === "PATCH" &&
+      match(pathname, /^\/api\/admin\/settings\/clients\/([^/]+)$/)
+    ) {
+      const clientId = pathname.split("/")[5];
+      const body = await parseBody(request);
+      return json(response, 200, store.updateClient(clientId, body));
+    }
+
+    if (request.method === "POST" && pathname === "/api/admin/settings/callers") {
+      const body = await parseBody(request);
+      return json(response, 201, store.createCaller(body));
+    }
+
+    if (
+      request.method === "PATCH" &&
+      match(pathname, /^\/api\/admin\/settings\/callers\/([^/]+)$/)
+    ) {
+      const callerId = pathname.split("/")[5];
+      const body = await parseBody(request);
+      return json(response, 200, store.updateCaller(callerId, body));
     }
 
     if (
@@ -153,7 +254,7 @@ const server = http.createServer(async (request, response) => {
 
     if (request.method === "POST" && pathname === "/api/webhooks/nylas") {
       const body = await parseBody(request);
-      return json(response, 202, store.handleWebhook(body));
+      return json(response, 202, await store.handleWebhook(body));
     }
 
     return json(response, 404, { error: "Route introuvable." });
@@ -168,6 +269,12 @@ const server = http.createServer(async (request, response) => {
 server.listen(PORT, HOST, () => {
   console.log(`[mvp-api] listening on http://${HOST}:${PORT} (${provider.mode})`);
 });
+
+setInterval(() => {
+  void store.refreshCalendarBookings().catch(() => {
+    // Best effort refresh only.
+  });
+}, 60_000);
 
 function handleStream(pathname, request, response) {
   const slug = pathname.split("/")[3];
@@ -188,6 +295,29 @@ function handleStream(pathname, request, response) {
   request.on("close", () => {
     clearInterval(heartbeat);
     store.removeSseClient(slug, response);
+  });
+}
+
+function handleAdminStream(request, response) {
+  response.writeHead(200, {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache, no-transform",
+    Connection: "keep-alive",
+    "Access-Control-Allow-Origin": "*",
+  });
+  response.write(
+    `event: booking.updated\ndata: ${JSON.stringify({ at: new Date().toISOString() })}\n\n`,
+  );
+
+  const heartbeat = setInterval(() => {
+    response.write(`event: ping\ndata: ${Date.now()}\n\n`);
+  }, 15000);
+
+  store.addAdminSseClient(response);
+
+  request.on("close", () => {
+    clearInterval(heartbeat);
+    store.removeAdminSseClient(response);
   });
 }
 
@@ -233,26 +363,24 @@ function renderCallbackPage({ title, description, target }) {
     <title>${escapeHtml(title)}</title>
     <style>
       :root {
-        color-scheme: dark;
-        font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        color-scheme: light;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       }
       body {
         margin: 0;
         min-height: 100vh;
         display: grid;
         place-items: center;
-        background:
-          radial-gradient(circle at top, rgba(174, 221, 203, 0.22), transparent 36%),
-          linear-gradient(160deg, #05161b 0%, #0b2128 54%, #09151b 100%);
-        color: #ecf8f4;
+        background: #f9f4ed;
+        color: #001e5b;
       }
       main {
         width: min(34rem, calc(100vw - 2rem));
         padding: 2rem;
         border-radius: 1.5rem;
-        border: 1px solid rgba(255, 255, 255, 0.12);
-        background: rgba(8, 25, 31, 0.84);
-        box-shadow: 0 30px 80px rgba(0, 0, 0, 0.3);
+        border: 1px solid rgba(0, 30, 91, 0.08);
+        background: #fffdf9;
+        box-shadow: 0 18px 48px rgba(0, 30, 91, 0.1);
       }
       h1 {
         margin: 0 0 0.75rem;
@@ -261,7 +389,7 @@ function renderCallbackPage({ title, description, target }) {
       p {
         margin: 0 0 1rem;
         line-height: 1.6;
-        color: rgba(236, 248, 244, 0.78);
+        color: rgba(0, 30, 91, 0.74);
       }
       a {
         display: inline-flex;
@@ -269,8 +397,8 @@ function renderCallbackPage({ title, description, target }) {
         justify-content: center;
         border-radius: 999px;
         padding: 0.8rem 1.2rem;
-        background: #7be0af;
-        color: #082019;
+        background: #f7a600;
+        color: #001e5b;
         font-weight: 700;
         text-decoration: none;
       }

@@ -119,8 +119,8 @@ export function createSeedState(providerMode = "mock") {
     timezone: TIMEZONE,
     durationMinutes: 30,
     intervalMinutes: 30,
-    bufferBeforeMinutes: 15,
-    bufferAfterMinutes: 15,
+    bufferBeforeMinutes: 0,
+    bufferAfterMinutes: 0,
     minNoticeMinutes: 60,
     active: true,
   };
@@ -343,8 +343,8 @@ export function createSeedState(providerMode = "mock") {
     timezone: TIMEZONE,
     durationMinutes: 30,
     intervalMinutes: 30,
-    bufferBeforeMinutes: 15,
-    bufferAfterMinutes: 15,
+    bufferBeforeMinutes: 0,
+    bufferAfterMinutes: 0,
     minNoticeMinutes: 60,
     active: true,
   };

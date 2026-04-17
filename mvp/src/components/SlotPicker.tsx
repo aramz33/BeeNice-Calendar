@@ -43,7 +43,7 @@ export function SlotPicker({
 
   if (loading) {
     return (
-      <Card className="glass-card rounded-[1.5rem] border-white/10">
+      <Card className="surface-card">
         <CardHeader>
           <CardTitle>Disponibilités en direct</CardTitle>
         </CardHeader>
@@ -53,10 +53,7 @@ export function SlotPicker({
           </p>
           <div className="grid gap-3 md:grid-cols-3">
             {Array.from({ length: 6 }).map((_, index) => (
-              <div
-                key={index}
-                className="h-12 animate-pulse rounded-2xl bg-muted/60"
-              />
+              <div key={index} className="h-12 animate-pulse rounded-2xl bg-[#001E5B]/5" />
             ))}
           </div>
         </CardContent>
@@ -66,7 +63,7 @@ export function SlotPicker({
 
   if (!availability || availability.slots.length === 0) {
     return (
-      <Card className="glass-card rounded-[1.5rem] border-white/10">
+      <Card className="surface-card">
         <CardHeader>
           <CardTitle>Disponibilités en direct</CardTitle>
         </CardHeader>
@@ -84,7 +81,7 @@ export function SlotPicker({
   }
 
   return (
-    <Card className="glass-card rounded-[1.5rem] border-white/10">
+      <Card className="surface-card">
       <CardHeader className="flex flex-row items-center justify-between">
         <div>
           <CardTitle>Disponibilités en direct</CardTitle>
@@ -92,7 +89,7 @@ export function SlotPicker({
             Les créneaux disparaissent dès qu’un autre caller les réserve.
           </p>
         </div>
-        <div className="rounded-full border border-emerald-500/30 bg-emerald-500/15 px-3 py-1 text-xs text-emerald-300">
+        <div className="rounded-full border border-[#001E5B]/10 bg-[#F9F4ED] px-3 py-1 text-xs text-[#001E5B]">
           Live sync
         </div>
       </CardHeader>

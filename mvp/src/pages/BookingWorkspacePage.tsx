@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router";
-import { BellRing, CalendarClock, Orbit, Users } from "lucide-react";
+import { BellRing, CalendarClock, RotateCcw, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@shared-ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@shared-ui/card";
@@ -14,7 +14,6 @@ import {
   SelectValue,
 } from "@shared-ui/select";
 import { Textarea } from "@shared-ui/textarea";
-import { Badge } from "@shared-ui/badge";
 import { AppChrome } from "@mvp/components/AppChrome";
 import { MetricCard } from "@mvp/components/MetricCard";
 import { SlotPicker } from "@mvp/components/SlotPicker";
@@ -24,8 +23,8 @@ import { formatDateTime, formatRelativeShort } from "@mvp/lib/time";
 import type {
   AvailabilityResponse,
   BookingLinkResponse,
-  BookingStatus,
   CallerBookingsResponse,
+  FollowUpTask,
 } from "@mvp/lib/types";
 
 const COMPANY_SIZE_OPTIONS = [
@@ -37,20 +36,11 @@ const COMPANY_SIZE_OPTIONS = [
 
 const CALLER_STORAGE_KEY = "benice-mvp-caller";
 
-const ACTION_STATUSES: BookingStatus[] = [
-  "no_show",
-  "cancelled",
-  "rescheduled",
-];
-
 export function BookingWorkspacePage() {
   const { slug = "teamstarter-discovery" } = useParams();
   const [payload, setPayload] = useState<BookingLinkResponse | null>(null);
-  const [availability, setAvailability] = useState<AvailabilityResponse | null>(
-    null,
-  );
-  const [recentBookings, setRecentBookings] =
-    useState<CallerBookingsResponse | null>(null);
+  const [availability, setAvailability] = useState<AvailabilityResponse | null>(null);
+  const [callerBookings, setCallerBookings] = useState<CallerBookingsResponse | null>(null);
   const [loadingMeta, setLoadingMeta] = useState(true);
   const [loadingAvailability, setLoadingAvailability] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -61,20 +51,22 @@ export function BookingWorkspacePage() {
   const [prospectEmail, setProspectEmail] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [notes, setNotes] = useState("");
+  const [sourceTask, setSourceTask] = useState<FollowUpTask | null>(null);
 
   const timezone = payload?.bookingLink.timezone ?? "Europe/Paris";
   const selectedSlotLabel = selectedSlot
     ? formatDateTime(selectedSlot, timezone)
     : "Aucun créneau sélectionné";
 
+  const tasks = callerBookings?.tasks ?? [];
+  const recentBookings = callerBookings?.bookings ?? [];
+
   useEffect(() => {
     let ignore = false;
     setLoadingMeta(true);
     apiFetch<BookingLinkResponse>(`/api/book/${slug}`)
       .then((data) => {
-        if (ignore) {
-          return;
-        }
+        if (ignore) return;
         setPayload(data);
         const stored = window.localStorage.getItem(CALLER_STORAGE_KEY);
         const firstCaller =
@@ -85,9 +77,7 @@ export function BookingWorkspacePage() {
       })
       .catch((error) => toast.error(error.message))
       .finally(() => {
-        if (!ignore) {
-          setLoadingMeta(false);
-        }
+        if (!ignore) setLoadingMeta(false);
       });
 
     return () => {
@@ -96,10 +86,9 @@ export function BookingWorkspacePage() {
   }, [slug]);
 
   useEffect(() => {
-    if (!callerId) {
-      return;
+    if (callerId) {
+      window.localStorage.setItem(CALLER_STORAGE_KEY, callerId);
     }
-    window.localStorage.setItem(CALLER_STORAGE_KEY, callerId);
   }, [callerId]);
 
   const fetchAvailability = async () => {
@@ -110,19 +99,14 @@ export function BookingWorkspacePage() {
     }
 
     setLoadingAvailability(true);
-
     try {
-      const params = new URLSearchParams({
-        companySize,
-      });
+      const params = new URLSearchParams({ companySize });
       const data = await apiFetch<AvailabilityResponse>(
         `/api/book/${slug}/availability?${params.toString()}`,
       );
       setAvailability(data);
       setSelectedSlot((current) =>
-        current && data.slots.some((slot) => slot.startAt === current)
-          ? current
-          : null,
+        current && data.slots.some((slot) => slot.startAt === current) ? current : null,
       );
     } catch (error) {
       toast.error((error as Error).message);
@@ -131,9 +115,9 @@ export function BookingWorkspacePage() {
     }
   };
 
-  const fetchRecentBookings = async () => {
+  const fetchCallerData = async () => {
     if (!callerId) {
-      setRecentBookings(null);
+      setCallerBookings(null);
       return;
     }
 
@@ -141,7 +125,10 @@ export function BookingWorkspacePage() {
       const data = await apiFetch<CallerBookingsResponse>(
         `/api/book/${slug}/callers/${callerId}/bookings`,
       );
-      setRecentBookings(data);
+      setCallerBookings(data);
+      setSourceTask((current) =>
+        current ? data.tasks.find((task) => task.id === current.id) ?? null : null,
+      );
     } catch (error) {
       toast.error((error as Error).message);
     }
@@ -152,24 +139,16 @@ export function BookingWorkspacePage() {
   }, [slug, companySize]);
 
   useEffect(() => {
-    void fetchRecentBookings();
+    void fetchCallerData();
   }, [slug, callerId]);
 
   useEffect(() => {
     const source = new EventSource(`/api/book/${slug}/stream`);
-
     source.addEventListener("availability.updated", () => {
       void fetchAvailability();
-      void fetchRecentBookings();
+      void fetchCallerData();
     });
-
-    source.onerror = () => {
-      source.close();
-      setTimeout(() => {
-        void fetchAvailability();
-      }, 1000);
-    };
-
+    source.onerror = () => source.close();
     return () => source.close();
   }, [slug, callerId, companySize]);
 
@@ -177,58 +156,55 @@ export function BookingWorkspacePage() {
     if (!companySize || !payload) {
       return "Choisissez une tranche";
     }
-
     return Number(companySize) >= payload.bookingLink.companySizeThreshold
       ? "Pool senior uniquement"
       : "Pool complet";
   }, [companySize, payload]);
 
-  const sortedRecentBookings = useMemo(() => {
-    if (!recentBookings?.bookings) return [];
-    return [...recentBookings.bookings].sort((a, b) => {
-      const aAction = ACTION_STATUSES.includes(a.status) ? 0 : 1;
-      const bAction = ACTION_STATUSES.includes(b.status) ? 0 : 1;
-      return aAction - bAction;
-    });
-  }, [recentBookings]);
+  const handleTaskSelect = (task: FollowUpTask) => {
+    setSourceTask(task);
+    setCompanyName(task.companyName);
+    setProspectName(task.prospectName);
+    setNotes(task.notes ?? "");
+    toast.success("Contexte de repositionnement chargé.");
+  };
+
+  const resetTask = () => {
+    setSourceTask(null);
+    setProspectName("");
+    setCompanyName("");
+    setNotes("");
+  };
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-
     if (!selectedSlot) {
       toast.error("Choisissez un créneau avant de réserver.");
       return;
     }
-
-    if (
-      !callerId ||
-      !companySize ||
-      !prospectName ||
-      !prospectEmail ||
-      !companyName
-    ) {
+    if (!callerId || !companySize || !prospectName || !prospectEmail || !companyName) {
       toast.error("Complétez les informations prospect obligatoires.");
       return;
     }
 
     setSubmitting(true);
-
     try {
-      const result = await apiFetch<{
-        bookingId: string;
-        assignedRepName: string;
-      }>(`/api/book/${slug}/bookings`, {
-        method: "POST",
-        body: JSON.stringify({
-          callerId,
-          companySize: Number(companySize),
-          companyName,
-          prospectName,
-          prospectEmail,
-          notes,
-          slotStart: selectedSlot,
-        }),
-      });
+      const result = await apiFetch<{ bookingId: string; assignedRepName: string }>(
+        `/api/book/${slug}/bookings`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            callerId,
+            companySize: Number(companySize),
+            companyName,
+            prospectName,
+            prospectEmail,
+            notes,
+            slotStart: selectedSlot,
+            sourceTaskId: sourceTask?.id ?? null,
+          }),
+        },
+      );
 
       toast.success(`Rendez-vous réservé chez ${result.assignedRepName}.`);
       setProspectName("");
@@ -236,7 +212,8 @@ export function BookingWorkspacePage() {
       setCompanyName("");
       setNotes("");
       setSelectedSlot(null);
-      await Promise.all([fetchAvailability(), fetchRecentBookings()]);
+      setSourceTask(null);
+      await Promise.all([fetchAvailability(), fetchCallerData()]);
     } catch (error) {
       toast.error((error as Error).message);
       await fetchAvailability();
@@ -249,14 +226,11 @@ export function BookingWorkspacePage() {
     return (
       <AppChrome
         title="Chargement du workspace caller"
-        subtitle="Récupération de la configuration du client et des callers."
+        subtitle="Récupération de la configuration client et des callers."
       >
         <div className="grid gap-6 md:grid-cols-3">
           {Array.from({ length: 3 }).map((_, index) => (
-            <div
-              key={index}
-              className="glass-card h-52 animate-pulse rounded-[1.5rem]"
-            />
+            <div key={index} className="surface-card h-52 animate-pulse" />
           ))}
         </div>
       </AppChrome>
@@ -265,190 +239,151 @@ export function BookingWorkspacePage() {
 
   return (
     <AppChrome
-      title={`${payload.bookingLink.clientName} · Workspace caller`}
-      subtitle="Un seul lien, des créneaux live consolidés, un routing invisible pour le caller."
+      title="Workspace caller"
+      subtitle="Réservez pour vos clients, suivez les résultats et repositionnez immédiatement les rendez-vous annulés ou no-show."
     >
-      <div className="grid gap-6 xl:grid-cols-[0.95fr_1.35fr]">
-        <div className="space-y-6">
-          <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-1">
-            <MetricCard
-              label="Lien"
-              value={payload.bookingLink.slug}
-              helper="Un slug unique par client pour l’équipe caller."
-            />
-            <MetricCard
-              label="Routing"
-              value="80 / 20"
-              helper={`Qualification à partir de ${payload.bookingLink.companySizeThreshold} salariés.`}
-            />
-            <MetricCard
-              label="Calendriers"
-              value={payload.bookingLink.reps.length}
-              helper={`${payload.bookingLink.providerMode === "mock" ? "Mode mock" : "Mode Nylas"} actif.`}
-            />
-          </div>
+      <div className="grid gap-4 md:grid-cols-4">
+        <MetricCard
+          label="Callers actifs"
+          value={payload.callers.length}
+          helper="Choix libre par membre d’équipe."
+        />
+        <MetricCard
+          label="Reps connectés"
+          value={payload.bookingLink.reps.filter((rep) => rep.connectionStatus === "connected").length}
+          helper="Calendriers réellement consolidés."
+        />
+        <MetricCard
+          label="Tâches ouvertes"
+          value={tasks.length}
+          helper="Relances à repositionner."
+        />
+        <MetricCard
+          label="Pool éligible"
+          value={eligiblePoolLabel}
+          helper="Selon la taille de société."
+        />
+      </div>
 
-          <Card className="glass-card rounded-[1.5rem] border-white/10">
+      <div className="mt-6 grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
+        <div className="space-y-6">
+          <Card className="surface-card">
             <CardHeader>
               <CardTitle>Contexte d’appel</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="grid gap-4">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="caller">Caller</Label>
+                  <Select value={callerId} onValueChange={setCallerId}>
+                    <SelectTrigger id="caller">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {payload.callers.map((caller) => (
+                        <SelectItem key={caller.id} value={caller.id}>
+                          {caller.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="company-size">Taille de société</Label>
+                  <Select value={companySize} onValueChange={setCompanySize}>
+                    <SelectTrigger id="company-size">
+                      <SelectValue placeholder="Choisir une tranche" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {COMPANY_SIZE_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="rounded-[1.25rem] border border-[#001E5B]/8 bg-white px-4 py-4">
+                <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#001E5B]/40">
+                  Créneau sélectionné
+                </p>
+                <p className="mt-2 font-semibold text-[#001E5B]">{selectedSlotLabel}</p>
+              </div>
+
+              {sourceTask ? (
+                <div className="rounded-[1.25rem] border border-[#F7A600]/20 bg-[#FFF6E4] px-4 py-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="font-semibold text-[#001E5B]">
+                        Repositionnement en cours: {sourceTask.companyName}
+                      </p>
+                      <p className="text-sm text-[#001E5B]/64">
+                        {sourceTask.triggerReason === "cancelled" ? "Annulation" : "No-show"} · échéance {formatRelativeShort(sourceTask.dueAt)}
+                      </p>
+                    </div>
+                    <Button variant="outline" className="rounded-full" onClick={resetTask}>
+                      Retirer
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+
               <form className="space-y-4" onSubmit={handleSubmit}>
                 <div className="grid gap-4 md:grid-cols-2">
+                  <Field label="Nom du prospect" id="prospect-name" value={prospectName} onChange={setProspectName} />
+                  <Field label="Email du prospect" id="prospect-email" value={prospectEmail} onChange={setProspectEmail} type="email" />
+                  <Field label="Société prospect" id="company-name" value={companyName} onChange={setCompanyName} />
                   <div className="space-y-2">
-                    <Label htmlFor="caller">Caller</Label>
-                    <Select value={callerId} onValueChange={setCallerId}>
-                      <SelectTrigger id="caller">
-                        <SelectValue placeholder="Choisir un caller" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {payload.callers.map((caller) => (
-                          <SelectItem key={caller.id} value={caller.id}>
-                            {caller.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="company-size">Taille de société</Label>
-                    <Select value={companySize} onValueChange={setCompanySize}>
-                      <SelectTrigger id="company-size">
-                        <SelectValue placeholder="Choisir une tranche" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {COMPANY_SIZE_OPTIONS.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="rounded-[1.25rem] border border-primary/20 bg-primary/8 px-4 py-3 text-sm text-muted-foreground">
-                  <div className="flex items-center gap-2 font-medium text-foreground">
-                    <Orbit className="h-4 w-4 text-primary" />
-                    Pool de qualification actif
-                  </div>
-                  <p className="mt-2">{eligiblePoolLabel}</p>
-                </div>
-
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="prospect-name">Nom du prospect</Label>
-                    <Input
-                      id="prospect-name"
-                      value={prospectName}
-                      onChange={(event) => setProspectName(event.target.value)}
-                      placeholder="Ex. Anne Dubois"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="prospect-email">Email</Label>
-                    <Input
-                      id="prospect-email"
-                      type="email"
-                      value={prospectEmail}
-                      onChange={(event) => setProspectEmail(event.target.value)}
-                      placeholder="anne@entreprise.com"
+                    <Label htmlFor="notes">Contexte</Label>
+                    <Textarea
+                      id="notes"
+                      value={notes}
+                      onChange={(event) => setNotes(event.target.value)}
+                      placeholder="Contexte, signaux, objections..."
                     />
                   </div>
                 </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="company-name">Société</Label>
-                  <Input
-                    id="company-name"
-                    value={companyName}
-                    onChange={(event) => setCompanyName(event.target.value)}
-                    placeholder="Ex. Doctolib"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="notes">Contexte call</Label>
-                  <Textarea
-                    id="notes"
-                    value={notes}
-                    onChange={(event) => setNotes(event.target.value)}
-                    placeholder="Rappeler avant le rendez-vous, besoin centré sur l’acquisition outbound..."
-                    rows={4}
-                  />
-                </div>
-
-                <div className="rounded-[1.25rem] border border-white/10 bg-background/30 px-4 py-4">
-                  <p className="text-sm font-medium">Créneau sélectionné</p>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    {selectedSlotLabel}
-                  </p>
-                </div>
-
-                <Button
-                  type="submit"
-                  className="w-full rounded-full"
-                  disabled={submitting || !selectedSlot}
-                >
-                  {submitting
-                    ? "Réservation en cours..."
-                    : "Réserver le rendez-vous"}
+                <Button type="submit" className="rounded-full" disabled={submitting}>
+                  <CalendarClock className="h-4 w-4" />
+                  Réserver le rendez-vous
                 </Button>
               </form>
             </CardContent>
           </Card>
 
-          <Card className="glass-card rounded-[1.5rem] border-white/10">
-            <CardHeader className="flex flex-row items-start justify-between">
-              <div>
-                <CardTitle>Rendez-vous du caller</CardTitle>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Historique récent pour le client en cours.
-                </p>
-              </div>
-              <Badge variant="outline" className="border-white/10">
-                <Users className="mr-1 h-3 w-3" />
-                {recentBookings?.bookings.length ?? 0}
-              </Badge>
+          <Card className="surface-card">
+            <CardHeader>
+              <CardTitle>Mes tâches de repositionnement</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              {sortedRecentBookings.length ? (
-                sortedRecentBookings.map((booking) => {
-                  const needsAction = ACTION_STATUSES.includes(booking.status);
-                  return (
-                    <div
-                      key={booking.id}
-                      className={`rounded-[1.25rem] border px-4 py-3 ${
-                        needsAction
-                          ? "border-amber-400/30 bg-amber-400/5"
-                          : "border-white/10 bg-background/25"
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <p className="font-medium">{booking.companyName}</p>
-                            {needsAction && (
-                              <Badge className="border-amber-400/40 bg-amber-400/10 text-amber-400 text-xs">
-                                À relancer
-                              </Badge>
-                            )}
-                          </div>
-                          <p className="text-sm text-muted-foreground">
-                            {booking.prospectName} · {booking.assignedRepName}
-                          </p>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {formatRelativeShort(booking.startAt)}
-                          </p>
-                        </div>
-                        <StatusBadge status={booking.status} />
+              {tasks.length ? (
+                tasks.map((task) => (
+                  <div
+                    key={task.id}
+                    className="rounded-[1.25rem] border border-[#001E5B]/8 bg-white px-4 py-4"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-[#001E5B]">{task.companyName}</p>
+                        <p className="text-sm text-[#001E5B]/56">
+                          {task.prospectName} · {task.clientName}
+                        </p>
+                        <p className="mt-2 text-xs text-[#001E5B]/48">
+                          {task.triggerReason === "cancelled" ? "Annulation" : "No-show"} · RDV initial {formatRelativeShort(task.sourceStartAt)}
+                        </p>
                       </div>
+                      <Button className="rounded-full" onClick={() => handleTaskSelect(task)}>
+                        <RotateCcw className="h-4 w-4" />
+                        Repositionner
+                      </Button>
                     </div>
-                  );
-                })
+                  </div>
+                ))
               ) : (
-                <div className="rounded-[1.25rem] border border-dashed border-white/10 px-4 py-6 text-sm text-muted-foreground">
-                  Aucun rendez-vous récent pour ce caller sur ce client.
+                <div className="rounded-[1.25rem] border border-dashed border-[#001E5B]/12 px-4 py-8 text-sm text-[#001E5B]/44">
+                  Aucune relance à traiter pour ce caller.
                 </div>
               )}
             </CardContent>
@@ -463,62 +398,94 @@ export function BookingWorkspacePage() {
             loading={loadingAvailability}
           />
 
-          <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
-            <Card className="glass-card rounded-[1.5rem] border-white/10">
-              <CardHeader>
-                <CardTitle>Pool de reps connectés</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {payload.bookingLink.reps.map((rep) => (
+          <Card className="surface-card">
+            <CardHeader>
+              <CardTitle>Rendez-vous récents du caller</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {recentBookings.length ? (
+                recentBookings.map((booking) => (
                   <div
-                    key={rep.id}
-                    className="flex items-center justify-between rounded-[1.25rem] border border-white/10 bg-background/25 px-4 py-3"
+                    key={booking.id}
+                    className="rounded-[1.25rem] border border-[#001E5B]/8 bg-white px-4 py-4"
                   >
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="font-semibold text-[#001E5B]">{booking.companyName}</p>
+                          <StatusBadge status={booking.displayStatus} />
+                        </div>
+                        <p className="text-sm text-[#001E5B]/56">
+                          {booking.prospectName} · {booking.assignedRepName}
+                        </p>
+                        <p className="mt-2 text-xs text-[#001E5B]/48">
+                          {formatRelativeShort(booking.startAt)}
+                        </p>
+                      </div>
+                      {booking.taskId ? (
+                        <div className="rounded-full border border-[#F7A600]/20 bg-[#FFF6E4] px-3 py-1 text-xs font-medium text-[#9C6400]">
+                          Relance ouverte
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-[1.25rem] border border-dashed border-[#001E5B]/12 px-4 py-8 text-sm text-[#001E5B]/44">
+                  Aucun rendez-vous récent pour ce caller.
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="surface-card">
+            <CardHeader>
+              <CardTitle>Pool connecté</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-3 md:grid-cols-2">
+              {payload.bookingLink.reps.map((rep) => (
+                <div
+                  key={rep.id}
+                  className="rounded-[1.25rem] border border-[#001E5B]/8 bg-white px-4 py-4"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#F9F4ED] text-[#001E5B]">
+                      <Users className="h-5 w-5" />
+                    </div>
                     <div>
-                      <p className="font-medium">{rep.name}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {rep.seniority === "senior" ? "Senior" : "Junior"}
+                      <p className="font-semibold text-[#001E5B]">{rep.name}</p>
+                      <p className="text-sm text-[#001E5B]/56">
+                        {rep.seniority === "senior" ? "Senior" : "Junior"} · {rep.connectionStatus}
                       </p>
                     </div>
-                    <Badge variant="outline" className="border-white/10">
-                      {rep.connectionStatus}
-                    </Badge>
                   </div>
-                ))}
-              </CardContent>
-            </Card>
-
-            <Card className="glass-card rounded-[1.5rem] border-white/10">
-              <CardHeader>
-                <CardTitle>Garanties MVP</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4 text-sm text-muted-foreground">
-                <div className="flex items-start gap-3">
-                  <CalendarClock className="mt-0.5 h-4 w-4 text-primary" />
-                  <p>
-                    Le slot affiché est recalculé à partir du pool éligible
-                    selon la taille de société.
-                  </p>
                 </div>
-                <div className="flex items-start gap-3">
-                  <BellRing className="mt-0.5 h-4 w-4 text-primary" />
-                  <p>
-                    Les autres pages ouvertes reçoivent une mise à jour live dès
-                    qu’un booking valide le créneau.
-                  </p>
-                </div>
-                <div className="flex items-start gap-3">
-                  <Users className="mt-0.5 h-4 w-4 text-primary" />
-                  <p>
-                    Le rep est choisi automatiquement. Le caller ne voit jamais
-                    la complexité de dispatch.
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+              ))}
+            </CardContent>
+          </Card>
         </div>
       </div>
     </AppChrome>
+  );
+}
+
+function Field({
+  label,
+  id,
+  value,
+  onChange,
+  type = "text",
+}: {
+  label: string;
+  id: string;
+  value: string;
+  onChange: (value: string) => void;
+  type?: string;
+}) {
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={id}>{label}</Label>
+      <Input id={id} type={type} value={value} onChange={(event) => onChange(event.target.value)} />
+    </div>
   );
 }

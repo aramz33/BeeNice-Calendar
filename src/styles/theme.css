@@ -2,95 +2,83 @@
 
 :root {
   --font-size: 16px;
-  /* ppy JetBrains Theme - Light Mode */
-  --background: #FFFFFF;
-  --foreground: #2B2B2B;
-  --card: rgba(250, 250, 250, 0.95);
-  --card-foreground: #2B2B2B;
-  --popover: rgba(255, 255, 255, 0.98);
-  --popover-foreground: #2B2B2B;
-  /* Primary pink from ppy theme */
-  --primary: #FF66AA;
-  --primary-foreground: #FFFFFF;
-  --secondary: #F5F5F5;
-  --secondary-foreground: #2B2B2B;
-  --muted: #F5F5F5;
-  --muted-foreground: #808080;
-  --accent: #9966FF;
-  --accent-foreground: #FFFFFF;
-  --destructive: #FF5555;
-  --destructive-foreground: #FFFFFF;
-  --border: rgba(0, 0, 0, 0.12);
+  --background: #f9f4ed;
+  --foreground: #001e5b;
+  --card: #fffdf9;
+  --card-foreground: #001e5b;
+  --popover: #fffdf9;
+  --popover-foreground: #001e5b;
+  --primary: #001e5b;
+  --primary-foreground: #ffffff;
+  --secondary: #fff3da;
+  --secondary-foreground: #001e5b;
+  --muted: #f3ede3;
+  --muted-foreground: rgba(0, 30, 91, 0.58);
+  --accent: #f7a600;
+  --accent-foreground: #001e5b;
+  --destructive: #b73039;
+  --destructive-foreground: #ffffff;
+  --border: rgba(0, 30, 91, 0.08);
   --input: transparent;
-  --input-background: rgba(245, 245, 245, 0.8);
-  --switch-background: #E0E0E0;
+  --input-background: #ffffff;
+  --switch-background: #e8ded0;
   --font-weight-medium: 500;
   --font-weight-normal: 400;
-  --ring: #FF66AA;
-  /* Chart colors - ppy palette inspired */
-  --chart-1: #FF66AA;
-  --chart-2: #66FFCC;
-  --chart-3: #FFAA44;
-  --chart-4: #9966FF;
-  --chart-5: #FF5555;
-  --radius: 0.5rem;
-  /* Sidebar with subtle background */
-  --sidebar: rgba(250, 250, 250, 0.95);
-  --sidebar-foreground: #2B2B2B;
-  --sidebar-primary: #FF66AA;
-  --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: rgba(245, 245, 245, 0.9);
-  --sidebar-accent-foreground: #2B2B2B;
-  --sidebar-border: rgba(0, 0, 0, 0.08);
-  --sidebar-ring: #FF66AA;
-  /* Weekend color for light mode */
-  --weekend: rgba(255, 102, 170, 0.06);
+  --ring: #f7a600;
+  --chart-1: #001e5b;
+  --chart-2: #f7a600;
+  --chart-3: #ffc755;
+  --chart-4: #d9d4cb;
+  --chart-5: #b73039;
+  --radius: 1rem;
+  --sidebar: #fffdf9;
+  --sidebar-foreground: #001e5b;
+  --sidebar-primary: #001e5b;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #fff3da;
+  --sidebar-accent-foreground: #001e5b;
+  --sidebar-border: rgba(0, 30, 91, 0.08);
+  --sidebar-ring: #f7a600;
 }
 
 .dark {
-  /* ppy JetBrains Theme - Dark Mode */
-  --background: #222436;
-  --foreground: #C8D3F5;
-  --card: rgba(40, 42, 60, 0.85);
-  --card-foreground: #C8D3F5;
-  --popover: rgba(34, 36, 54, 0.98);
-  --popover-foreground: #C8D3F5;
-  /* Primary pink from ppy dark theme */
-  --primary: #FF66AA;
-  --primary-foreground: #FFFFFF;
-  --secondary: #2F334D;
-  --secondary-foreground: #C8D3F5;
-  --muted: #2F334D;
-  --muted-foreground: #828BB8;
-  --accent: #C099FF;
-  --accent-foreground: #FFFFFF;
-  --destructive: #FF757F;
-  --destructive-foreground: #FFFFFF;
-  --border: rgba(130, 139, 184, 0.15);
+  --background: #f9f4ed;
+  --foreground: #001e5b;
+  --card: #fffdf9;
+  --card-foreground: #001e5b;
+  --popover: #fffdf9;
+  --popover-foreground: #001e5b;
+  --primary: #001e5b;
+  --primary-foreground: #ffffff;
+  --secondary: #fff3da;
+  --secondary-foreground: #001e5b;
+  --muted: #f3ede3;
+  --muted-foreground: rgba(0, 30, 91, 0.58);
+  --accent: #f7a600;
+  --accent-foreground: #001e5b;
+  --destructive: #b73039;
+  --destructive-foreground: #ffffff;
+  --border: rgba(0, 30, 91, 0.08);
   --input: transparent;
-  --input-background: rgba(47, 51, 77, 0.6);
-  --switch-background: #3E4563;
+  --input-background: #ffffff;
+  --switch-background: #e8ded0;
   --font-weight-medium: 500;
   --font-weight-normal: 400;
-  --ring: #FF66AA;
-  /* Chart colors - ppy dark palette */
-  --chart-1: #FF66AA;
-  --chart-2: #4FD6BE;
-  --chart-3: #FFC777;
-  --chart-4: #C099FF;
-  --chart-5: #FF757F;
-  --radius: 0.5rem;
-  /* Sidebar with glass effect */
-  --sidebar: rgba(34, 36, 54, 0.85);
-  --sidebar-foreground: #C8D3F5;
-  --sidebar-primary: #FF66AA;
-  --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: rgba(47, 51, 77, 0.9);
-  --sidebar-accent-foreground: #C8D3F5;
-  --sidebar-border: rgba(130, 139, 184, 0.12);
-  --sidebar-ring: #FF66AA;
-  /* Weekend color for dark mode */
-  --weekend: rgba(255, 102, 170, 0.08);
+  --ring: #f7a600;
+  --chart-1: #001e5b;
+  --chart-2: #f7a600;
+  --chart-3: #ffc755;
+  --chart-4: #d9d4cb;
+  --chart-5: #b73039;
+  --radius: 1rem;
+  --sidebar: #fffdf9;
+  --sidebar-foreground: #001e5b;
+  --sidebar-primary: #001e5b;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #fff3da;
+  --sidebar-accent-foreground: #001e5b;
+  --sidebar-border: rgba(0, 30, 91, 0.08);
+  --sidebar-ring: #f7a600;
 }
 
 @theme inline {
@@ -120,10 +108,10 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 6px);
+  --radius-md: calc(var(--radius) - 4px);
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  --radius-xl: calc(var(--radius) + 6px);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -139,102 +127,38 @@
     @apply border-border outline-ring/50;
   }
 
-  body {
-    @apply bg-background text-foreground;
-  }
-
-  /**
-  * Default typography styles for HTML elements (h1-h4, p, label, button, input).
-  * These are in @layer base, so Tailwind utility classes (like text-sm, text-lg) automatically override them.
-  */
-
   html {
     font-size: var(--font-size);
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: Inter, "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  }
+
+  h1,
+  h2,
+  h3,
+  .font-display {
+    font-family: "Clash Display", "Arial Black", "Avenir Next", sans-serif;
   }
 
   h1 {
     font-size: var(--text-2xl);
     font-weight: var(--font-weight-medium);
-    line-height: 1.5;
+    line-height: 1.05;
   }
 
   h2 {
     font-size: var(--text-xl);
     font-weight: var(--font-weight-medium);
-    line-height: 1.5;
+    line-height: 1.1;
   }
 
-  h3 {
-    font-size: var(--text-lg);
-    font-weight: var(--font-weight-medium);
-    line-height: 1.5;
-  }
-
-  h4 {
-    font-size: var(--text-base);
-    font-weight: var(--font-weight-medium);
-    line-height: 1.5;
-  }
-
-  label {
-    font-size: var(--text-base);
-    font-weight: var(--font-weight-medium);
-    line-height: 1.5;
-  }
-
+  h3,
+  h4,
+  label,
   button {
-    font-size: var(--text-base);
     font-weight: var(--font-weight-medium);
-    line-height: 1.5;
-  }
-
-  input {
-    font-size: var(--text-base);
-    font-weight: var(--font-weight-normal);
-    line-height: 1.5;
-  }
-
-  /* Compact Mode - IDE-style dense display */
-  .compact-mode {
-    padding: 0.75rem !important;
-    font-size: 0.875rem;
-    line-height: 1.25;
-  }
-
-  .compact-mode * {
-    font-size: 0.875rem;
-    line-height: 1.25;
-  }
-
-  .compact-mode h1,
-  .compact-mode h2,
-  .compact-mode h3 {
-    font-size: 0.875rem;
-    line-height: 1.25;
-    margin: 0;
-  }
-
-  .compact-mode .text-xs {
-    font-size: 0.75rem;
-  }
-
-  .compact-mode .text-sm {
-    font-size: 0.8125rem;
-  }
-
-  .compact-mode .p-6 {
-    padding: 0.5rem;
-  }
-
-  .compact-mode .p-4 {
-    padding: 0.375rem;
-  }
-
-  .compact-mode .gap-4 {
-    gap: 0.375rem;
-  }
-
-  .compact-mode .gap-2 {
-    gap: 0.25rem;
   }
 }

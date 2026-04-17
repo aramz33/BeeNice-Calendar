@@ -287,6 +287,72 @@ export function createCalendarProvider(
       return payload?.data?.id ?? payload?.id ?? `nylas-${booking.id}`;
     },
 
+    async fetchExternalEvent(store, booking) {
+      if (mode !== "nylas" || !booking.externalEventId) {
+        return {
+          id: booking.externalEventId,
+          startAt: new Date(booking.startAt),
+          endAt: new Date(booking.endAt),
+        };
+      }
+
+      ensureNylasConfigured(this.nylasConfigured);
+
+      const connection = store.getConnection(booking.assignedRepId);
+      if (!connection?.providerGrantId) {
+        throw new Error("Connexion calendrier absente pour ce rep.");
+      }
+
+      const response = await fetch(
+        `${nylas.apiUri}/v3/grants/${connection.providerGrantId}/events/${booking.externalEventId}?calendar_id=${
+          connection.bookingCalendarId ?? "primary"
+        }`,
+        {
+          headers: {
+            Accept: "application/json",
+            Authorization: `Bearer ${nylas.apiKey}`,
+          },
+        },
+      );
+
+      if (response.status === 404) {
+        return null;
+      }
+
+      if (!response.ok) {
+        const message = await readProviderError(
+          response,
+          "Lecture de l'événement calendrier impossible.",
+        );
+        store.upsertConnection(booking.assignedRepId, {
+          provider: "nylas",
+          status: "error",
+          lastError: message,
+        });
+        throw new Error(message);
+      }
+
+      const payload = await response.json();
+      const event = payload?.data ?? payload;
+      const interval = extractEventInterval(event);
+      if (!interval) {
+        return null;
+      }
+
+      store.upsertConnection(booking.assignedRepId, {
+        provider: "nylas",
+        status: "connected",
+        lastSyncAt: new Date().toISOString(),
+        lastError: null,
+      });
+
+      return {
+        id: event?.id ?? booking.externalEventId,
+        startAt: interval.startAt,
+        endAt: interval.endAt,
+      };
+    },
+
     async releaseExternalEvent(store, booking) {
       if (mode !== "nylas" || !booking.externalEventId) {
         return;

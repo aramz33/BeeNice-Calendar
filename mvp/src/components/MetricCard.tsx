@@ -8,15 +8,17 @@ interface MetricCardProps {
 
 export function MetricCard({ label, value, helper }: MetricCardProps) {
   return (
-    <Card className="glass-card rounded-[1.25rem] border-white/10">
+    <Card className="surface-card">
       <CardHeader className="pb-2">
-        <CardTitle className="text-sm text-muted-foreground">{label}</CardTitle>
+        <CardTitle className="text-sm uppercase tracking-[0.15em] text-[#001E5B]/40">
+          {label}
+        </CardTitle>
       </CardHeader>
       <CardContent className="space-y-1">
-        <div className="metric-value text-3xl font-semibold tracking-tight">
+        <div className="metric-value text-3xl font-semibold tracking-tight text-[#001E5B]">
           {value}
         </div>
-        <p className="text-sm text-muted-foreground">{helper}</p>
+        <p className="text-sm text-[#001E5B]/56">{helper}</p>
       </CardContent>
     </Card>
   );

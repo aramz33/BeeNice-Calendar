@@ -4,22 +4,18 @@ import {
   addMinutes,
   eachDayOfInterval,
   endOfDay,
+  format,
   getDay,
+  isWeekend,
   parseISO,
+  set,
   startOfToday,
   subMinutes,
 } from "date-fns";
 import { createDatabase } from "./database.mjs";
 
-const ACTIVE_BOOKING_STATUSES = new Set([
-  "booked",
-  "completed",
-  "no_show",
-  "not_qualified",
-]);
-
-const ALL_STATUSES = [
-  "booked",
+const DISPLAY_STATUSES = [
+  "scheduled",
   "completed",
   "no_show",
   "cancelled",
@@ -27,13 +23,25 @@ const ALL_STATUSES = [
   "not_qualified",
 ];
 
+const OUTCOME_STATES = [
+  "pending",
+  "completed",
+  "no_show",
+  "not_qualified",
+];
+
+const SCHEDULE_STATES = ["scheduled", "rescheduled", "cancelled"];
+
+const ACTIVE_SCHEDULE_STATES = new Set(["scheduled", "rescheduled"]);
+
 export function createStore(provider) {
   const database = createDatabase(provider.mode);
   const { db } = database;
   const sseClients = new Map();
+  const adminSseClients = new Set();
 
   const store = {
-    allStatuses: ALL_STATUSES,
+    displayStatuses: DISPLAY_STATUSES,
     dbFile: database.filename,
 
     getPublicBookingPayload(slug) {
@@ -124,7 +132,8 @@ export function createStore(provider) {
               endAt: addMinutes(slot, bookingLink.durationMinutes).toISOString(),
               availableRepCount: availableReps.length,
               seniorityPool:
-                companySize >= (this.getRoutingPolicy(bookingLink.id)?.companySizeThreshold ?? 200)
+                companySize >=
+                (this.getRoutingPolicy(bookingLink.id)?.companySizeThreshold ?? 200)
                   ? "senior"
                   : "all",
             });
@@ -154,18 +163,27 @@ export function createStore(provider) {
         `)
         .all(bookingLink.id, callerId)
         .map(fromBookingRow)
-        .map((booking) => ({
-          id: booking.id,
-          status: booking.status,
-          companyName: booking.companyName,
-          prospectName: booking.prospectName,
-          startAt: booking.startAt,
-          assignedRepName: this.getRep(booking.assignedRepId)?.name ?? "Rep inconnu",
-        }));
+        .map((booking) => this.toBookingSummary(booking));
 
       return {
         timezone: bookingLink.timezone,
         bookings,
+        tasks: this.listCallerTasks(callerId, bookingLink.clientId).tasks,
+      };
+    },
+
+    listCallerTasks(callerId, clientId = null) {
+      let tasks = this.listAllTasks();
+      tasks = tasks.filter(
+        (task) =>
+          task.callerId === callerId &&
+          task.status === "open" &&
+          (!clientId || task.clientId === clientId),
+      );
+
+      return {
+        timezone: "Europe/Paris",
+        tasks: tasks.sort((left, right) => left.dueAt.localeCompare(right.dueAt)),
       };
     },
 
@@ -199,9 +217,15 @@ export function createStore(provider) {
         throw new Error("Créneau invalide.");
       }
 
+      const sourceTask = payload.sourceTaskId
+        ? this.getTask(payload.sourceTaskId)
+        : null;
+      if (sourceTask && sourceTask.callerId !== caller.id) {
+        throw new Error("La tâche ne correspond pas au caller sélectionné.");
+      }
+
       const createdAt = new Date().toISOString();
       const bookingId = makeId("booking");
-      const historyId = makeId("history");
       let externalEventId = null;
       let repForCleanup = null;
 
@@ -244,6 +268,12 @@ export function createStore(provider) {
             endAt: addMinutes(slotStart, freshLink.durationMinutes).toISOString(),
             timezone: freshLink.timezone,
             status: "booked",
+            scheduleState: "scheduled",
+            outcomeState: "pending",
+            originalStartAt: slotStart.toISOString(),
+            previousStartAt: null,
+            lastCalendarChangeAt: null,
+            calendarSyncState: "synced",
             externalEventId: null,
             assignmentReason: assignment.reason,
             createdAt,
@@ -269,11 +299,17 @@ export function createStore(provider) {
               end_at,
               timezone,
               status,
+              schedule_state,
+              outcome_state,
+              original_start_at,
+              previous_start_at,
+              last_calendar_change_at,
+              calendar_sync_state,
               external_event_id,
               assignment_reason_json,
               sync_state,
               created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `).run(
             booking.id,
             booking.bookingLinkId,
@@ -288,43 +324,52 @@ export function createStore(provider) {
             booking.startAt,
             booking.endAt,
             booking.timezone,
-            booking.status,
+            "booked",
+            booking.scheduleState,
+            booking.outcomeState,
+            booking.originalStartAt,
+            null,
+            null,
+            booking.calendarSyncState,
             externalEventId,
             JSON.stringify(booking.assignmentReason),
             "synced",
             booking.createdAt,
           );
 
-          db.prepare(`
-            INSERT INTO booking_status_history (
-              id,
-              booking_id,
-              from_status,
-              to_status,
-              actor_type,
-              actor_label,
-              reason,
-              created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-          `).run(
-            historyId,
-            booking.id,
-            null,
-            "booked",
-            "caller",
-            caller.name,
-            "Booking créé depuis le workspace caller.",
+          this.insertLegacyStatusHistory({
+            bookingId: booking.id,
+            fromStatus: null,
+            toStatus: "booked",
+            actorType: "caller",
+            actorLabel: caller.name,
+            reason: "Booking créé depuis le workspace caller.",
             createdAt,
-          );
+          });
+
+          this.insertTimelineEvent({
+            bookingId: booking.id,
+            type: "booking_created",
+            actorLabel: caller.name,
+            reason: "Booking créé depuis le workspace caller.",
+            createdAt,
+          });
+
+          if (sourceTask) {
+            this.completeTask(sourceTask.id, booking.id, createdAt);
+          }
 
           return {
             bookingId: booking.id,
             assignedRepName: assignment.rep.name,
             slug: freshLink.slug,
+            clientId: freshLink.clientId,
           };
         });
 
         this.broadcastAvailability(result.slug);
+        this.broadcastAdmin("booking.updated");
+        this.broadcastAdmin("task.updated");
         return {
           bookingId: result.bookingId,
           assignedRepName: result.assignedRepName,
@@ -344,64 +389,30 @@ export function createStore(provider) {
       }
     },
 
-    listAdminBookings(filters) {
-      let bookings = db
-        .prepare("SELECT * FROM bookings ORDER BY start_at DESC")
-        .all()
-        .map(fromBookingRow);
-
-      if (filters.status) {
-        bookings = bookings.filter((booking) => booking.status === filters.status);
-      }
-      if (filters.callerId) {
-        bookings = bookings.filter((booking) => booking.callerId === filters.callerId);
-      }
-      if (filters.repId) {
-        bookings = bookings.filter((booking) => booking.assignedRepId === filters.repId);
-      }
-      if (filters.clientId) {
-        bookings = bookings.filter((booking) => booking.clientId === filters.clientId);
-      }
-      if (filters.query) {
-        const query = filters.query.toLowerCase();
-        bookings = bookings.filter(
-          (booking) =>
-            booking.companyName.toLowerCase().includes(query) ||
-            booking.prospectName.toLowerCase().includes(query),
-        );
-      }
-
-      const counts = Object.fromEntries(ALL_STATUSES.map((status) => [status, 0]));
+    listAdminBookings(filters = {}) {
+      const bookings = this.filterBookings(this.listAllBookings(), filters);
+      const counts = blankStatusCounts();
       bookings.forEach((booking) => {
-        counts[booking.status] += 1;
+        counts[getDisplayStatus(booking)] += 1;
       });
 
       const allReps = this.listAllReps().map((rep) =>
         decorateRep(rep, this.getConnection(rep.id)),
       );
+      const tasks = this.filterTasks(this.listAllTasks(), filters);
 
       return {
         timezone: "Europe/Paris",
         counts,
-        clientStats: this.getClientStats(),
-        bookings: bookings.map((booking) => ({
-          id: booking.id,
-          status: booking.status,
-          companyName: booking.companyName,
-          prospectName: booking.prospectName,
-          callerName: this.getCaller(booking.callerId)?.name ?? "Caller inconnu",
-          assignedRepName: this.getRep(booking.assignedRepId)?.name ?? "Rep inconnu",
-          startAt: booking.startAt,
-          timezone: booking.timezone,
-          notes: booking.notes,
-        })),
+        openTaskCount: tasks.filter((task) => task.status === "open").length,
+        clientStats: this.getClientStats(bookings, tasks),
+        bookings: bookings.map((booking) => this.toBookingSummary(booking)),
         filters: {
-          clients: db
-            .prepare("SELECT * FROM clients ORDER BY name ASC")
-            .all()
-            .map(fromClientRow)
-            .map((client) => ({ id: client.id, name: client.name })),
-          callers: this.listActiveCallers().map((caller) => ({
+          clients: this.listAllClients().map((client) => ({
+            id: client.id,
+            name: client.name,
+          })),
+          callers: this.listAllCallers().map((caller) => ({
             id: caller.id,
             name: caller.name,
           })),
@@ -416,44 +427,56 @@ export function createStore(provider) {
             lastWebhookAt: rep.lastWebhookAt,
             lastError: rep.lastError,
           })),
-          statuses: ALL_STATUSES,
+          statuses: DISPLAY_STATUSES,
         },
         integrations: provider.getOverview(),
       };
     },
 
+    listAdminCalendar(filters = {}) {
+      const from = filters.from ?? startOfToday().toISOString();
+      const to = filters.to ?? endOfDay(addDays(startOfToday(), 6)).toISOString();
+      const entries = this.filterBookings(this.listAllBookings(), {
+        ...filters,
+        from,
+        to,
+      }).map((booking) => this.toBookingSummary(booking));
+
+      return {
+        timezone: "Europe/Paris",
+        from,
+        to,
+        entries,
+      };
+    },
+
+    listAdminTasks(filters = {}) {
+      const tasks = this.filterTasks(this.listAllTasks(), filters);
+      return {
+        timezone: "Europe/Paris",
+        tasks,
+      };
+    },
+
     getBookingDetail(bookingId) {
-      const bookingRow = db
-        .prepare("SELECT * FROM bookings WHERE id = ?")
-        .get(bookingId);
-      if (!bookingRow) {
+      const booking = this.getBooking(bookingId);
+      if (!booking) {
         throw new Error("Booking introuvable.");
       }
 
-      const booking = fromBookingRow(bookingRow);
       const caller = this.getCaller(booking.callerId);
       const rep = this.getRep(booking.assignedRepId);
-      const history = db
-        .prepare(`
-          SELECT *
-          FROM booking_status_history
-          WHERE booking_id = ?
-          ORDER BY created_at DESC
-        `)
-        .all(bookingId)
-        .map((entry) => ({
-          id: entry.id,
-          fromStatus: entry.from_status ?? null,
-          toStatus: entry.to_status,
-          actorLabel: entry.actor_label,
-          reason: entry.reason ?? "",
-          createdAt: entry.created_at,
-        }));
+      const client = this.getClient(booking.clientId);
+      const linkedTask = this.getOpenTaskByBookingId(booking.id) ?? this.getTaskByReplacement(booking.id);
 
       return {
         booking: {
           id: booking.id,
-          status: booking.status,
+          displayStatus: getDisplayStatus(booking),
+          scheduleState: booking.scheduleState,
+          outcomeState: booking.outcomeState,
+          clientId: booking.clientId,
+          clientName: client?.name ?? "Client inconnu",
           companyName: booking.companyName,
           companySize: booking.companySize,
           prospectName: booking.prospectName,
@@ -465,17 +488,22 @@ export function createStore(provider) {
           notes: booking.notes,
           startAt: booking.startAt,
           endAt: booking.endAt,
+          originalStartAt: booking.originalStartAt,
+          previousStartAt: booking.previousStartAt,
+          lastCalendarChangeAt: booking.lastCalendarChangeAt,
+          calendarSyncState: booking.calendarSyncState,
           timezone: booking.timezone,
           assignmentReason: booking.assignmentReason,
           externalEventId: booking.externalEventId ?? "",
+          linkedTask,
         },
-        history,
+        timeline: this.getTimelineForBooking(bookingId),
       };
     },
 
-    async updateBookingStatus(bookingId, status, reason = "") {
-      if (!ALL_STATUSES.includes(status)) {
-        throw new Error("Statut invalide.");
+    async updateBookingOutcome(bookingId, outcomeState, reason = "") {
+      if (!OUTCOME_STATES.includes(outcomeState)) {
+        throw new Error("Outcome invalide.");
       }
 
       const booking = this.getBooking(bookingId);
@@ -483,43 +511,270 @@ export function createStore(provider) {
         throw new Error("Booking introuvable.");
       }
 
-      if (booking.status === status) {
-        throw new Error("Le booking est déjà dans ce statut.");
+      if (booking.outcomeState === outcomeState) {
+        throw new Error("Le booking a déjà ce résultat.");
       }
 
-      if (status === "cancelled" || status === "rescheduled") {
+      const createdAt = new Date().toISOString();
+      const next = {
+        ...booking,
+        outcomeState,
+      };
+
+      database.withTransaction(() => {
+        db.prepare(`
+          UPDATE bookings
+          SET outcome_state = ?,
+              status = ?,
+              completed_at = ?,
+              no_show_at = ?
+          WHERE id = ?
+        `).run(
+          outcomeState,
+          getLegacyStatus(next),
+          outcomeState === "completed" ? createdAt : booking.completedAt,
+          outcomeState === "no_show" ? createdAt : booking.noShowAt,
+          bookingId,
+        );
+
+        this.insertLegacyStatusHistory({
+          bookingId,
+          fromStatus: getLegacyStatus(booking),
+          toStatus: getLegacyStatus(next),
+          actorType: "admin",
+          actorLabel: "Admin BeeNice",
+          reason,
+          createdAt,
+        });
+
+        this.insertTimelineEvent({
+          bookingId,
+          type: "outcome_set",
+          actorLabel: "Admin BeeNice",
+          reason: reason || `Résultat mis à jour: ${outcomeState}.`,
+          createdAt,
+          meta: { outcomeState },
+        });
+
+        if (outcomeState === "no_show") {
+          this.ensureFollowUpTask(bookingId, "no_show", createdAt);
+        }
+      });
+
+      this.broadcastAdmin("booking.updated");
+      this.broadcastAdmin("task.updated");
+      return { ok: true };
+    },
+
+    async updateBookingSchedule(bookingId, scheduleState, reason = "", nextStartAt = null) {
+      if (!SCHEDULE_STATES.includes(scheduleState)) {
+        throw new Error("Statut calendrier invalide.");
+      }
+
+      const booking = this.getBooking(bookingId);
+      if (!booking) {
+        throw new Error("Booking introuvable.");
+      }
+
+      const createdAt = new Date().toISOString();
+      const patch = {
+        scheduleState,
+        status: booking.status,
+        previousStartAt: booking.previousStartAt,
+        startAt: booking.startAt,
+        endAt: booking.endAt,
+        cancelledAt: booking.cancelledAt,
+        lastCalendarChangeAt: createdAt,
+      };
+
+      if (scheduleState === "cancelled") {
+        patch.cancelledAt = createdAt;
+      }
+
+      if (scheduleState === "rescheduled" && nextStartAt) {
+        const nextStart = parseISO(nextStartAt);
+        if (Number.isNaN(nextStart.getTime())) {
+          throw new Error("Nouvelle date invalide.");
+        }
+        patch.previousStartAt = booking.startAt;
+        patch.startAt = nextStart.toISOString();
+        patch.endAt = addMinutes(
+          nextStart,
+          differenceInMinutesSafe(booking.startAt, booking.endAt),
+        ).toISOString();
+      }
+
+      if (scheduleState === "cancelled") {
         await provider.releaseExternalEvent(this, booking);
       }
 
-      await database.withTransaction(() => {
-        db.prepare("UPDATE bookings SET status = ? WHERE id = ?").run(status, bookingId);
+      const nextBooking = {
+        ...booking,
+        scheduleState,
+        previousStartAt: patch.previousStartAt,
+        startAt: patch.startAt,
+        endAt: patch.endAt,
+      };
+
+      database.withTransaction(() => {
         db.prepare(`
-          INSERT INTO booking_status_history (
-            id,
-            booking_id,
-            from_status,
-            to_status,
-            actor_type,
-            actor_label,
-            reason,
-            created_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          UPDATE bookings
+          SET schedule_state = ?,
+              status = ?,
+              previous_start_at = ?,
+              start_at = ?,
+              end_at = ?,
+              cancelled_at = ?,
+              last_calendar_change_at = ?,
+              calendar_sync_state = 'synced'
+          WHERE id = ?
         `).run(
-          makeId("history"),
+          scheduleState,
+          getLegacyStatus(nextBooking),
+          patch.previousStartAt,
+          patch.startAt,
+          patch.endAt,
+          patch.cancelledAt,
+          patch.lastCalendarChangeAt,
           bookingId,
-          booking.status,
-          status,
-          "admin",
-          "Admin Be Nice",
-          reason || null,
-          new Date().toISOString(),
         );
+
+        this.insertLegacyStatusHistory({
+          bookingId,
+          fromStatus: getLegacyStatus(booking),
+          toStatus: getLegacyStatus(nextBooking),
+          actorType: "admin",
+          actorLabel: "Admin BeeNice",
+          reason,
+          createdAt,
+        });
+
+        this.insertTimelineEvent({
+          bookingId,
+          type:
+            scheduleState === "cancelled"
+              ? "calendar_cancelled"
+              : "calendar_rescheduled",
+          actorLabel: "Admin BeeNice",
+          reason:
+            reason ||
+            (scheduleState === "cancelled"
+              ? "Rendez-vous annulé."
+              : "Rendez-vous déplacé manuellement."),
+          createdAt,
+          meta:
+            scheduleState === "rescheduled" && nextStartAt
+              ? { previousStartAt: booking.startAt, nextStartAt: patch.startAt }
+              : undefined,
+        });
+
+        if (scheduleState === "cancelled") {
+          this.ensureFollowUpTask(bookingId, "cancelled", createdAt);
+        }
       });
 
       const link = this.getBookingLinkById(booking.bookingLinkId);
       if (link) {
         this.broadcastAvailability(link.slug);
       }
+      this.broadcastAdmin("booking.updated");
+      this.broadcastAdmin("task.updated");
+      return { ok: true };
+    },
+
+    updateTask(taskId, payload = {}) {
+      const task = this.getTask(taskId);
+      if (!task) {
+        throw new Error("Tâche introuvable.");
+      }
+
+      const createdAt = new Date().toISOString();
+      const nextStatus = payload.status ?? task.status;
+      const dueAt = payload.dueAt ?? task.dueAt;
+      if (!["open", "done", "dismissed"].includes(nextStatus)) {
+        throw new Error("Statut de tâche invalide.");
+      }
+
+      database.withTransaction(() => {
+        db.prepare(`
+          UPDATE follow_up_tasks
+          SET status = ?,
+              due_at = ?,
+              notes = ?,
+              completed_at = ?,
+              dismissed_at = ?
+          WHERE id = ?
+        `).run(
+          nextStatus,
+          dueAt,
+          payload.notes ?? task.notes ?? null,
+          nextStatus === "done" ? createdAt : task.completedAt,
+          nextStatus === "dismissed" ? createdAt : task.dismissedAt,
+          taskId,
+        );
+
+        if (nextStatus !== task.status) {
+          this.insertTimelineEvent({
+            bookingId: task.sourceBookingId,
+            type: "task_completed",
+            actorLabel: "Admin BeeNice",
+            reason:
+              nextStatus === "dismissed"
+                ? "Tâche classée."
+                : "Tâche marquée comme traitée.",
+            createdAt,
+            meta: { taskStatus: nextStatus },
+          });
+        }
+      });
+
+      this.broadcastAdmin("task.updated");
+      return { ok: true };
+    },
+
+    async refreshCalendarBookings() {
+      if (provider.mode !== "nylas") {
+        return { refreshed: 0 };
+      }
+
+      const bookings = this.listAllBookings().filter(
+        (booking) =>
+          booking.externalEventId &&
+          ACTIVE_SCHEDULE_STATES.has(booking.scheduleState),
+      );
+
+      let refreshed = 0;
+      for (const booking of bookings) {
+        try {
+          const externalEvent = await provider.fetchExternalEvent(this, booking);
+          if (!externalEvent) {
+            await this.applyProviderCancellation(booking, "Annulé côté calendrier client.");
+            refreshed += 1;
+            continue;
+          }
+
+          if (
+            externalEvent.startAt.toISOString() !== booking.startAt ||
+            externalEvent.endAt.toISOString() !== booking.endAt
+          ) {
+            await this.applyProviderReschedule(
+              booking,
+              externalEvent.startAt.toISOString(),
+              externalEvent.endAt.toISOString(),
+              "Rendez-vous déplacé côté calendrier client.",
+            );
+            refreshed += 1;
+          }
+        } catch {
+          db.prepare(`
+            UPDATE bookings
+            SET calendar_sync_state = 'error'
+            WHERE id = ?
+          `).run(booking.id);
+        }
+      }
+
+      return { refreshed };
     },
 
     async startRepConnection(repId, payload) {
@@ -528,6 +783,7 @@ export function createStore(provider) {
       if (rep && result.connection?.status === "connected") {
         this.broadcastClientAvailability(rep.clientId);
       }
+      this.broadcastAdmin("connections.updated");
       return result;
     },
 
@@ -537,6 +793,7 @@ export function createStore(provider) {
       if (rep) {
         this.broadcastClientAvailability(rep.clientId);
       }
+      this.broadcastAdmin("connections.updated");
       return result;
     },
 
@@ -544,9 +801,11 @@ export function createStore(provider) {
       return this.startRepConnection(repId, payload);
     },
 
-    handleWebhook(payload = {}) {
+    async handleWebhook(payload = {}) {
       const receivedAt = new Date().toISOString();
       const grantId = extractGrantId(payload);
+      const eventType = payload.type ?? payload.specversion ?? null;
+      const externalId = extractExternalId(payload);
 
       database.withTransaction(() => {
         db.prepare(`
@@ -562,8 +821,8 @@ export function createStore(provider) {
         `).run(
           makeId("webhook"),
           provider.mode === "nylas" ? "nylas" : "mock",
-          payload.type ?? payload.specversion ?? null,
-          extractExternalId(payload),
+          eventType,
+          externalId,
           JSON.stringify(payload),
           receivedAt,
           receivedAt,
@@ -578,8 +837,131 @@ export function createStore(provider) {
         }
       });
 
+      const booking = externalId ? this.findBookingByExternalEventId(externalId) : null;
+      if (booking) {
+        if (isDeletionEvent(eventType)) {
+          await this.applyProviderCancellation(
+            booking,
+            "Annulé côté calendrier client.",
+          );
+        } else if (isUpdateEvent(eventType)) {
+          const fresh = await provider.fetchExternalEvent(this, booking);
+          if (!fresh) {
+            await this.applyProviderCancellation(
+              booking,
+              "Annulé côté calendrier client.",
+            );
+          } else if (
+            fresh.startAt.toISOString() !== booking.startAt ||
+            fresh.endAt.toISOString() !== booking.endAt
+          ) {
+            await this.applyProviderReschedule(
+              booking,
+              fresh.startAt.toISOString(),
+              fresh.endAt.toISOString(),
+              "Rendez-vous déplacé côté calendrier client.",
+            );
+          }
+        }
+      }
+
       this.listBookingLinks().forEach((link) => this.broadcastAvailability(link.slug));
+      this.broadcastAdmin("booking.updated");
+      this.broadcastAdmin("task.updated");
+      this.broadcastAdmin("connections.updated");
       return { ok: true };
+    },
+
+    listSettings() {
+      return {
+        clients: this.listAllClients(),
+        callers: this.listAllCallers(),
+      };
+    },
+
+    createClient(payload = {}) {
+      if (!payload.name?.trim()) {
+        throw new Error("Le nom du client est obligatoire.");
+      }
+
+      const client = {
+        id: makeId("client"),
+        name: payload.name.trim(),
+        timezone: payload.timezone?.trim() || "Europe/Paris",
+        active: payload.active !== false,
+      };
+
+      db.prepare(`
+        INSERT INTO clients (id, name, timezone, active)
+        VALUES (?, ?, ?, ?)
+      `).run(client.id, client.name, client.timezone, toDbBool(client.active));
+
+      this.broadcastAdmin("settings.updated");
+      return client;
+    },
+
+    updateClient(clientId, payload = {}) {
+      const client = this.getClient(clientId);
+      if (!client) {
+        throw new Error("Client introuvable.");
+      }
+
+      db.prepare(`
+        UPDATE clients
+        SET name = ?,
+            timezone = ?,
+            active = ?
+        WHERE id = ?
+      `).run(
+        payload.name?.trim() || client.name,
+        payload.timezone?.trim() || client.timezone,
+        toDbBool(payload.active ?? client.active),
+        clientId,
+      );
+
+      this.broadcastAdmin("settings.updated");
+      return this.getClient(clientId);
+    },
+
+    createCaller(payload = {}) {
+      if (!payload.name?.trim()) {
+        throw new Error("Le nom du caller est obligatoire.");
+      }
+
+      const caller = {
+        id: makeId("caller"),
+        name: payload.name.trim(),
+        active: payload.active !== false,
+      };
+
+      db.prepare(`
+        INSERT INTO callers (id, name, active)
+        VALUES (?, ?, ?)
+      `).run(caller.id, caller.name, toDbBool(caller.active));
+
+      this.broadcastAdmin("settings.updated");
+      return caller;
+    },
+
+    updateCaller(callerId, payload = {}) {
+      const caller = this.getCaller(callerId);
+      if (!caller) {
+        throw new Error("Caller introuvable.");
+      }
+
+      db.prepare(`
+        UPDATE callers
+        SET name = ?,
+            active = ?
+        WHERE id = ?
+      `).run(
+        payload.name?.trim() || caller.name,
+        toDbBool(payload.active ?? caller.active),
+        callerId,
+      );
+
+      this.broadcastAdmin("settings.updated");
+      return this.getCaller(callerId);
     },
 
     listReps() {
@@ -597,6 +979,14 @@ export function createStore(provider) {
       sseClients.get(slug)?.delete(response);
     },
 
+    addAdminSseClient(response) {
+      adminSseClients.add(response);
+    },
+
+    removeAdminSseClient(response) {
+      adminSseClients.delete(response);
+    },
+
     broadcastAvailability(slug) {
       const clients = sseClients.get(slug);
       if (!clients || clients.size === 0) {
@@ -610,10 +1000,21 @@ export function createStore(provider) {
       clients.forEach((response) => response.write(payload));
     },
 
+    broadcastAdmin(eventName = "booking.updated") {
+      if (adminSseClients.size === 0) {
+        return;
+      }
+      const payload = `event: ${eventName}\ndata: ${JSON.stringify({
+        at: new Date().toISOString(),
+      })}\n\n`;
+      adminSseClients.forEach((response) => response.write(payload));
+    },
+
     broadcastClientAvailability(clientId) {
       this.listBookingLinksForClient(clientId).forEach((link) =>
         this.broadcastAvailability(link.slug),
       );
+      this.broadcastAdmin("connections.updated");
     },
 
     getBookingLinkBySlug(slug) {
@@ -644,16 +1045,27 @@ export function createStore(provider) {
         .map(fromBookingLinkRow);
     },
 
+    listAllClients() {
+      return db
+        .prepare("SELECT * FROM clients ORDER BY name ASC")
+        .all()
+        .map(fromClientRow);
+    },
+
     getClient(clientId) {
       const row = db.prepare("SELECT * FROM clients WHERE id = ?").get(clientId);
       return row ? fromClientRow(row) : null;
     },
 
-    listActiveCallers() {
+    listAllCallers() {
       return db
-        .prepare("SELECT * FROM callers WHERE active = 1 ORDER BY name ASC")
+        .prepare("SELECT * FROM callers ORDER BY name ASC")
         .all()
         .map(fromCallerRow);
+    },
+
+    listActiveCallers() {
+      return this.listAllCallers().filter((caller) => caller.active);
     },
 
     getCaller(callerId) {
@@ -847,7 +1259,7 @@ export function createStore(provider) {
           WHERE assigned_rep_id = ?
             AND end_at > ?
             AND start_at < ?
-            AND status IN ('booked', 'completed', 'no_show', 'not_qualified')
+            AND schedule_state != 'cancelled'
         `)
         .all(repId, interval.start.toISOString(), interval.end.toISOString())
         .map((booking) => ({
@@ -972,42 +1384,154 @@ export function createStore(provider) {
       return row?.count ?? 0;
     },
 
+    listAllBookings() {
+      return db
+        .prepare("SELECT * FROM bookings ORDER BY start_at DESC")
+        .all()
+        .map(fromBookingRow);
+    },
+
     getBooking(bookingId) {
       const row = db.prepare("SELECT * FROM bookings WHERE id = ?").get(bookingId);
       return row ? fromBookingRow(row) : null;
     },
 
-    getClientStats() {
-      const rows = db
-        .prepare(
-          `SELECT client_id, status, COUNT(*) AS count
-           FROM bookings
-           GROUP BY client_id, status`,
-        )
-        .all();
+    findBookingByExternalEventId(externalEventId) {
+      const row = db
+        .prepare("SELECT * FROM bookings WHERE external_event_id = ?")
+        .get(externalEventId);
+      return row ? fromBookingRow(row) : null;
+    },
 
+    listAllTasks() {
+      return db
+        .prepare(`
+          SELECT t.*, b.company_name, b.prospect_name, b.start_at, c.name AS client_name, u.name AS caller_name
+          FROM follow_up_tasks t
+          JOIN bookings b ON b.id = t.source_booking_id
+          JOIN clients c ON c.id = t.client_id
+          JOIN callers u ON u.id = t.caller_id
+          ORDER BY t.due_at ASC, t.created_at DESC
+        `)
+        .all()
+        .map(fromTaskRow);
+    },
+
+    getTask(taskId) {
+      const row = db
+        .prepare(`
+          SELECT t.*, b.company_name, b.prospect_name, b.start_at, c.name AS client_name, u.name AS caller_name
+          FROM follow_up_tasks t
+          JOIN bookings b ON b.id = t.source_booking_id
+          JOIN clients c ON c.id = t.client_id
+          JOIN callers u ON u.id = t.caller_id
+          WHERE t.id = ?
+        `)
+        .get(taskId);
+      return row ? fromTaskRow(row) : null;
+    },
+
+    getOpenTaskByBookingId(bookingId) {
+      const row = db
+        .prepare(`
+          SELECT t.*, b.company_name, b.prospect_name, b.start_at, c.name AS client_name, u.name AS caller_name
+          FROM follow_up_tasks t
+          JOIN bookings b ON b.id = t.source_booking_id
+          JOIN clients c ON c.id = t.client_id
+          JOIN callers u ON u.id = t.caller_id
+          WHERE t.source_booking_id = ? AND t.status = 'open'
+        `)
+        .get(bookingId);
+      return row ? fromTaskRow(row) : null;
+    },
+
+    getTaskByReplacement(bookingId) {
+      const row = db
+        .prepare(`
+          SELECT t.*, b.company_name, b.prospect_name, b.start_at, c.name AS client_name, u.name AS caller_name
+          FROM follow_up_tasks t
+          JOIN bookings b ON b.id = t.source_booking_id
+          JOIN clients c ON c.id = t.client_id
+          JOIN callers u ON u.id = t.caller_id
+          WHERE t.replacement_booking_id = ?
+        `)
+        .get(bookingId);
+      return row ? fromTaskRow(row) : null;
+    },
+
+    getTimelineForBooking(bookingId) {
+      return db
+        .prepare(`
+          SELECT *
+          FROM booking_timeline_events
+          WHERE booking_id = ?
+          ORDER BY created_at DESC
+        `)
+        .all(bookingId)
+        .map((entry) => ({
+          id: entry.id,
+          type: entry.event_type,
+          actorLabel: entry.actor_label,
+          reason: entry.reason ?? "",
+          createdAt: entry.created_at,
+          meta: parseJson(entry.meta_json),
+        }));
+    },
+
+    toBookingSummary(booking) {
+      return {
+        id: booking.id,
+        displayStatus: getDisplayStatus(booking),
+        scheduleState: booking.scheduleState,
+        outcomeState: booking.outcomeState,
+        clientId: booking.clientId,
+        clientName: this.getClient(booking.clientId)?.name ?? "Client inconnu",
+        companyName: booking.companyName,
+        prospectName: booking.prospectName,
+        callerId: booking.callerId,
+        callerName: this.getCaller(booking.callerId)?.name ?? "Caller inconnu",
+        assignedRepId: booking.assignedRepId,
+        assignedRepName: this.getRep(booking.assignedRepId)?.name ?? "Rep inconnu",
+        startAt: booking.startAt,
+        originalStartAt: booking.originalStartAt,
+        previousStartAt: booking.previousStartAt,
+        timezone: booking.timezone,
+        notes: booking.notes,
+        taskId: this.getOpenTaskByBookingId(booking.id)?.id ?? null,
+      };
+    },
+
+    getClientStats(bookings, tasks) {
       const byClient = new Map();
-      rows.forEach(({ client_id, status, count }) => {
-        if (!byClient.has(client_id)) {
-          const client = this.getClient(client_id);
-          byClient.set(client_id, {
-            clientId: client_id,
+      bookings.forEach((booking) => {
+        if (!byClient.has(booking.clientId)) {
+          const client = this.getClient(booking.clientId);
+          byClient.set(booking.clientId, {
+            clientId: booking.clientId,
             clientName: client?.name ?? "Client inconnu",
             total: 0,
-            byStatus: {
-              booked: 0,
-              completed: 0,
-              no_show: 0,
-              cancelled: 0,
-              rescheduled: 0,
-              not_qualified: 0,
-            },
+            byStatus: blankStatusCounts(),
+            openTaskCount: 0,
           });
         }
-        const entry = byClient.get(client_id);
-        entry.total += count;
-        if (Object.prototype.hasOwnProperty.call(entry.byStatus, status)) {
-          entry.byStatus[status] = count;
+        const entry = byClient.get(booking.clientId);
+        entry.total += 1;
+        entry.byStatus[getDisplayStatus(booking)] += 1;
+      });
+
+      tasks.forEach((task) => {
+        if (!byClient.has(task.clientId)) {
+          const client = this.getClient(task.clientId);
+          byClient.set(task.clientId, {
+            clientId: task.clientId,
+            clientName: client?.name ?? "Client inconnu",
+            total: 0,
+            byStatus: blankStatusCounts(),
+            openTaskCount: 0,
+          });
+        }
+        if (task.status === "open") {
+          byClient.get(task.clientId).openTaskCount += 1;
         }
       });
 
@@ -1032,12 +1556,388 @@ export function createStore(provider) {
                   100,
               )
             : 0,
-        pendingCount: entry.byStatus.booked,
+        pendingCount: entry.byStatus.scheduled + entry.byStatus.rescheduled,
+        openTaskCount: entry.openTaskCount,
       }));
+    },
+
+    filterBookings(bookings, filters = {}) {
+      return bookings.filter((booking) => {
+        if (filters.status && filters.status !== "all") {
+          if (getDisplayStatus(booking) !== filters.status) {
+            return false;
+          }
+        }
+        if (filters.callerId && filters.callerId !== "all") {
+          if (booking.callerId !== filters.callerId) {
+            return false;
+          }
+        }
+        if (filters.repId && filters.repId !== "all") {
+          if (booking.assignedRepId !== filters.repId) {
+            return false;
+          }
+        }
+        if (filters.clientId && filters.clientId !== "all") {
+          if (booking.clientId !== filters.clientId) {
+            return false;
+          }
+        }
+        if (filters.from && booking.startAt < filters.from) {
+          return false;
+        }
+        if (filters.to && booking.startAt > filters.to) {
+          return false;
+        }
+        if (filters.query) {
+          const query = filters.query.toLowerCase();
+          const clientName = this.getClient(booking.clientId)?.name ?? "";
+          const callerName = this.getCaller(booking.callerId)?.name ?? "";
+          const repName = this.getRep(booking.assignedRepId)?.name ?? "";
+          const haystack = [
+            booking.companyName,
+            booking.prospectName,
+            clientName,
+            callerName,
+            repName,
+          ]
+            .join(" ")
+            .toLowerCase();
+          if (!haystack.includes(query)) {
+            return false;
+          }
+        }
+        return true;
+      });
+    },
+
+    filterTasks(tasks, filters = {}) {
+      return tasks.filter((task) => {
+        if (filters.callerId && filters.callerId !== "all" && task.callerId !== filters.callerId) {
+          return false;
+        }
+        if (filters.clientId && filters.clientId !== "all" && task.clientId !== filters.clientId) {
+          return false;
+        }
+        if (filters.query) {
+          const query = filters.query.toLowerCase();
+          const haystack = [
+            task.clientName,
+            task.callerName,
+            task.companyName,
+            task.prospectName,
+          ]
+            .join(" ")
+            .toLowerCase();
+          if (!haystack.includes(query)) {
+            return false;
+          }
+        }
+        return true;
+      });
+    },
+
+    insertLegacyStatusHistory({
+      bookingId,
+      fromStatus,
+      toStatus,
+      actorType,
+      actorLabel,
+      reason,
+      createdAt = new Date().toISOString(),
+    }) {
+      db.prepare(`
+        INSERT INTO booking_status_history (
+          id,
+          booking_id,
+          from_status,
+          to_status,
+          actor_type,
+          actor_label,
+          reason,
+          created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        makeId("history"),
+        bookingId,
+        fromStatus,
+        toStatus,
+        actorType,
+        actorLabel,
+        reason || null,
+        createdAt,
+      );
+    },
+
+    insertTimelineEvent({
+      bookingId,
+      type,
+      actorLabel,
+      reason,
+      createdAt = new Date().toISOString(),
+      meta,
+    }) {
+      db.prepare(`
+        INSERT INTO booking_timeline_events (
+          id,
+          booking_id,
+          event_type,
+          actor_label,
+          reason,
+          meta_json,
+          created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        makeId("timeline"),
+        bookingId,
+        type,
+        actorLabel,
+        reason || null,
+        meta ? JSON.stringify(meta) : null,
+        createdAt,
+      );
+    },
+
+    ensureFollowUpTask(bookingId, triggerReason, createdAt = new Date().toISOString()) {
+      const current = this.getOpenTaskByBookingId(bookingId);
+      if (current) {
+        return current;
+      }
+
+      const booking = this.getBooking(bookingId);
+      if (!booking) {
+        return null;
+      }
+
+      const taskId = makeId("task");
+      db.prepare(`
+        INSERT INTO follow_up_tasks (
+          id,
+          source_booking_id,
+          client_id,
+          caller_id,
+          type,
+          trigger_reason,
+          status,
+          due_at,
+          replacement_booking_id,
+          notes,
+          created_at,
+          completed_at,
+          dismissed_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        taskId,
+        booking.id,
+        booking.clientId,
+        booking.callerId,
+        "reposition_booking",
+        triggerReason,
+        "open",
+        nextBusinessMorning(createdAt),
+        null,
+        booking.notes || null,
+        createdAt,
+        null,
+        null,
+      );
+
+      this.insertTimelineEvent({
+        bookingId,
+        type: "task_created",
+        actorLabel: "BeeNice",
+        reason:
+          triggerReason === "cancelled"
+            ? "Tâche de repositionnement créée après annulation."
+            : "Tâche de repositionnement créée après no-show.",
+        createdAt,
+        meta: { triggerReason, taskId },
+      });
+
+      return this.getTask(taskId);
+    },
+
+    completeTask(taskId, replacementBookingId, createdAt = new Date().toISOString()) {
+      const task = this.getTask(taskId);
+      if (!task) {
+        return null;
+      }
+
+      db.prepare(`
+        UPDATE follow_up_tasks
+        SET status = 'done',
+            replacement_booking_id = ?,
+            completed_at = ?
+        WHERE id = ?
+      `).run(replacementBookingId, createdAt, taskId);
+
+      this.insertTimelineEvent({
+        bookingId: task.sourceBookingId,
+        type: "task_completed",
+        actorLabel: this.getCaller(task.callerId)?.name ?? "BeeNice",
+        reason: "Tâche de repositionnement clôturée après rebooking.",
+        createdAt,
+        meta: { taskId, replacementBookingId },
+      });
+
+      return this.getTask(taskId);
+    },
+
+    async applyProviderCancellation(booking, reason) {
+      if (booking.scheduleState === "cancelled") {
+        return;
+      }
+
+      const createdAt = new Date().toISOString();
+      database.withTransaction(() => {
+        db.prepare(`
+          UPDATE bookings
+          SET schedule_state = 'cancelled',
+              status = 'cancelled',
+              cancelled_at = ?,
+              last_calendar_change_at = ?,
+              calendar_sync_state = 'synced'
+          WHERE id = ?
+        `).run(createdAt, createdAt, booking.id);
+
+        this.insertLegacyStatusHistory({
+          bookingId: booking.id,
+          fromStatus: getLegacyStatus(booking),
+          toStatus: "cancelled",
+          actorType: "system",
+          actorLabel: "Calendrier client",
+          reason,
+          createdAt,
+        });
+
+        this.insertTimelineEvent({
+          bookingId: booking.id,
+          type: "calendar_cancelled",
+          actorLabel: "Calendrier client",
+          reason,
+          createdAt,
+        });
+
+        this.ensureFollowUpTask(booking.id, "cancelled", createdAt);
+      });
+
+      const link = this.getBookingLinkById(booking.bookingLinkId);
+      if (link) {
+        this.broadcastAvailability(link.slug);
+      }
+    },
+
+    async applyProviderReschedule(booking, nextStartAt, nextEndAt, reason) {
+      const createdAt = new Date().toISOString();
+
+      database.withTransaction(() => {
+        db.prepare(`
+          UPDATE bookings
+          SET schedule_state = 'rescheduled',
+              status = 'rescheduled',
+              previous_start_at = ?,
+              start_at = ?,
+              end_at = ?,
+              last_calendar_change_at = ?,
+              calendar_sync_state = 'synced'
+          WHERE id = ?
+        `).run(booking.startAt, nextStartAt, nextEndAt, createdAt, booking.id);
+
+        this.insertLegacyStatusHistory({
+          bookingId: booking.id,
+          fromStatus: getLegacyStatus(booking),
+          toStatus: "rescheduled",
+          actorType: "system",
+          actorLabel: "Calendrier client",
+          reason,
+          createdAt,
+        });
+
+        this.insertTimelineEvent({
+          bookingId: booking.id,
+          type: "calendar_rescheduled",
+          actorLabel: "Calendrier client",
+          reason,
+          createdAt,
+          meta: { previousStartAt: booking.startAt, nextStartAt },
+        });
+      });
+
+      const link = this.getBookingLinkById(booking.bookingLinkId);
+      if (link) {
+        this.broadcastAvailability(link.slug);
+      }
     },
   };
 
+  bootstrapTimeline(store, db);
+  bootstrapTasks(store, db);
+
   return store;
+}
+
+function bootstrapTimeline(store, db) {
+  const rows = db.prepare("SELECT COUNT(*) AS count FROM booking_timeline_events").get();
+  if (rows?.count > 0) {
+    return;
+  }
+
+  const historyRows = db
+    .prepare(`
+      SELECT *
+      FROM booking_status_history
+      ORDER BY created_at ASC
+    `)
+    .all();
+
+  historyRows.forEach((entry) => {
+    let type = "booking_created";
+    let meta = null;
+    if (entry.to_status === "cancelled") {
+      type = "calendar_cancelled";
+    } else if (entry.to_status === "rescheduled") {
+      type = "calendar_rescheduled";
+    } else if (
+      entry.to_status === "completed" ||
+      entry.to_status === "no_show" ||
+      entry.to_status === "not_qualified"
+    ) {
+      type = "outcome_set";
+      meta = {
+        outcomeState:
+          entry.to_status === "completed"
+            ? "completed"
+            : entry.to_status === "no_show"
+              ? "no_show"
+              : "not_qualified",
+      };
+    }
+
+    store.insertTimelineEvent({
+      bookingId: entry.booking_id,
+      type,
+      actorLabel: entry.actor_label,
+      reason: entry.reason,
+      createdAt: entry.created_at,
+      meta,
+    });
+  });
+}
+
+function bootstrapTasks(store) {
+  store
+    .listAllBookings()
+    .filter((booking) => {
+      const displayStatus = getDisplayStatus(booking);
+      return displayStatus === "no_show" || displayStatus === "cancelled";
+    })
+    .forEach((booking) => {
+      store.ensureFollowUpTask(
+        booking.id,
+        getDisplayStatus(booking) === "cancelled" ? "cancelled" : "no_show",
+        booking.noShowAt ?? booking.cancelledAt ?? booking.createdAt,
+      );
+    });
 }
 
 function decorateRep(rep, connection) {
@@ -1066,6 +1966,39 @@ function rangesOverlap(startA, endA, startB, endB) {
   return startA < endB && startB < endA;
 }
 
+function blankStatusCounts() {
+  return Object.fromEntries(DISPLAY_STATUSES.map((status) => [status, 0]));
+}
+
+function getDisplayStatus(booking) {
+  if (booking.scheduleState === "cancelled") {
+    return "cancelled";
+  }
+  if (booking.outcomeState === "completed") {
+    return "completed";
+  }
+  if (booking.outcomeState === "no_show") {
+    return "no_show";
+  }
+  if (booking.outcomeState === "not_qualified") {
+    return "not_qualified";
+  }
+  if (booking.scheduleState === "rescheduled") {
+    return "rescheduled";
+  }
+  return "scheduled";
+}
+
+function getLegacyStatus(booking) {
+  const displayStatus = getDisplayStatus(booking);
+  switch (displayStatus) {
+    case "scheduled":
+      return "booked";
+    default:
+      return displayStatus;
+  }
+}
+
 function extractGrantId(payload) {
   return (
     payload?.data?.grant_id ??
@@ -1076,7 +2009,36 @@ function extractGrantId(payload) {
 }
 
 function extractExternalId(payload) {
-  return payload?.data?.id ?? payload?.id ?? payload?.specversion ?? null;
+  return (
+    payload?.data?.object?.id ??
+    payload?.data?.id ??
+    payload?.id ??
+    payload?.specversion ??
+    null
+  );
+}
+
+function isDeletionEvent(eventType) {
+  return typeof eventType === "string" && /deleted|cancelled/i.test(eventType);
+}
+
+function isUpdateEvent(eventType) {
+  return typeof eventType === "string" && /updated/i.test(eventType);
+}
+
+function nextBusinessMorning(referenceIso) {
+  let cursor = parseISO(referenceIso);
+  cursor = addDays(cursor, 1);
+  while (isWeekend(cursor)) {
+    cursor = addDays(cursor, 1);
+  }
+  return set(cursor, { hours: 9, minutes: 0, seconds: 0, milliseconds: 0 }).toISOString();
+}
+
+function differenceInMinutesSafe(startIso, endIso) {
+  const start = parseISO(startIso);
+  const end = parseISO(endIso);
+  return Math.max(15, Math.round((end.getTime() - start.getTime()) / 60000));
 }
 
 function makeId(prefix) {
@@ -1088,6 +2050,7 @@ function fromClientRow(row) {
     id: row.id,
     name: row.name,
     timezone: row.timezone,
+    active: Boolean(row.active),
   };
 }
 
@@ -1171,10 +2134,42 @@ function fromBookingRow(row) {
     endAt: row.end_at,
     timezone: row.timezone,
     status: row.status,
+    scheduleState: row.schedule_state ?? "scheduled",
+    outcomeState: row.outcome_state ?? "pending",
+    originalStartAt: row.original_start_at ?? row.start_at,
+    previousStartAt: row.previous_start_at ?? null,
+    lastCalendarChangeAt: row.last_calendar_change_at ?? null,
+    calendarSyncState: row.calendar_sync_state ?? row.sync_state ?? "synced",
+    cancelledAt: row.cancelled_at ?? null,
+    completedAt: row.completed_at ?? null,
+    noShowAt: row.no_show_at ?? null,
     externalEventId: row.external_event_id ?? "",
     assignmentReason: parseJson(row.assignment_reason_json),
     syncState: row.sync_state,
     createdAt: row.created_at,
+  };
+}
+
+function fromTaskRow(row) {
+  return {
+    id: row.id,
+    sourceBookingId: row.source_booking_id,
+    clientId: row.client_id,
+    clientName: row.client_name,
+    callerId: row.caller_id,
+    callerName: row.caller_name,
+    type: row.type,
+    triggerReason: row.trigger_reason,
+    status: row.status,
+    dueAt: row.due_at,
+    createdAt: row.created_at,
+    completedAt: row.completed_at ?? null,
+    dismissedAt: row.dismissed_at ?? null,
+    replacementBookingId: row.replacement_booking_id ?? null,
+    companyName: row.company_name,
+    prospectName: row.prospect_name,
+    notes: row.notes ?? null,
+    sourceStartAt: row.start_at,
   };
 }
 
@@ -1188,4 +2183,8 @@ function parseJson(value) {
   } catch {
     return {};
   }
+}
+
+function toDbBool(value) {
+  return value ? 1 : 0;
 }

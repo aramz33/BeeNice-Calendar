@@ -1,10 +1,84 @@
-export type BookingStatus =
-  | "booked"
+export type ScheduleState = "scheduled" | "rescheduled" | "cancelled";
+export type OutcomeState =
+  | "pending"
+  | "completed"
+  | "no_show"
+  | "not_qualified";
+export type DisplayStatus =
+  | "scheduled"
   | "completed"
   | "no_show"
   | "cancelled"
   | "rescheduled"
   | "not_qualified";
+export type BookingStatus = DisplayStatus;
+export type FollowUpTaskStatus = "open" | "done" | "dismissed";
+export type FollowUpTaskTrigger = "no_show" | "cancelled";
+
+export interface AssignmentReason {
+  companySizeThreshold: number;
+  seniorityPool: "all" | "senior";
+  chosenRole: "senior" | "junior";
+  roleDeficits: Record<string, number>;
+  candidateRepIds: string[];
+}
+
+export interface BookingSummary {
+  id: string;
+  displayStatus: DisplayStatus;
+  scheduleState: ScheduleState;
+  outcomeState: OutcomeState;
+  clientId: string;
+  clientName: string;
+  companyName: string;
+  prospectName: string;
+  callerId: string;
+  callerName: string;
+  assignedRepId: string;
+  assignedRepName: string;
+  startAt: string;
+  originalStartAt: string;
+  previousStartAt?: string | null;
+  timezone: string;
+  notes?: string;
+  taskId?: string | null;
+}
+
+export interface FollowUpTask {
+  id: string;
+  sourceBookingId: string;
+  clientId: string;
+  clientName: string;
+  callerId: string;
+  callerName: string;
+  type: "reposition_booking";
+  triggerReason: FollowUpTaskTrigger;
+  status: FollowUpTaskStatus;
+  dueAt: string;
+  createdAt: string;
+  completedAt?: string | null;
+  dismissedAt?: string | null;
+  replacementBookingId?: string | null;
+  companyName: string;
+  prospectName: string;
+  notes?: string;
+  sourceStartAt: string;
+}
+
+export interface TimelineEvent {
+  id: string;
+  type:
+    | "booking_created"
+    | "calendar_rescheduled"
+    | "calendar_cancelled"
+    | "outcome_set"
+    | "task_created"
+    | "task_completed";
+  actorLabel: string;
+  reason?: string;
+  createdAt: string;
+  meta?: Record<string, string | number | boolean | null>;
+}
 
 export interface Caller {
   id: string;
@@ -47,42 +121,26 @@ export interface AvailabilityResponse {
 
 export interface CallerBookingsResponse {
   timezone: string;
-  bookings: Array<{
-    id: string;
-    status: BookingStatus;
-    companyName: string;
-    prospectName: string;
-    startAt: string;
-    assignedRepName: string;
-  }>;
-}
-
-export interface BookingSummary {
-  id: string;
-  status: BookingStatus;
-  companyName: string;
-  prospectName: string;
-  callerName: string;
-  assignedRepName: string;
-  startAt: string;
-  timezone: string;
-  notes?: string;
+  bookings: BookingSummary[];
+  tasks: FollowUpTask[];
 }
 
 export interface ClientStat {
   clientId: string;
   clientName: string;
   total: number;
-  byStatus: Record<BookingStatus, number>;
+  byStatus: Record<DisplayStatus, number>;
   completedPct: number;
   noShowPct: number;
   toReplacePct: number;
   pendingCount: number;
+  openTaskCount: number;
 }
 
 export interface AdminBookingsResponse {
   timezone: string;
-  counts: Record<BookingStatus, number>;
+  counts: Record<DisplayStatus, number>;
+  openTaskCount: number;
   clientStats: ClientStat[];
   bookings: BookingSummary[];
   filters: {
@@ -99,7 +157,7 @@ export interface AdminBookingsResponse {
       lastWebhookAt?: string | null;
       lastError?: string | null;
     }>;
-    statuses: BookingStatus[];
+    statuses: DisplayStatus[];
   };
   integrations: {
     providerMode: "mock" | "nylas";
@@ -109,10 +167,26 @@ export interface AdminBookingsResponse {
   };
 }
 
+export interface AdminCalendarResponse {
+  timezone: string;
+  from: string;
+  to: string;
+  entries: BookingSummary[];
+}
+
+export interface AdminTasksResponse {
+  timezone: string;
+  tasks: FollowUpTask[];
+}
+
 export interface BookingDetailResponse {
   booking: {
     id: string;
-    status: BookingStatus;
+    displayStatus: DisplayStatus;
+    scheduleState: ScheduleState;
+    outcomeState: OutcomeState;
+    clientId: string;
+    clientName: string;
     companyName: string;
     companySize: number;
     prospectName: string;
@@ -124,24 +198,16 @@ export interface BookingDetailResponse {
     notes?: string;
     startAt: string;
     endAt: string;
+    originalStartAt: string;
+    previousStartAt?: string | null;
+    lastCalendarChangeAt?: string | null;
+    calendarSyncState: "synced" | "stale" | "error";
     timezone: string;
-    assignmentReason: {
-      companySizeThreshold: number;
-      seniorityPool: "all" | "senior";
-      chosenRole: "senior" | "junior";
-      roleDeficits: Record<string, number>;
-      candidateRepIds: string[];
-    };
+    assignmentReason: AssignmentReason;
     externalEventId: string;
+    linkedTask?: FollowUpTask | null;
   };
-  history: Array<{
-    id: string;
-    fromStatus: BookingStatus | null;
-    toStatus: BookingStatus;
-    actorLabel: string;
-    reason?: string;
-    createdAt: string;
-  }>;
+  timeline: TimelineEvent[];
 }
 
 export interface StartRepConnectionResponse {
@@ -158,4 +224,9 @@ export interface StartRepConnectionResponse {
     lastWebhookAt?: string | null;
     lastError?: string | null;
   };
+}
+
+export interface SettingsPayload {
+  clients: Array<{ id: string; name: string; timezone: string; active: boolean }>;
+  callers: Array<{ id: string; name: string; active: boolean }>;
 }

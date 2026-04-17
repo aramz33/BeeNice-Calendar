@@ -19,7 +19,9 @@ export function createDatabase(
   db.exec("PRAGMA foreign_keys = ON;");
 
   initSchema(db);
+  migrateSchema(db);
   seedDatabase(db, providerMode);
+  normalizeLegacyData(db);
 
   return {
     db,
@@ -66,7 +68,8 @@ function initSchema(db) {
     CREATE TABLE IF NOT EXISTS clients (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
-      timezone TEXT NOT NULL
+      timezone TEXT NOT NULL,
+      active INTEGER NOT NULL DEFAULT 1
     );
 
     CREATE TABLE IF NOT EXISTS callers (
@@ -138,6 +141,15 @@ function initSchema(db) {
       end_at TEXT NOT NULL,
       timezone TEXT NOT NULL,
       status TEXT NOT NULL,
+      schedule_state TEXT NOT NULL DEFAULT 'scheduled',
+      outcome_state TEXT NOT NULL DEFAULT 'pending',
+      original_start_at TEXT,
+      previous_start_at TEXT,
+      last_calendar_change_at TEXT,
+      calendar_sync_state TEXT NOT NULL DEFAULT 'synced',
+      cancelled_at TEXT,
+      completed_at TEXT,
+      no_show_at TEXT,
       external_event_id TEXT,
       assignment_reason_json TEXT NOT NULL,
       sync_state TEXT NOT NULL DEFAULT 'synced',
@@ -153,6 +165,32 @@ function initSchema(db) {
       actor_label TEXT NOT NULL,
       reason TEXT,
       created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS booking_timeline_events (
+      id TEXT PRIMARY KEY,
+      booking_id TEXT NOT NULL REFERENCES bookings(id),
+      event_type TEXT NOT NULL,
+      actor_label TEXT NOT NULL,
+      reason TEXT,
+      meta_json TEXT,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS follow_up_tasks (
+      id TEXT PRIMARY KEY,
+      source_booking_id TEXT NOT NULL REFERENCES bookings(id),
+      client_id TEXT NOT NULL REFERENCES clients(id),
+      caller_id TEXT NOT NULL REFERENCES callers(id),
+      type TEXT NOT NULL,
+      trigger_reason TEXT NOT NULL,
+      status TEXT NOT NULL,
+      due_at TEXT NOT NULL,
+      replacement_booking_id TEXT REFERENCES bookings(id),
+      notes TEXT,
+      created_at TEXT NOT NULL,
+      completed_at TEXT,
+      dismissed_at TEXT
     );
 
     CREATE TABLE IF NOT EXISTS calendar_events (
@@ -177,10 +215,35 @@ function initSchema(db) {
     CREATE INDEX IF NOT EXISTS idx_booking_links_slug ON booking_links(slug);
     CREATE INDEX IF NOT EXISTS idx_bookings_link_start ON bookings(booking_link_id, start_at);
     CREATE INDEX IF NOT EXISTS idx_bookings_rep_start ON bookings(assigned_rep_id, start_at);
+    CREATE INDEX IF NOT EXISTS idx_bookings_external_event ON bookings(external_event_id);
     CREATE INDEX IF NOT EXISTS idx_history_booking ON booking_status_history(booking_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_timeline_booking ON booking_timeline_events(booking_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_follow_up_tasks_status ON follow_up_tasks(status, due_at);
+    CREATE INDEX IF NOT EXISTS idx_follow_up_tasks_booking ON follow_up_tasks(source_booking_id, status);
     CREATE INDEX IF NOT EXISTS idx_connections_status ON rep_calendar_connections(status);
     CREATE INDEX IF NOT EXISTS idx_calendar_events_rep_time ON calendar_events(rep_id, start_at, end_at);
   `);
+}
+
+function migrateSchema(db) {
+  ensureColumn(db, "clients", "active", "INTEGER NOT NULL DEFAULT 1");
+  ensureColumn(db, "bookings", "schedule_state", "TEXT NOT NULL DEFAULT 'scheduled'");
+  ensureColumn(db, "bookings", "outcome_state", "TEXT NOT NULL DEFAULT 'pending'");
+  ensureColumn(db, "bookings", "original_start_at", "TEXT");
+  ensureColumn(db, "bookings", "previous_start_at", "TEXT");
+  ensureColumn(db, "bookings", "last_calendar_change_at", "TEXT");
+  ensureColumn(db, "bookings", "calendar_sync_state", "TEXT NOT NULL DEFAULT 'synced'");
+  ensureColumn(db, "bookings", "cancelled_at", "TEXT");
+  ensureColumn(db, "bookings", "completed_at", "TEXT");
+  ensureColumn(db, "bookings", "no_show_at", "TEXT");
+}
+
+function ensureColumn(db, table, column, definition) {
+  const columns = db.prepare(`PRAGMA table_info(${table})`).all();
+  if (columns.some((entry) => entry.name === column)) {
+    return;
+  }
+  db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
 }
 
 function seedDatabase(db, providerMode) {
@@ -192,10 +255,10 @@ function seedDatabase(db, providerMode) {
   const seed = createSeedState(providerMode);
 
   const insertClient = db.prepare(
-    "INSERT INTO clients (id, name, timezone) VALUES (?, ?, ?)",
+    "INSERT INTO clients (id, name, timezone, active) VALUES (?, ?, ?, ?)",
   );
   seed.clients.forEach((client) => {
-    insertClient.run(client.id, client.name, client.timezone);
+    insertClient.run(client.id, client.name, client.timezone, toDbBool(true));
   });
 
   const insertCaller = db.prepare(
@@ -329,13 +392,23 @@ function seedDatabase(db, providerMode) {
       end_at,
       timezone,
       status,
+      schedule_state,
+      outcome_state,
+      original_start_at,
+      previous_start_at,
+      last_calendar_change_at,
+      calendar_sync_state,
+      cancelled_at,
+      completed_at,
+      no_show_at,
       external_event_id,
       assignment_reason_json,
       sync_state,
       created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   seed.bookings.forEach((booking) => {
+    const normalized = normalizeLegacyStatus(booking.status);
     insertBooking.run(
       booking.id,
       booking.bookingLinkId,
@@ -351,6 +424,15 @@ function seedDatabase(db, providerMode) {
       booking.endAt,
       booking.timezone,
       booking.status,
+      normalized.scheduleState,
+      normalized.outcomeState,
+      booking.startAt,
+      null,
+      null,
+      "synced",
+      normalized.scheduleState === "cancelled" ? booking.createdAt : null,
+      normalized.outcomeState === "completed" ? booking.createdAt : null,
+      normalized.outcomeState === "no_show" ? booking.createdAt : null,
       booking.externalEventId ?? null,
       JSON.stringify(booking.assignmentReason ?? {}),
       "synced",
@@ -399,6 +481,42 @@ function seedDatabase(db, providerMode) {
   });
 }
 
+function normalizeLegacyData(db) {
+  db.exec("UPDATE clients SET active = COALESCE(active, 1)");
+  db.exec(`
+    UPDATE bookings
+    SET schedule_state = CASE status
+          WHEN 'cancelled' THEN 'cancelled'
+          WHEN 'rescheduled' THEN 'rescheduled'
+          ELSE 'scheduled'
+        END
+  `);
+  db.exec(`
+    UPDATE bookings
+    SET outcome_state = CASE status
+          WHEN 'completed' THEN 'completed'
+          WHEN 'no_show' THEN 'no_show'
+          WHEN 'not_qualified' THEN 'not_qualified'
+          ELSE 'pending'
+        END
+  `);
+  db.exec("UPDATE bookings SET original_start_at = COALESCE(original_start_at, start_at)");
+  db.exec("UPDATE bookings SET calendar_sync_state = COALESCE(calendar_sync_state, sync_state, 'synced')");
+  db.exec("UPDATE bookings SET status = COALESCE(status, 'booked')");
+  db.exec(`
+    UPDATE bookings
+    SET completed_at = COALESCE(completed_at, CASE WHEN outcome_state = 'completed' THEN created_at END),
+        no_show_at = COALESCE(no_show_at, CASE WHEN outcome_state = 'no_show' THEN created_at END),
+        cancelled_at = COALESCE(cancelled_at, CASE WHEN schedule_state = 'cancelled' THEN created_at END)
+  `);
+  db.exec(`
+    UPDATE booking_links
+    SET buffer_before_minutes = 0,
+        buffer_after_minutes = 0
+    WHERE buffer_before_minutes != 0 OR buffer_after_minutes != 0
+  `);
+}
+
 function toDbBool(value) {
   return value ? 1 : 0;
 }
@@ -411,4 +529,21 @@ function inferActorType(actorLabel) {
     return "admin";
   }
   return "system";
+}
+
+function normalizeLegacyStatus(status) {
+  switch (status) {
+    case "completed":
+      return { scheduleState: "scheduled", outcomeState: "completed" };
+    case "no_show":
+      return { scheduleState: "scheduled", outcomeState: "no_show" };
+    case "cancelled":
+      return { scheduleState: "cancelled", outcomeState: "pending" };
+    case "rescheduled":
+      return { scheduleState: "rescheduled", outcomeState: "pending" };
+    case "not_qualified":
+      return { scheduleState: "scheduled", outcomeState: "not_qualified" };
+    default:
+      return { scheduleState: "scheduled", outcomeState: "pending" };
+  }
 }

@@ -2,6 +2,7 @@ import { createBrowserRouter, Navigate } from "react-router";
 import { ShellPage } from "@mvp/pages/ShellPage";
 import { BookingWorkspacePage } from "@mvp/pages/BookingWorkspacePage";
 import { AdminBookingsPage } from "@mvp/pages/AdminBookingsPage";
+import { AdminSettingsPage } from "@mvp/pages/AdminSettingsPage";
 
 export const router = createBrowserRouter([
   {
@@ -15,6 +16,10 @@ export const router = createBrowserRouter([
   {
     path: "/admin/bookings",
     Component: AdminBookingsPage,
+  },
+  {
+    path: "/admin/settings",
+    Component: AdminSettingsPage,
   },
   {
     path: "*",

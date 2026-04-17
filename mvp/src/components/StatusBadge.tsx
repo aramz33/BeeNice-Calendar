@@ -5,40 +5,60 @@ const badgeMap: Record<
   BookingStatus,
   { label: string; className: string; variant: "default" | "secondary" | "destructive" | "outline" }
 > = {
-  booked: {
-    label: "Réservé",
-    className: "text-primary",
+  scheduled: {
+    label: "Planifié",
+    className: "border-[#001E5B]/10 bg-[#001E5B] text-white",
     variant: "default",
   },
   completed: {
-    label: "Validé",
-    className: "border-emerald-500/30 bg-emerald-500/15 text-emerald-300",
+    label: "Honoré",
+    className: "border-emerald-700/15 bg-emerald-50 text-emerald-800",
     variant: "outline",
   },
   no_show: {
     label: "No-show",
-    className: "border-amber-500/30 bg-amber-500/15 text-amber-300",
+    className: "border-[#F7A600]/20 bg-[#FFF3DA] text-[#9C6400]",
     variant: "outline",
   },
   cancelled: {
     label: "Annulé",
-    className: "border-rose-500/30 bg-rose-500/15 text-rose-300",
+    className: "border-rose-200 bg-rose-50 text-rose-700",
     variant: "outline",
   },
   rescheduled: {
-    label: "Replacé",
-    className: "border-cyan-500/30 bg-cyan-500/15 text-cyan-300",
+    label: "Déplacé",
+    className: "border-sky-200 bg-sky-50 text-sky-800",
     variant: "outline",
   },
   not_qualified: {
     label: "Non qualifié",
-    className: "border-violet-500/30 bg-violet-500/15 text-violet-300",
+    className: "border-stone-200 bg-stone-100 text-stone-700",
     variant: "outline",
   },
 };
 
-export function StatusBadge({ status }: { status: BookingStatus }) {
-  const config = badgeMap[status];
+const fallbackBadge = {
+  label: "Statut inconnu",
+  className: "border-[#001E5B]/10 bg-[#F9F4ED] text-[#001E5B]",
+  variant: "outline" as const,
+};
+
+function normalizeStatus(status: string | undefined): BookingStatus | null {
+  if (!status) {
+    return null;
+  }
+  if (status in badgeMap) {
+    return status as BookingStatus;
+  }
+  if (status === "booked") {
+    return "scheduled";
+  }
+  return null;
+}
+
+export function StatusBadge({ status }: { status: BookingStatus | string | undefined }) {
+  const normalizedStatus = normalizeStatus(status);
+  const config = normalizedStatus ? badgeMap[normalizedStatus] : fallbackBadge;
   return (
     <Badge variant={config.variant} className={config.className}>
       <span className="status-dot">{config.label}</span>
