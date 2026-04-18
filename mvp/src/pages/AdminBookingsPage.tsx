@@ -12,6 +12,8 @@ import {
   Cable,
   CalendarRange,
   CheckCheck,
+  ChevronLeft,
+  ChevronRight,
   Clock3,
   ListTodo,
   RefreshCw,
@@ -58,15 +60,22 @@ type ViewMode = "agenda" | "list" | "tasks" | "connections";
 export function AdminBookingsPage() {
   const [payload, setPayload] = useState<AdminBookingsResponse | null>(null);
   const [calendar, setCalendar] = useState<AdminCalendarResponse | null>(null);
-  const [tasksPayload, setTasksPayload] = useState<AdminTasksResponse | null>(null);
-  const [settingsPayload, setSettingsPayload] = useState<SettingsPayload | null>(null);
-  const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
+  const [tasksPayload, setTasksPayload] = useState<AdminTasksResponse | null>(
+    null,
+  );
+  const [settingsPayload, setSettingsPayload] =
+    useState<SettingsPayload | null>(null);
+  const [selectedBookingId, setSelectedBookingId] = useState<string | null>(
+    null,
+  );
   const [detail, setDetail] = useState<BookingDetailResponse | null>(null);
   const [loadingDashboard, setLoadingDashboard] = useState(true);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [connectingRepId, setConnectingRepId] = useState<string | null>(null);
   const [updatingBooking, setUpdatingBooking] = useState(false);
-  const [providerChoiceByRep, setProviderChoiceByRep] = useState<Record<string, string>>({});
+  const [providerChoiceByRep, setProviderChoiceByRep] = useState<
+    Record<string, string>
+  >({});
   const [statusReason, setStatusReason] = useState("");
   const [manualStartAt, setManualStartAt] = useState("");
   const [activeView, setActiveView] = useState<ViewMode>("agenda");
@@ -82,7 +91,10 @@ export function AdminBookingsPage() {
   });
 
   const weekStart = useMemo(() => parseISO(weekStartIso), [weekStartIso]);
-  const weekEnd = useMemo(() => endOfWeek(weekStart, { weekStartsOn: 1 }), [weekStart]);
+  const weekEnd = useMemo(
+    () => endOfWeek(weekStart, { weekStartsOn: 1 }),
+    [weekStart],
+  );
   const weekDays = useMemo(() => getWeekDays(weekStartIso), [weekStartIso]);
 
   const fetchDashboard = async () => {
@@ -100,8 +112,12 @@ export function AdminBookingsPage() {
       calendarParams.set("to", weekEnd.toISOString());
 
       const [bookings, agenda, tasks, settings] = await Promise.all([
-        apiFetch<AdminBookingsResponse>(`/api/admin/bookings?${params.toString()}`),
-        apiFetch<AdminCalendarResponse>(`/api/admin/calendar?${calendarParams.toString()}`),
+        apiFetch<AdminBookingsResponse>(
+          `/api/admin/bookings?${params.toString()}`,
+        ),
+        apiFetch<AdminCalendarResponse>(
+          `/api/admin/calendar?${calendarParams.toString()}`,
+        ),
         apiFetch<AdminTasksResponse>(`/api/admin/tasks?${params.toString()}`),
         apiFetch<SettingsPayload>("/api/admin/settings"),
       ]);
@@ -111,7 +127,10 @@ export function AdminBookingsPage() {
       setTasksPayload(tasks);
       setSettingsPayload(settings);
       setSelectedBookingId((current) => {
-        if (current && bookings.bookings.some((booking) => booking.id === current)) {
+        if (
+          current &&
+          bookings.bookings.some((booking) => booking.id === current)
+        ) {
           return current;
         }
         return bookings.bookings[0]?.id ?? null;
@@ -126,7 +145,9 @@ export function AdminBookingsPage() {
   const fetchDetail = async (bookingId: string) => {
     setLoadingDetail(true);
     try {
-      const data = await apiFetch<BookingDetailResponse>(`/api/admin/bookings/${bookingId}`);
+      const data = await apiFetch<BookingDetailResponse>(
+        `/api/admin/bookings/${bookingId}`,
+      );
       setDetail(data);
     } catch (error) {
       toast.error((error as Error).message);
@@ -219,8 +240,10 @@ export function AdminBookingsPage() {
 
   const integrationMode = payload?.integrations.providerMode ?? "mock";
   const liveConnectedCount =
-    payload?.filters.reps.filter((rep) => rep.connectionStatus === "connected").length ?? 0;
-  const selectedTaskCount = tasksPayload?.tasks.filter((task) => task.status === "open").length ?? 0;
+    payload?.filters.reps.filter((rep) => rep.connectionStatus === "connected")
+      .length ?? 0;
+  const selectedTaskCount =
+    tasksPayload?.tasks.filter((task) => task.status === "open").length ?? 0;
 
   const handleConnectRep = async (repId: string) => {
     setConnectingRepId(repId);
@@ -249,7 +272,9 @@ export function AdminBookingsPage() {
     }
   };
 
-  const updateOutcome = async (outcomeState: "completed" | "no_show" | "not_qualified") => {
+  const updateOutcome = async (
+    outcomeState: "completed" | "no_show" | "not_qualified",
+  ) => {
     if (!detail) return;
     setUpdatingBooking(true);
     try {
@@ -330,10 +355,7 @@ export function AdminBookingsPage() {
   };
 
   return (
-    <AppChrome
-      title="Agenda client BeeNice"
-      subtitle="Suivez les rendez-vous pris pour vos clients, les déplacements détectés, les résultats et les tâches de repositionnement."
-    >
+    <AppChrome title="Admin">
       <div className="grid gap-4 md:grid-cols-4">
         <MetricCard
           label="Planifiés"
@@ -347,7 +369,9 @@ export function AdminBookingsPage() {
         />
         <MetricCard
           label="À replacer"
-          value={(payload?.counts.no_show ?? 0) + (payload?.counts.cancelled ?? 0)}
+          value={
+            (payload?.counts.no_show ?? 0) + (payload?.counts.cancelled ?? 0)
+          }
           helper="No-show + annulations."
         />
         <MetricCard
@@ -371,7 +395,10 @@ export function AdminBookingsPage() {
                   placeholder="Client, société, prospect..."
                   value={filters.query}
                   onChange={(event) =>
-                    setFilters((current) => ({ ...current, query: event.target.value }))
+                    setFilters((current) => ({
+                      ...current,
+                      query: event.target.value,
+                    }))
                   }
                 />
               </div>
@@ -417,7 +444,7 @@ export function AdminBookingsPage() {
                 }
                 options={(payload?.filters.reps ?? []).map((rep) => ({
                   id: rep.id,
-                  name: rep.name,
+                  name: `${rep.name} · ${rep.clientName}`,
                 }))}
                 allLabel="Tous les reps"
               />
@@ -426,23 +453,60 @@ export function AdminBookingsPage() {
 
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap gap-2">
-              <ViewButton active={activeView === "agenda"} onClick={() => setActiveView("agenda")} icon={CalendarRange} label="Agenda" />
-              <ViewButton active={activeView === "list"} onClick={() => setActiveView("list")} icon={ArrowRightLeft} label="Liste" />
-              <ViewButton active={activeView === "tasks"} onClick={() => setActiveView("tasks")} icon={ListTodo} label="Tâches" />
-              <ViewButton active={activeView === "connections"} onClick={() => setActiveView("connections")} icon={Cable} label="Connexions" />
+              <ViewButton
+                active={activeView === "agenda"}
+                onClick={() => setActiveView("agenda")}
+                icon={CalendarRange}
+                label="Agenda"
+              />
+              <ViewButton
+                active={activeView === "list"}
+                onClick={() => setActiveView("list")}
+                icon={ArrowRightLeft}
+                label="RDV"
+              />
+              <ViewButton
+                active={activeView === "tasks"}
+                onClick={() => setActiveView("tasks")}
+                icon={ListTodo}
+                label="Tâches"
+              />
+              <ViewButton
+                active={activeView === "connections"}
+                onClick={() => setActiveView("connections")}
+                icon={Cable}
+                label="Connexions"
+              />
             </div>
 
-            <div className="flex items-center gap-2">
-              <Button variant="outline" className="rounded-full" onClick={() => setWeekStartIso(subWeeks(weekStart, 1).toISOString())}>
-                Semaine précédente
-              </Button>
-              <div className="rounded-full border border-[#001E5B]/10 bg-white px-4 py-2 text-sm font-medium text-[#001E5B]">
-                {formatDateShort(weekStartIso)} → {formatDateShort(weekEnd.toISOString())}
+            {activeView === "agenda" && (
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="rounded-full"
+                  onClick={() =>
+                    setWeekStartIso(subWeeks(weekStart, 1).toISOString())
+                  }
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <div className="rounded-full border border-[#001E5B]/10 bg-white px-4 py-2 text-sm font-medium text-[#001E5B]">
+                  {formatDateShort(weekStartIso)} →{" "}
+                  {formatDateShort(weekEnd.toISOString())}
+                </div>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="rounded-full"
+                  onClick={() =>
+                    setWeekStartIso(addWeeks(weekStart, 1).toISOString())
+                  }
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
               </div>
-              <Button variant="outline" className="rounded-full" onClick={() => setWeekStartIso(addWeeks(weekStart, 1).toISOString())}>
-                Semaine suivante
-              </Button>
-            </div>
+            )}
           </div>
 
           {activeView === "agenda" && (
@@ -462,20 +526,21 @@ export function AdminBookingsPage() {
                 <CardTitle>Liste des rendez-vous</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                {loadingDashboard ? (
-                  Array.from({ length: 5 }).map((_, index) => (
-                    <div key={index} className="h-24 animate-pulse rounded-[1.25rem] bg-[#001E5B]/5" />
-                  ))
-                ) : (
-                  payload?.bookings.map((booking) => (
-                    <BookingListItem
-                      key={booking.id}
-                      booking={booking}
-                      selected={booking.id === selectedBookingId}
-                      onSelect={setSelectedBookingId}
-                    />
-                  ))
-                )}
+                {loadingDashboard
+                  ? Array.from({ length: 5 }).map((_, index) => (
+                      <div
+                        key={index}
+                        className="h-24 animate-pulse rounded-[1.25rem] bg-[#001E5B]/5"
+                      />
+                    ))
+                  : payload?.bookings.map((booking) => (
+                      <BookingListItem
+                        key={booking.id}
+                        booking={booking}
+                        selected={booking.id === selectedBookingId}
+                        onSelect={setSelectedBookingId}
+                      />
+                    ))}
               </CardContent>
             </Card>
           )}
@@ -488,7 +553,11 @@ export function AdminBookingsPage() {
               <CardContent className="space-y-3">
                 {tasksPayload?.tasks.length ? (
                   tasksPayload.tasks.map((task) => (
-                    <TaskCard key={task.id} task={task} onDismiss={dismissTask} />
+                    <TaskCard
+                      key={task.id}
+                      task={task}
+                      onDismiss={dismissTask}
+                    />
                   ))
                 ) : (
                   <EmptyState message="Aucune tâche ne correspond à ces filtres." />
@@ -521,15 +590,29 @@ export function AdminBookingsPage() {
                   >
                     <div className="flex flex-wrap items-start justify-between gap-4">
                       <div>
-                        <p className="font-semibold text-[#001E5B]">{rep.name}</p>
+                        <p className="font-semibold text-[#001E5B]">
+                          {rep.name}
+                        </p>
                         <p className="text-sm text-[#001E5B]/56">
                           {rep.seniority === "senior" ? "Senior" : "Junior"}
                           {rep.providerEmail ? ` · ${rep.providerEmail}` : ""}
                         </p>
                         <div className="mt-2 space-y-1 text-xs text-[#001E5B]/56">
-                          <p>Dernière synchro: {rep.lastSyncAt ? formatRelativeShort(rep.lastSyncAt) : "jamais"}</p>
-                          <p>Dernier webhook: {rep.lastWebhookAt ? formatRelativeShort(rep.lastWebhookAt) : "jamais"}</p>
-                          {rep.lastError ? <p className="text-rose-600">{rep.lastError}</p> : null}
+                          <p>
+                            Dernière synchro:{" "}
+                            {rep.lastSyncAt
+                              ? formatRelativeShort(rep.lastSyncAt)
+                              : "jamais"}
+                          </p>
+                          <p>
+                            Dernier webhook:{" "}
+                            {rep.lastWebhookAt
+                              ? formatRelativeShort(rep.lastWebhookAt)
+                              : "jamais"}
+                          </p>
+                          {rep.lastError ? (
+                            <p className="text-rose-600">{rep.lastError}</p>
+                          ) : null}
                         </div>
                       </div>
                       <div className="space-y-3">
@@ -540,7 +623,10 @@ export function AdminBookingsPage() {
                           <Select
                             value={providerChoiceByRep[rep.id] ?? "google"}
                             onValueChange={(value) =>
-                              setProviderChoiceByRep((current) => ({ ...current, [rep.id]: value }))
+                              setProviderChoiceByRep((current) => ({
+                                ...current,
+                                [rep.id]: value,
+                              }))
                             }
                           >
                             <SelectTrigger className="w-32">
@@ -548,7 +634,9 @@ export function AdminBookingsPage() {
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="google">Google</SelectItem>
-                              <SelectItem value="microsoft">Microsoft</SelectItem>
+                              <SelectItem value="microsoft">
+                                Microsoft
+                              </SelectItem>
                             </SelectContent>
                           </Select>
                           <Button
@@ -556,7 +644,9 @@ export function AdminBookingsPage() {
                             onClick={() => void handleConnectRep(rep.id)}
                             disabled={connectingRepId === rep.id}
                           >
-                            <RefreshCw className={`h-4 w-4 ${connectingRepId === rep.id ? "animate-spin" : ""}`} />
+                            <RefreshCw
+                              className={`h-4 w-4 ${connectingRepId === rep.id ? "animate-spin" : ""}`}
+                            />
                             Connecter
                           </Button>
                         </div>
@@ -569,7 +659,7 @@ export function AdminBookingsPage() {
           )}
         </div>
 
-        <Card className="surface-card self-start">
+        <Card className="surface-card overflow-y-auto">
           <CardHeader>
             <CardTitle>Détail du rendez-vous</CardTitle>
           </CardHeader>
@@ -581,9 +671,12 @@ export function AdminBookingsPage() {
                 <div className="space-y-3 rounded-[1.25rem] border border-[#001E5B]/8 bg-white px-4 py-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      <p className="font-semibold text-[#001E5B]">{detail.booking.companyName}</p>
+                      <p className="font-semibold text-[#001E5B]">
+                        {detail.booking.companyName}
+                      </p>
                       <p className="text-sm text-[#001E5B]/56">
-                        {detail.booking.prospectName} · {detail.booking.clientName}
+                        {detail.booking.prospectName} ·{" "}
+                        {detail.booking.clientName}
                       </p>
                     </div>
                     <StatusBadge status={detail.booking.displayStatus} />
@@ -591,14 +684,36 @@ export function AdminBookingsPage() {
                   <div className="grid gap-2 text-sm text-[#001E5B]/72">
                     <p>Caller: {detail.booking.callerName}</p>
                     <p>Rep: {detail.booking.assignedRepName}</p>
-                    <p>Date courante: {formatDateTime(detail.booking.startAt, detail.booking.timezone)}</p>
-                    <p>Date originale: {formatDateTime(detail.booking.originalStartAt, detail.booking.timezone)}</p>
+                    <p>
+                      Date courante:{" "}
+                      {formatDateTime(
+                        detail.booking.startAt,
+                        detail.booking.timezone,
+                      )}
+                    </p>
+                    <p>
+                      Date originale:{" "}
+                      {formatDateTime(
+                        detail.booking.originalStartAt,
+                        detail.booking.timezone,
+                      )}
+                    </p>
                     {detail.booking.previousStartAt ? (
-                      <p>Dernière date avant déplacement: {formatDateTime(detail.booking.previousStartAt, detail.booking.timezone)}</p>
+                      <p>
+                        Dernière date avant déplacement:{" "}
+                        {formatDateTime(
+                          detail.booking.previousStartAt,
+                          detail.booking.timezone,
+                        )}
+                      </p>
                     ) : null}
                     <p>Sync calendrier: {detail.booking.calendarSyncState}</p>
                     {detail.booking.linkedTask ? (
-                      <p>Tâche liée: {detail.booking.linkedTask.status} · échéance {formatRelativeShort(detail.booking.linkedTask.dueAt)}</p>
+                      <p>
+                        Tâche liée: {detail.booking.linkedTask.status} ·
+                        échéance{" "}
+                        {formatRelativeShort(detail.booking.linkedTask.dueAt)}
+                      </p>
                     ) : null}
                   </div>
                 </div>
@@ -614,19 +729,38 @@ export function AdminBookingsPage() {
                 </div>
 
                 <div className="grid gap-2 sm:grid-cols-2">
-                  <Button className="rounded-full" disabled={updatingBooking} onClick={() => void updateOutcome("completed")}>
+                  <Button
+                    className="rounded-full"
+                    disabled={updatingBooking}
+                    onClick={() => void updateOutcome("completed")}
+                  >
                     <CheckCheck className="h-4 w-4" />
                     Honoré
                   </Button>
-                  <Button variant="outline" className="rounded-full" disabled={updatingBooking} onClick={() => void updateOutcome("no_show")}>
+                  <Button
+                    variant="outline"
+                    className="rounded-full"
+                    disabled={updatingBooking}
+                    onClick={() => void updateOutcome("no_show")}
+                  >
                     <Clock3 className="h-4 w-4" />
                     No-show
                   </Button>
-                  <Button variant="outline" className="rounded-full" disabled={updatingBooking} onClick={() => void updateOutcome("not_qualified")}>
+                  <Button
+                    variant="outline"
+                    className="rounded-full"
+                    disabled={updatingBooking}
+                    onClick={() => void updateOutcome("not_qualified")}
+                  >
                     <Settings2 className="h-4 w-4" />
                     Non qualifié
                   </Button>
-                  <Button variant="outline" className="rounded-full border-rose-200 text-rose-700" disabled={updatingBooking} onClick={() => void cancelBooking()}>
+                  <Button
+                    variant="outline"
+                    className="rounded-full border-rose-200 text-rose-700"
+                    disabled={updatingBooking}
+                    onClick={() => void cancelBooking()}
+                  >
                     <XCircle className="h-4 w-4" />
                     Annuler
                   </Button>
@@ -640,7 +774,12 @@ export function AdminBookingsPage() {
                     value={manualStartAt}
                     onChange={(event) => setManualStartAt(event.target.value)}
                   />
-                  <Button variant="outline" className="rounded-full" disabled={!manualStartAt || updatingBooking} onClick={() => void rescheduleBooking()}>
+                  <Button
+                    variant="outline"
+                    className="rounded-full"
+                    disabled={!manualStartAt || updatingBooking}
+                    onClick={() => void rescheduleBooking()}
+                  >
                     Déplacer le rendez-vous
                   </Button>
                 </div>
@@ -654,9 +793,15 @@ export function AdminBookingsPage() {
                       key={event.id}
                       className="rounded-[1.25rem] border border-[#001E5B]/8 bg-white px-4 py-4"
                     >
-                      <p className="font-medium text-[#001E5B]">{event.actorLabel}</p>
-                      <p className="mt-1 text-sm text-[#001E5B]/64">{event.reason || event.type}</p>
-                      <p className="mt-2 text-xs text-[#001E5B]/48">{formatRelativeShort(event.createdAt)}</p>
+                      <p className="font-medium text-[#001E5B]">
+                        {event.actorLabel}
+                      </p>
+                      <p className="mt-1 text-sm text-[#001E5B]/64">
+                        {event.reason || event.type}
+                      </p>
+                      <p className="mt-2 text-xs text-[#001E5B]/48">
+                        {formatRelativeShort(event.createdAt)}
+                      </p>
                     </div>
                   ))}
                 </div>
@@ -729,6 +874,155 @@ function ViewButton({
   );
 }
 
+const CALENDAR_START_HOUR = 9;
+const CALENDAR_END_HOUR = 18;
+const SLOT_MINUTES = 30;
+const SLOT_HEIGHT_PX = 44;
+const TOTAL_SLOTS =
+  (CALENDAR_END_HOUR - CALENDAR_START_HOUR) * (60 / SLOT_MINUTES);
+const TOTAL_HEIGHT_PX = TOTAL_SLOTS * SLOT_HEIGHT_PX;
+const CALENDAR_START_MINUTES = CALENDAR_START_HOUR * 60;
+const CALENDAR_END_MINUTES = CALENDAR_END_HOUR * 60;
+const CALENDAR_HOURS = Array.from(
+  { length: CALENDAR_END_HOUR - CALENDAR_START_HOUR + 1 },
+  (_, i) => CALENDAR_START_HOUR + i,
+);
+
+type EventTiming = {
+  entry: BookingSummary;
+  startMin: number;
+  endMin: number;
+  visibleStartMin: number;
+  visibleEndMin: number;
+};
+
+function parseIsoSafe(value: string | null | undefined): Date | null {
+  if (typeof value !== "string" || !value) {
+    return null;
+  }
+
+  const parsed = parseISO(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return parsed;
+}
+
+function getTimeInMinutes(
+  iso: string | null | undefined,
+  timezone: string,
+): number | null {
+  if (typeof iso !== "string" || !iso) {
+    return null;
+  }
+
+  const timeStr = formatTimeOnly(iso, timezone);
+  const [h, m] = timeStr.split(":").map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m ?? 0)) {
+    return null;
+  }
+
+  return h * 60 + (m ?? 0);
+}
+
+function getEventTiming(
+  entry: BookingSummary,
+  timezone: string,
+): EventTiming | null {
+  const startMin = getTimeInMinutes(entry.startAt, timezone);
+  if (startMin === null) {
+    return null;
+  }
+
+  const startAt = parseIsoSafe(entry.startAt);
+  const endAt = parseIsoSafe(entry.endAt);
+  const durationMinutes =
+    startAt && endAt
+      ? Math.max(
+          SLOT_MINUTES,
+          Math.round((endAt.getTime() - startAt.getTime()) / (60 * 1000)),
+        )
+      : SLOT_MINUTES;
+  const endMin = startMin + durationMinutes;
+
+  return {
+    entry,
+    startMin,
+    endMin,
+    visibleStartMin: Math.max(startMin, CALENDAR_START_MINUTES),
+    visibleEndMin: Math.min(endMin, CALENDAR_END_MINUTES),
+  };
+}
+
+function calcEventTop(startMin: number): number {
+  return ((startMin - CALENDAR_START_MINUTES) / SLOT_MINUTES) * SLOT_HEIGHT_PX;
+}
+
+function calcEventHeight(startMin: number, endMin: number): number {
+  return ((endMin - startMin) / SLOT_MINUTES) * SLOT_HEIGHT_PX;
+}
+
+function isEventInRange(entry: BookingSummary, timezone: string): boolean {
+  const timing = getEventTiming(entry, timezone);
+  return timing ? timing.visibleStartMin < timing.visibleEndMin : false;
+}
+
+function assignTracks(
+  events: BookingSummary[],
+  timezone: string,
+): Array<{
+  entry: BookingSummary;
+  track: number;
+  trackCount: number;
+  top: number;
+  height: number;
+}> {
+  const sorted = events
+    .map((entry) => getEventTiming(entry, timezone))
+    .filter((timing): timing is EventTiming => timing !== null)
+    .sort((a, b) => {
+      if (a.startMin !== b.startMin) {
+        return a.startMin - b.startMin;
+      }
+      return a.endMin - b.endMin;
+    });
+  const trackEnds: number[] = [];
+  const result: Array<{
+    entry: BookingSummary;
+    track: number;
+    trackCount: number;
+    startMin: number;
+    endMin: number;
+    top: number;
+    height: number;
+  }> = [];
+
+  sorted.forEach((timing) => {
+    const { entry, startMin, endMin, visibleStartMin, visibleEndMin } = timing;
+    let track = trackEnds.findIndex((end) => end <= startMin);
+    if (track === -1) track = trackEnds.length;
+    trackEnds[track] = endMin;
+    result.push({
+      entry,
+      track,
+      trackCount: 0,
+      startMin,
+      endMin,
+      top: calcEventTop(visibleStartMin),
+      height: calcEventHeight(visibleStartMin, visibleEndMin),
+    });
+  });
+
+  result.forEach((item) => {
+    item.trackCount = result.filter((other) => {
+      return other.startMin < item.endMin && other.endMin > item.startMin;
+    }).length;
+  });
+
+  return result.map(({ startMin: _startMin, endMin: _endMin, ...item }) => item);
+}
+
 function AgendaBoard({
   loading,
   entries,
@@ -750,7 +1044,14 @@ function AgendaBoard({
       map.set(formatISO(day, { representation: "date" }), []);
     });
     entries.forEach((entry) => {
-      const key = formatISO(parseISO(entry.startAt), { representation: "date" });
+      const startAt = parseIsoSafe(entry.startAt);
+      if (!startAt) {
+        return;
+      }
+
+      const key = formatISO(startAt, {
+        representation: "date",
+      });
       if (!map.has(key)) {
         map.set(key, []);
       }
@@ -763,7 +1064,7 @@ function AgendaBoard({
   }, [entries, weekDays]);
 
   return (
-    <Card className="surface-card">
+    <Card className="surface-card overflow-x-auto">
       <CardHeader>
         <CardTitle>Agenda semaine</CardTitle>
       </CardHeader>
@@ -771,55 +1072,110 @@ function AgendaBoard({
         {loading ? (
           <div className="grid gap-4 md:grid-cols-7">
             {Array.from({ length: 7 }).map((_, index) => (
-              <div key={index} className="h-72 animate-pulse rounded-[1.5rem] bg-[#001E5B]/5" />
+              <div
+                key={index}
+                className="h-72 animate-pulse rounded-[1.5rem] bg-[#001E5B]/5"
+              />
             ))}
           </div>
         ) : (
-          <div className="agenda-grid">
-            {weekDays.map((day) => {
-              const key = formatISO(day, { representation: "date" });
-              const items = grouped.get(key) ?? [];
-              return (
-                <div key={key} className="agenda-column">
-                  <div className="agenda-day-head">
+          <div style={{ minWidth: "800px" }}>
+            {/* Day header row */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "3.5rem repeat(7, minmax(0, 1fr))",
+                gap: "0 0.25rem",
+                marginBottom: "0.5rem",
+              }}
+            >
+              <div />
+              {weekDays.map((day) => {
+                const key = formatISO(day, { representation: "date" });
+                const items = grouped.get(key) ?? [];
+                return (
+                  <div key={key} className="agenda-day-head">
                     <p className="text-sm font-semibold capitalize text-[#001E5B]">
                       {formatDayShort(day.toISOString(), timezone)}
                     </p>
-                    <p className="text-xs text-[#001E5B]/48">{items.length} rendez-vous</p>
+                    <p className="text-xs text-[#001E5B]/48">
+                      {items.length} rendez-vous
+                    </p>
                   </div>
-                  <div className="space-y-2">
-                    {items.length ? (
-                      items.map((entry) => (
+                );
+              })}
+            </div>
+
+            {/* Time grid body */}
+            <div className="time-grid-container">
+              {/* Time axis column */}
+              <div className="relative" style={{ height: TOTAL_HEIGHT_PX }}>
+                {CALENDAR_HOURS.map((hour, i) => (
+                  <div
+                    key={hour}
+                    className="absolute right-2 text-right"
+                    style={{ top: i * 2 * SLOT_HEIGHT_PX - 8 }}
+                  >
+                    <span className="text-xs text-[#001E5B]/36">{hour}:00</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* 7 day columns */}
+              {weekDays.map((day) => {
+                const key = formatISO(day, { representation: "date" });
+                const inRange = (grouped.get(key) ?? []).filter((e) =>
+                  isEventInRange(e, timezone),
+                );
+                const tracked = assignTracks(inRange, timezone);
+
+                return (
+                  <div key={key} className="time-grid-day-col">
+                    {/* Horizontal slot lines */}
+                    {Array.from({ length: TOTAL_SLOTS }).map((_, i) => (
+                      <div
+                        key={i}
+                        className={`time-grid-slot-line ${i % 2 === 0 ? "time-grid-slot-line-hour" : ""}`}
+                        style={{ top: i * SLOT_HEIGHT_PX }}
+                      />
+                    ))}
+
+                    {/* Event blocks */}
+                    {tracked.map(({ entry, track, trackCount, top, height }) => {
+                      const widthPct = 100 / Math.max(trackCount, 1);
+                      const leftPct = track * widthPct;
+                      const rightPct = 100 - leftPct - widthPct;
+                      return (
                         <button
                           key={entry.id}
                           type="button"
-                          className={`agenda-card ${selectedBookingId === entry.id ? "agenda-card-selected" : ""}`}
+                          className={`time-grid-event ${selectedBookingId === entry.id ? "time-grid-event-selected" : ""}`}
+                          style={{
+                            top,
+                            height,
+                            left: `calc(3px + ${leftPct}%)`,
+                            right: `calc(3px + ${rightPct}%)`,
+                          }}
                           onClick={() => onSelect(entry.id)}
+                          title={`${entry.clientName} - ${entry.prospectName}`}
                         >
-                          <div className="flex items-center justify-between gap-3">
-                            <p className="text-sm font-semibold text-[#001E5B]">
-                              {formatTimeOnly(entry.startAt, timezone)}
-                            </p>
-                            <StatusBadge status={entry.displayStatus} />
-                          </div>
-                          <p className="mt-2 font-medium text-[#001E5B]">{entry.companyName}</p>
-                          <p className="text-sm text-[#001E5B]/64">{entry.prospectName}</p>
-                          {entry.previousStartAt ? (
-                            <p className="mt-2 text-xs text-[#001E5B]/48">
-                              Déplacé depuis {formatTimeOnly(entry.previousStartAt, timezone)}
-                            </p>
-                          ) : null}
+                          <p className="time-grid-event-time">
+                            {formatTimeOnly(entry.startAt, timezone)}
+                          </p>
+                          <p className="time-grid-event-context">
+                            {entry.clientName} - {entry.prospectName}
+                          </p>
+                          <StatusBadge
+                            status={entry.displayStatus}
+                            className="time-grid-event-badge"
+                          />
                         </button>
-                      ))
-                    ) : (
-                      <div className="rounded-[1.25rem] border border-dashed border-[#001E5B]/10 px-3 py-6 text-center text-sm text-[#001E5B]/40">
-                        Aucun rendez-vous
-                      </div>
-                    )}
+                      );
+                    })}
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         )}
       </CardContent>
@@ -849,14 +1205,17 @@ function BookingListItem({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <p className="font-semibold text-[#001E5B]">{booking.companyName}</p>
+            <p className="font-semibold text-[#001E5B]">
+              {booking.companyName}
+            </p>
             <StatusBadge status={booking.displayStatus} />
           </div>
           <p className="text-sm text-[#001E5B]/64">
             {booking.prospectName} · {booking.clientName}
           </p>
           <p className="text-xs text-[#001E5B]/48">
-            {formatRelativeShort(booking.startAt)} · {booking.callerName} → {booking.assignedRepName}
+            {formatRelativeShort(booking.startAt)} · {booking.callerName} →{" "}
+            {booking.assignedRepName}
           </p>
         </div>
       </div>
@@ -885,14 +1244,20 @@ function TaskCard({
         </div>
       </div>
       <div className="mt-3 space-y-1 text-sm text-[#001E5B]/64">
-        <p>Motif: {task.triggerReason === "cancelled" ? "Annulation" : "No-show"}</p>
+        <p>
+          Motif: {task.triggerReason === "cancelled" ? "Annulation" : "No-show"}
+        </p>
         <p>RDV source: {formatRelativeShort(task.sourceStartAt)}</p>
         <p>Échéance: {formatRelativeShort(task.dueAt)}</p>
       </div>
       {task.status === "open" ? (
         <div className="mt-4 flex gap-2">
-          <Button variant="outline" className="rounded-full" onClick={() => onDismiss(task.id)}>
-            Classer la tâche
+          <Button
+            variant="outline"
+            className="rounded-full"
+            onClick={() => onDismiss(task.id)}
+          >
+            Dismiss
           </Button>
         </div>
       ) : null}

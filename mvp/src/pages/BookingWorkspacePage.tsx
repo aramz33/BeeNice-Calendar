@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router";
-import { BellRing, CalendarClock, RotateCcw, Users } from "lucide-react";
+import { useNavigate, useParams } from "react-router";
+import { CalendarClock, RotateCcw, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@shared-ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@shared-ui/card";
@@ -25,6 +25,7 @@ import type {
   BookingLinkResponse,
   CallerBookingsResponse,
   FollowUpTask,
+  PublicWorkspace,
 } from "@mvp/lib/types";
 
 const COMPANY_SIZE_OPTIONS = [
@@ -35,12 +36,34 @@ const COMPANY_SIZE_OPTIONS = [
 ];
 
 const CALLER_STORAGE_KEY = "benice-mvp-caller";
+const DEMO_WORKSPACES: PublicWorkspace[] = [
+  {
+    id: "booking-link-teamstarter",
+    slug: "teamstarter-discovery",
+    clientId: "client-teamstarter",
+    clientName: "TeamStarter",
+    title: "Discovery call TeamStarter",
+    timezone: "Europe/Paris",
+  },
+  {
+    id: "booking-link-doctolib",
+    slug: "doctolib-discovery",
+    clientId: "client-doctolib",
+    clientName: "Doctolib",
+    title: "Discovery call Doctolib",
+    timezone: "Europe/Paris",
+  },
+];
 
 export function BookingWorkspacePage() {
   const { slug = "teamstarter-discovery" } = useParams();
+  const navigate = useNavigate();
   const [payload, setPayload] = useState<BookingLinkResponse | null>(null);
-  const [availability, setAvailability] = useState<AvailabilityResponse | null>(null);
-  const [callerBookings, setCallerBookings] = useState<CallerBookingsResponse | null>(null);
+  const [availability, setAvailability] = useState<AvailabilityResponse | null>(
+    null,
+  );
+  const [callerBookings, setCallerBookings] =
+    useState<CallerBookingsResponse | null>(null);
   const [loadingMeta, setLoadingMeta] = useState(true);
   const [loadingAvailability, setLoadingAvailability] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -60,6 +83,34 @@ export function BookingWorkspacePage() {
 
   const tasks = callerBookings?.tasks ?? [];
   const recentBookings = callerBookings?.bookings ?? [];
+  const clientName = payload?.bookingLink.clientName ?? "Client";
+  const workspaceOptions = useMemo(() => {
+    if (payload?.workspaces?.length) {
+      return payload.workspaces;
+    }
+
+    const currentWorkspace = payload
+      ? {
+          id: payload.bookingLink.id,
+          slug: payload.bookingLink.slug,
+          clientId: payload.bookingLink.clientId ?? payload.bookingLink.slug,
+          clientName: payload.bookingLink.clientName,
+          title: payload.bookingLink.title,
+          timezone: payload.bookingLink.timezone,
+        }
+      : null;
+
+    const merged = currentWorkspace
+      ? [
+          currentWorkspace,
+          ...DEMO_WORKSPACES.filter(
+            (workspace) => workspace.slug !== currentWorkspace.slug,
+          ),
+        ]
+      : DEMO_WORKSPACES;
+
+    return merged;
+  }, [payload]);
 
   useEffect(() => {
     let ignore = false;
@@ -106,7 +157,9 @@ export function BookingWorkspacePage() {
       );
       setAvailability(data);
       setSelectedSlot((current) =>
-        current && data.slots.some((slot) => slot.startAt === current) ? current : null,
+        current && data.slots.some((slot) => slot.startAt === current)
+          ? current
+          : null,
       );
     } catch (error) {
       toast.error((error as Error).message);
@@ -127,7 +180,9 @@ export function BookingWorkspacePage() {
       );
       setCallerBookings(data);
       setSourceTask((current) =>
-        current ? data.tasks.find((task) => task.id === current.id) ?? null : null,
+        current
+          ? (data.tasks.find((task) => task.id === current.id) ?? null)
+          : null,
       );
     } catch (error) {
       toast.error((error as Error).message);
@@ -169,6 +224,17 @@ export function BookingWorkspacePage() {
     toast.success("Contexte de repositionnement chargé.");
   };
 
+  const handleWorkspaceChange = (nextSlug: string) => {
+    if (nextSlug === slug) {
+      return;
+    }
+
+    setAvailability(null);
+    setSelectedSlot(null);
+    setSourceTask(null);
+    navigate(`/book/${nextSlug}`);
+  };
+
   const resetTask = () => {
     setSourceTask(null);
     setProspectName("");
@@ -182,29 +248,35 @@ export function BookingWorkspacePage() {
       toast.error("Choisissez un créneau avant de réserver.");
       return;
     }
-    if (!callerId || !companySize || !prospectName || !prospectEmail || !companyName) {
+    if (
+      !callerId ||
+      !companySize ||
+      !prospectName ||
+      !prospectEmail ||
+      !companyName
+    ) {
       toast.error("Complétez les informations prospect obligatoires.");
       return;
     }
 
     setSubmitting(true);
     try {
-      const result = await apiFetch<{ bookingId: string; assignedRepName: string }>(
-        `/api/book/${slug}/bookings`,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            callerId,
-            companySize: Number(companySize),
-            companyName,
-            prospectName,
-            prospectEmail,
-            notes,
-            slotStart: selectedSlot,
-            sourceTaskId: sourceTask?.id ?? null,
-          }),
-        },
-      );
+      const result = await apiFetch<{
+        bookingId: string;
+        assignedRepName: string;
+      }>(`/api/book/${slug}/bookings`, {
+        method: "POST",
+        body: JSON.stringify({
+          callerId,
+          companySize: Number(companySize),
+          companyName,
+          prospectName,
+          prospectEmail,
+          notes,
+          slotStart: selectedSlot,
+          sourceTaskId: sourceTask?.id ?? null,
+        }),
+      });
 
       toast.success(`Rendez-vous réservé chez ${result.assignedRepName}.`);
       setProspectName("");
@@ -224,10 +296,7 @@ export function BookingWorkspacePage() {
 
   if (loadingMeta || !payload) {
     return (
-      <AppChrome
-        title="Chargement du workspace caller"
-        subtitle="Récupération de la configuration client et des callers."
-      >
+      <AppChrome title="Chargement du workspace caller">
         <div className="grid gap-6 md:grid-cols-3">
           {Array.from({ length: 3 }).map((_, index) => (
             <div key={index} className="surface-card h-52 animate-pulse" />
@@ -238,10 +307,7 @@ export function BookingWorkspacePage() {
   }
 
   return (
-    <AppChrome
-      title="Workspace caller"
-      subtitle="Réservez pour vos clients, suivez les résultats et repositionnez immédiatement les rendez-vous annulés ou no-show."
-    >
+    <AppChrome title={`Workspace caller · ${clientName}`}>
       <div className="grid gap-4 md:grid-cols-4">
         <MetricCard
           label="Callers actifs"
@@ -250,7 +316,11 @@ export function BookingWorkspacePage() {
         />
         <MetricCard
           label="Reps connectés"
-          value={payload.bookingLink.reps.filter((rep) => rep.connectionStatus === "connected").length}
+          value={
+            payload.bookingLink.reps.filter(
+              (rep) => rep.connectionStatus === "connected",
+            ).length
+          }
           helper="Calendriers réellement consolidés."
         />
         <MetricCard
@@ -265,14 +335,32 @@ export function BookingWorkspacePage() {
         />
       </div>
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
+      <div className="mt-6 grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <div className="space-y-6">
           <Card className="surface-card">
             <CardHeader>
               <CardTitle>Contexte d’appel</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-4">
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-4 md:grid-cols-3">
+                <div className="space-y-2">
+                  <Label htmlFor="client">Client</Label>
+                  <Select
+                    value={payload.bookingLink.slug}
+                    onValueChange={handleWorkspaceChange}
+                  >
+                    <SelectTrigger id="client">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {workspaceOptions.map((workspace) => (
+                        <SelectItem key={workspace.slug} value={workspace.slug}>
+                          {workspace.clientName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
                 <div className="space-y-2">
                   <Label htmlFor="caller">Caller</Label>
                   <Select value={callerId} onValueChange={setCallerId}>
@@ -305,11 +393,27 @@ export function BookingWorkspacePage() {
                 </div>
               </div>
 
-              <div className="rounded-[1.25rem] border border-[#001E5B]/8 bg-white px-4 py-4">
-                <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#001E5B]/40">
-                  Créneau sélectionné
-                </p>
-                <p className="mt-2 font-semibold text-[#001E5B]">{selectedSlotLabel}</p>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="rounded-[1.25rem] border border-[#001E5B]/8 bg-white px-4 py-4">
+                  <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#001E5B]/40">
+                    Client sélectionné
+                  </p>
+                  <p className="mt-2 font-semibold text-[#001E5B]">
+                    {payload.bookingLink.clientName}
+                  </p>
+                  <p className="text-sm text-[#001E5B]/56">
+                    {payload.bookingLink.title}
+                  </p>
+                </div>
+
+                <div className="rounded-[1.25rem] border border-[#001E5B]/8 bg-white px-4 py-4">
+                  <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#001E5B]/40">
+                    Créneau sélectionné
+                  </p>
+                  <p className="mt-2 font-semibold text-[#001E5B]">
+                    {selectedSlotLabel}
+                  </p>
+                </div>
               </div>
 
               {sourceTask ? (
@@ -320,10 +424,17 @@ export function BookingWorkspacePage() {
                         Repositionnement en cours: {sourceTask.companyName}
                       </p>
                       <p className="text-sm text-[#001E5B]/64">
-                        {sourceTask.triggerReason === "cancelled" ? "Annulation" : "No-show"} · échéance {formatRelativeShort(sourceTask.dueAt)}
+                        {sourceTask.triggerReason === "cancelled"
+                          ? "Annulation"
+                          : "No-show"}{" "}
+                        · échéance {formatRelativeShort(sourceTask.dueAt)}
                       </p>
                     </div>
-                    <Button variant="outline" className="rounded-full" onClick={resetTask}>
+                    <Button
+                      variant="outline"
+                      className="rounded-full"
+                      onClick={resetTask}
+                    >
                       Retirer
                     </Button>
                   </div>
@@ -332,9 +443,25 @@ export function BookingWorkspacePage() {
 
               <form className="space-y-4" onSubmit={handleSubmit}>
                 <div className="grid gap-4 md:grid-cols-2">
-                  <Field label="Nom du prospect" id="prospect-name" value={prospectName} onChange={setProspectName} />
-                  <Field label="Email du prospect" id="prospect-email" value={prospectEmail} onChange={setProspectEmail} type="email" />
-                  <Field label="Société prospect" id="company-name" value={companyName} onChange={setCompanyName} />
+                  <Field
+                    label="Nom du prospect"
+                    id="prospect-name"
+                    value={prospectName}
+                    onChange={setProspectName}
+                  />
+                  <Field
+                    label="Email du prospect"
+                    id="prospect-email"
+                    value={prospectEmail}
+                    onChange={setProspectEmail}
+                    type="email"
+                  />
+                  <Field
+                    label="Entreprise appelée"
+                    id="company-name"
+                    value={companyName}
+                    onChange={setCompanyName}
+                  />
                   <div className="space-y-2">
                     <Label htmlFor="notes">Contexte</Label>
                     <Textarea
@@ -345,7 +472,11 @@ export function BookingWorkspacePage() {
                     />
                   </div>
                 </div>
-                <Button type="submit" className="rounded-full" disabled={submitting}>
+                <Button
+                  type="submit"
+                  className="rounded-full"
+                  disabled={submitting}
+                >
                   <CalendarClock className="h-4 w-4" />
                   Réserver le rendez-vous
                 </Button>
@@ -355,7 +486,7 @@ export function BookingWorkspacePage() {
 
           <Card className="surface-card">
             <CardHeader>
-              <CardTitle>Mes tâches de repositionnement</CardTitle>
+              <CardTitle>Tâches de repositionnement pour ce client</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               {tasks.length ? (
@@ -366,15 +497,24 @@ export function BookingWorkspacePage() {
                   >
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
-                        <p className="font-semibold text-[#001E5B]">{task.companyName}</p>
+                        <p className="font-semibold text-[#001E5B]">
+                          {task.companyName}
+                        </p>
                         <p className="text-sm text-[#001E5B]/56">
                           {task.prospectName} · {task.clientName}
                         </p>
                         <p className="mt-2 text-xs text-[#001E5B]/48">
-                          {task.triggerReason === "cancelled" ? "Annulation" : "No-show"} · RDV initial {formatRelativeShort(task.sourceStartAt)}
+                          {task.triggerReason === "cancelled"
+                            ? "Annulation"
+                            : "No-show"}{" "}
+                          · RDV initial{" "}
+                          {formatRelativeShort(task.sourceStartAt)}
                         </p>
                       </div>
-                      <Button className="rounded-full" onClick={() => handleTaskSelect(task)}>
+                      <Button
+                        className="rounded-full"
+                        onClick={() => handleTaskSelect(task)}
+                      >
                         <RotateCcw className="h-4 w-4" />
                         Repositionner
                       </Button>
@@ -383,24 +523,15 @@ export function BookingWorkspacePage() {
                 ))
               ) : (
                 <div className="rounded-[1.25rem] border border-dashed border-[#001E5B]/12 px-4 py-8 text-sm text-[#001E5B]/44">
-                  Aucune relance à traiter pour ce caller.
+                  Aucune relance à traiter pour ce caller sur ce client.
                 </div>
               )}
             </CardContent>
           </Card>
-        </div>
-
-        <div className="space-y-6">
-          <SlotPicker
-            availability={availability}
-            selectedSlot={selectedSlot}
-            onSelect={setSelectedSlot}
-            loading={loadingAvailability}
-          />
 
           <Card className="surface-card">
             <CardHeader>
-              <CardTitle>Rendez-vous récents du caller</CardTitle>
+              <CardTitle>Rendez-vous récents du caller pour ce client</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               {recentBookings.length ? (
@@ -412,7 +543,9 @@ export function BookingWorkspacePage() {
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <div className="flex items-center gap-2">
-                          <p className="font-semibold text-[#001E5B]">{booking.companyName}</p>
+                          <p className="font-semibold text-[#001E5B]">
+                            {booking.companyName}
+                          </p>
                           <StatusBadge status={booking.displayStatus} />
                         </div>
                         <p className="text-sm text-[#001E5B]/56">
@@ -432,7 +565,7 @@ export function BookingWorkspacePage() {
                 ))
               ) : (
                 <div className="rounded-[1.25rem] border border-dashed border-[#001E5B]/12 px-4 py-8 text-sm text-[#001E5B]/44">
-                  Aucun rendez-vous récent pour ce caller.
+                  Aucun rendez-vous récent pour ce caller sur ce client.
                 </div>
               )}
             </CardContent>
@@ -440,7 +573,7 @@ export function BookingWorkspacePage() {
 
           <Card className="surface-card">
             <CardHeader>
-              <CardTitle>Pool connecté</CardTitle>
+              <CardTitle>Pool connecté pour ce client</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-3 md:grid-cols-2">
               {payload.bookingLink.reps.map((rep) => (
@@ -455,7 +588,8 @@ export function BookingWorkspacePage() {
                     <div>
                       <p className="font-semibold text-[#001E5B]">{rep.name}</p>
                       <p className="text-sm text-[#001E5B]/56">
-                        {rep.seniority === "senior" ? "Senior" : "Junior"} · {rep.connectionStatus}
+                        {rep.seniority === "senior" ? "Senior" : "Junior"} ·{" "}
+                        {rep.connectionStatus}
                       </p>
                     </div>
                   </div>
@@ -463,6 +597,15 @@ export function BookingWorkspacePage() {
               ))}
             </CardContent>
           </Card>
+        </div>
+
+        <div className="space-y-6">
+          <SlotPicker
+            availability={availability}
+            selectedSlot={selectedSlot}
+            onSelect={setSelectedSlot}
+            loading={loadingAvailability}
+          />
         </div>
       </div>
     </AppChrome>
@@ -485,7 +628,12 @@ function Field({
   return (
     <div className="space-y-2">
       <Label htmlFor={id}>{label}</Label>
-      <Input id={id} type={type} value={value} onChange={(event) => onChange(event.target.value)} />
+      <Input
+        id={id}
+        type={type}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
     </div>
   );
 }

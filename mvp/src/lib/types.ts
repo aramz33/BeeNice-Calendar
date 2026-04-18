@@ -37,6 +37,7 @@ export interface BookingSummary {
   assignedRepId: string;
   assignedRepName: string;
   startAt: string;
+  endAt: string;
   originalStartAt: string;
   previousStartAt?: string | null;
   timezone: string;
@@ -86,10 +87,20 @@ export interface Caller {
   active: boolean;
 }
 
+export interface PublicWorkspace {
+  id: string;
+  slug: string;
+  clientId: string;
+  clientName: string;
+  title: string;
+  timezone: string;
+}
+
 export interface BookingLinkResponse {
   bookingLink: {
     id: string;
     slug: string;
+    clientId?: string;
     title: string;
     clientName: string;
     timezone: string;
@@ -107,6 +118,7 @@ export interface BookingLinkResponse {
     }>;
   };
   callers: Caller[];
+  workspaces?: PublicWorkspace[];
 }
 
 export interface AvailabilityResponse {
@@ -149,6 +161,7 @@ export interface AdminBookingsResponse {
     reps: Array<{
       id: string;
       name: string;
+      clientName: string;
       seniority: "senior" | "junior";
       connectionStatus: string;
       provider: string;
@@ -229,4 +242,8 @@ export interface StartRepConnectionResponse {
 export interface SettingsPayload {
   clients: Array<{ id: string; name: string; timezone: string; active: boolean }>;
   callers: Array<{ id: string; name: string; active: boolean }>;
+}
+
+export interface PublicWorkspacesResponse {
+  workspaces: PublicWorkspace[];
 }

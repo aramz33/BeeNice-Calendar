@@ -2,11 +2,31 @@ import { cn } from "@shared-ui/utils";
 
 interface BeeNiceLogoProps {
   compact?: boolean;
+  theme?: "navy" | "amber";
   className?: string;
 }
 
-export function BeeNiceLogo({ compact = false, className }: BeeNiceLogoProps) {
+export function BeeNiceLogo({ compact = false, theme = "navy", className }: BeeNiceLogoProps) {
   if (compact) {
+    if (theme === "amber") {
+      return (
+        <div
+          className={cn(
+            "benice-symbol inline-flex h-12 w-12 items-end rounded-[1.1rem] bg-[#F7A600] p-2.5",
+            className,
+          )}
+        >
+          <span className="bar h-2 w-1.5 rounded-full bg-[#001E5B]" />
+          <span className="bar h-4 w-1.5 rounded-full bg-[#001E5B]" />
+          <span className="bar h-6 w-1.5 rounded-full bg-[#001E5B]" />
+          <span className="bar h-8 w-1.5 rounded-full bg-[#001E5B]" />
+          <span className="ml-1 text-3xl font-semibold leading-none tracking-[-0.08em] text-[#001E5B]">
+            b
+          </span>
+        </div>
+      );
+    }
+
     return (
       <div
         className={cn(

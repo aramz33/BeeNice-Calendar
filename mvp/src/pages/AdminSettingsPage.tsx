@@ -90,10 +90,7 @@ export function AdminSettingsPage() {
   };
 
   return (
-    <AppChrome
-      title="Paramètres BeeNice"
-      subtitle="Gérez les clients et callers sans repasser par les seeds locales."
-    >
+    <AppChrome title="Paramètres">
       <div className="grid gap-6 xl:grid-cols-2">
         <Card className="surface-card">
           <CardHeader>

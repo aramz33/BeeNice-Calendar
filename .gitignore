@@ -4,3 +4,7 @@ node_modules/
 *.iml
 mvp/dist/
 mvp/server/data/
+
+
+.claude/
+Beenice - Charte graphique-2025 (1).pdf

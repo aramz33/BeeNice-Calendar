@@ -1,4 +1,5 @@
 import { Badge } from "@shared-ui/badge";
+import { cn } from "@shared-ui/utils";
 import type { BookingStatus } from "@mvp/lib/types";
 
 const badgeMap: Record<
@@ -56,11 +57,24 @@ function normalizeStatus(status: string | undefined): BookingStatus | null {
   return null;
 }
 
-export function StatusBadge({ status }: { status: BookingStatus | string | undefined }) {
+export function getStatusBadgeConfig(status: BookingStatus | string | undefined) {
   const normalizedStatus = normalizeStatus(status);
-  const config = normalizedStatus ? badgeMap[normalizedStatus] : fallbackBadge;
+  return normalizedStatus ? badgeMap[normalizedStatus] : fallbackBadge;
+}
+
+export function StatusBadge({
+  status,
+  className,
+}: {
+  status: BookingStatus | string | undefined;
+  className?: string;
+}) {
+  const config = getStatusBadgeConfig(status);
   return (
-    <Badge variant={config.variant} className={config.className}>
+    <Badge
+      variant={config.variant}
+      className={cn(config.className, className)}
+    >
       <span className="status-dot">{config.label}</span>
     </Badge>
   );

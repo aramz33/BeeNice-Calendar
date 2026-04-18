@@ -60,6 +60,7 @@ export function createStore(provider) {
         bookingLink: {
           id: bookingLink.id,
           slug: bookingLink.slug,
+          clientId: bookingLink.clientId,
           title: bookingLink.title,
           clientName: client?.name ?? "Client inconnu",
           timezone: bookingLink.timezone,
@@ -77,6 +78,7 @@ export function createStore(provider) {
           })),
         },
         callers: this.listActiveCallers(),
+        workspaces: this.listPublicBookingLinks(),
       };
     },
 
@@ -419,6 +421,7 @@ export function createStore(provider) {
           reps: allReps.map((rep) => ({
             id: rep.id,
             name: rep.name,
+            clientName: this.getClient(rep.clientId)?.name ?? "Client inconnu",
             seniority: rep.seniority,
             connectionStatus: rep.connectionStatus,
             provider: rep.provider,
@@ -1045,6 +1048,34 @@ export function createStore(provider) {
         .map(fromBookingLinkRow);
     },
 
+    listPublicBookingLinks() {
+      return this.listBookingLinks()
+        .filter((link) => link.active)
+        .map((link) => {
+          const client = this.getClient(link.clientId);
+          if (!client?.active) {
+            return null;
+          }
+
+          return {
+            id: link.id,
+            slug: link.slug,
+            clientId: link.clientId,
+            clientName: client.name,
+            title: link.title,
+            timezone: link.timezone,
+          };
+        })
+        .filter(Boolean)
+        .sort((left, right) => {
+          const clientDelta = left.clientName.localeCompare(right.clientName);
+          if (clientDelta !== 0) {
+            return clientDelta;
+          }
+          return left.title.localeCompare(right.title);
+        });
+    },
+
     listAllClients() {
       return db
         .prepare("SELECT * FROM clients ORDER BY name ASC")
@@ -1493,6 +1524,7 @@ export function createStore(provider) {
         assignedRepId: booking.assignedRepId,
         assignedRepName: this.getRep(booking.assignedRepId)?.name ?? "Rep inconnu",
         startAt: booking.startAt,
+        endAt: booking.endAt,
         originalStartAt: booking.originalStartAt,
         previousStartAt: booking.previousStartAt,
         timezone: booking.timezone,

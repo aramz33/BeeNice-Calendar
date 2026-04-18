@@ -14,11 +14,7 @@
 
 body {
   min-height: 100vh;
-  background:
-    radial-gradient(circle at top left, rgba(247, 166, 0, 0.14), transparent 28%),
-    radial-gradient(circle at top right, rgba(0, 30, 91, 0.09), transparent 30%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(249, 244, 237, 0.96)),
-    var(--background);
+  background: var(--background);
 }
 
 .surface-card {
@@ -29,11 +25,9 @@ body {
 }
 
 .app-shell {
-  background:
-    linear-gradient(120deg, rgba(255, 253, 249, 0.96), rgba(255, 247, 232, 0.98)),
-    rgba(255, 255, 255, 0.8);
-  border: 1px solid rgba(0, 30, 91, 0.08);
-  box-shadow: 0 22px 50px rgba(0, 30, 91, 0.1);
+  background: #001e5b;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 8px 32px rgba(0, 30, 91, 0.18);
 }
 
 .slot-grid {
@@ -128,4 +122,91 @@ body {
   .agenda-grid {
     grid-template-columns: repeat(1, minmax(0, 1fr));
   }
+}
+
+/* ── Time-grid calendar ── */
+
+.time-grid-container {
+  display: grid;
+  grid-template-columns: 3.5rem repeat(7, minmax(0, 1fr));
+}
+
+.time-grid-day-col {
+  position: relative;
+  border-left: 1px solid rgba(0, 30, 91, 0.06);
+  height: 792px;
+}
+
+.time-grid-slot-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px solid rgba(0, 30, 91, 0.04);
+}
+
+.time-grid-slot-line-hour {
+  border-top-color: rgba(0, 30, 91, 0.08);
+}
+
+.time-grid-event {
+  position: absolute;
+  left: 3px;
+  right: 3px;
+  border-radius: 0.6rem;
+  padding: 0.18rem 0.3rem;
+  border: 1px solid rgba(0, 30, 91, 0.08);
+  background: #fffdf9;
+  overflow: hidden;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 120ms ease, background 120ms ease;
+  font-size: 0.6875rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.time-grid-event-time {
+  margin: 0;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1.05;
+  color: #001e5b;
+}
+
+.time-grid-event-context {
+  margin: 0;
+  font-size: 0.64rem;
+  line-height: 1.05;
+  color: rgba(0, 30, 91, 0.9);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.time-grid-event-badge {
+  max-width: 100%;
+  min-width: 0;
+  padding: 0.05rem 0.28rem;
+  border-radius: 999px;
+  font-size: 0.58rem;
+  line-height: 1;
+}
+
+.time-grid-event-badge .status-dot {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.time-grid-event:hover {
+  border-color: rgba(247, 166, 0, 0.6);
+  background: #fff7e8;
+}
+
+.time-grid-event-selected {
+  border-color: #f7a600;
+  background: #fff7e8;
 }

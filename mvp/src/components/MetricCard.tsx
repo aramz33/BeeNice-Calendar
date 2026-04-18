@@ -8,14 +8,14 @@ interface MetricCardProps {
 
 export function MetricCard({ label, value, helper }: MetricCardProps) {
   return (
-    <Card className="surface-card">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm uppercase tracking-[0.15em] text-[#001E5B]/40">
+    <Card className="surface-card border-l-4 border-l-[#F7A600]">
+      <CardHeader className="pb-2 text-center">
+        <CardTitle className="text-xs uppercase tracking-[0.15em] text-[#001E5B]/40">
           {label}
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-1">
-        <div className="metric-value text-3xl font-semibold tracking-tight text-[#001E5B]">
+      <CardContent className="space-y-1 text-center">
+        <div className="metric-value font-display text-4xl font-semibold tracking-[-0.06em] text-[#001E5B]">
           {value}
         </div>
         <p className="text-sm text-[#001E5B]/56">{helper}</p>

@@ -20,6 +20,10 @@ const server = http.createServer(async (request, response) => {
       return handleAdminStream(request, response);
     }
 
+    if (request.method === "GET" && pathname === "/api/book") {
+      return json(response, 200, { workspaces: store.listPublicBookingLinks() });
+    }
+
     if (request.method === "GET" && match(pathname, /^\/api\/book\/([^/]+)$/)) {
       const slug = pathname.split("/").at(-1);
       return json(response, 200, store.getPublicBookingPayload(slug));
