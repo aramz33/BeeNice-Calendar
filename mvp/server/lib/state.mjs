@@ -2,13 +2,16 @@ import { randomUUID } from "node:crypto";
 import {
   addDays,
   addMinutes,
+  addWeeks,
   eachDayOfInterval,
   endOfDay,
+  endOfWeek,
   format,
   getDay,
   isWeekend,
   parseISO,
   set,
+  startOfWeek,
   startOfToday,
   subMinutes,
 } from "date-fns";
@@ -33,6 +36,8 @@ const OUTCOME_STATES = [
 const SCHEDULE_STATES = ["scheduled", "rescheduled", "cancelled"];
 
 const ACTIVE_SCHEDULE_STATES = new Set(["scheduled", "rescheduled"]);
+const BOOKING_WINDOW_WEEKS = 12;
+const WEEK_STARTS_ON = 1;
 
 export function createStore(provider) {
   const database = createDatabase(provider.mode);
@@ -82,23 +87,51 @@ export function createStore(provider) {
       };
     },
 
-    async listAvailability(slug, companySizeValue) {
+    async listAvailability(slug, companySizeValue, filters = {}) {
       const bookingLink = this.getBookingLinkBySlug(slug);
       if (!bookingLink) {
         throw new Error("Booking link introuvable.");
       }
 
       const companySize = Number(companySizeValue) || 0;
+      const minimumStart = addMinutes(new Date(), bookingLink.minNoticeMinutes);
+      const firstWeekStart = startOfWeek(minimumStart, {
+        weekStartsOn: WEEK_STARTS_ON,
+      });
+      const maximumWindowEnd = endOfWeek(
+        addWeeks(firstWeekStart, BOOKING_WINDOW_WEEKS - 1),
+        { weekStartsOn: WEEK_STARTS_ON },
+      );
+      const requestedStart = parseOptionalIso(filters.from);
+      const requestedEnd = parseOptionalIso(filters.to);
+      const windowStart = clampDate(
+        requestedStart ?? firstWeekStart,
+        firstWeekStart,
+        maximumWindowEnd,
+      );
+      const windowEnd = clampDate(
+        requestedEnd ??
+          endOfWeek(windowStart, {
+            weekStartsOn: WEEK_STARTS_ON,
+          }),
+        windowStart,
+        maximumWindowEnd,
+      );
+
+      if (windowEnd < windowStart) {
+        throw new Error("Fenêtre de disponibilité invalide.");
+      }
+
       const interval = {
-        start: addMinutes(new Date(), bookingLink.minNoticeMinutes),
-        end: endOfDay(addDays(startOfToday(), 6)),
+        start: maxDate(minimumStart, windowStart),
+        end: windowEnd,
       };
 
       const eligibleReps = this.getEligibleReps(bookingLink.id, companySize);
       const busyByRep = await this.getBusyIntervalsForReps(eligibleReps, interval);
       const slots = [];
 
-      for (const day of eachDayOfInterval(interval)) {
+      for (const day of eachDayOfInterval({ start: windowStart, end: windowEnd })) {
         const weekday = getDay(day);
         if (weekday === 0 || weekday === 6) {
           continue;
@@ -145,6 +178,9 @@ export function createStore(provider) {
 
       return {
         timezone: bookingLink.timezone,
+        windowStart: windowStart.toISOString(),
+        windowEnd: windowEnd.toISOString(),
+        maxWindowEnd: maximumWindowEnd.toISOString(),
         slots,
       };
     },
@@ -496,7 +532,12 @@ export function createStore(provider) {
           lastCalendarChangeAt: booking.lastCalendarChangeAt,
           calendarSyncState: booking.calendarSyncState,
           timezone: booking.timezone,
-          assignmentReason: booking.assignmentReason,
+          assignmentReason: {
+            ...booking.assignmentReason,
+            candidateRepNames: (booking.assignmentReason?.candidateRepIds ?? []).map(
+              (repId) => this.getRep(repId)?.name ?? repId,
+            ),
+          },
           externalEventId: booking.externalEventId ?? "",
           linkedTask,
         },
@@ -1518,7 +1559,9 @@ export function createStore(provider) {
         clientId: booking.clientId,
         clientName: this.getClient(booking.clientId)?.name ?? "Client inconnu",
         companyName: booking.companyName,
+        companySize: booking.companySize,
         prospectName: booking.prospectName,
+        prospectEmail: booking.prospectEmail,
         callerId: booking.callerId,
         callerName: this.getCaller(booking.callerId)?.name ?? "Caller inconnu",
         assignedRepId: booking.assignedRepId,
@@ -1530,7 +1573,29 @@ export function createStore(provider) {
         timezone: booking.timezone,
         notes: booking.notes,
         taskId: this.getOpenTaskByBookingId(booking.id)?.id ?? null,
+        canCancel: this.getCallerCancelMode(booking) === "direct",
+        cancelMode: this.getCallerCancelMode(booking),
       };
+    },
+
+    getCallerCancelMode(booking) {
+      if (
+        !ACTIVE_SCHEDULE_STATES.has(booking.scheduleState) ||
+        booking.outcomeState !== "pending"
+      ) {
+        return null;
+      }
+
+      if (provider.mode !== "nylas") {
+        return "direct";
+      }
+
+      const connection = this.getConnection(booking.assignedRepId);
+      if (!connection || connection.status !== "connected") {
+        return "admin_only";
+      }
+
+      return "direct";
     },
 
     getClientStats(bookings, tasks) {
@@ -1900,6 +1965,68 @@ export function createStore(provider) {
         this.broadcastAvailability(link.slug);
       }
     },
+
+    async cancelCallerBooking(slug, callerId, bookingId) {
+      const bookingLink = this.getBookingLinkBySlug(slug);
+      if (!bookingLink) {
+        throw new Error("Booking link introuvable.");
+      }
+
+      const caller = this.getCaller(callerId);
+      if (!caller || !caller.active) {
+        throw new Error("Caller introuvable.");
+      }
+
+      const booking = this.getBooking(bookingId);
+      if (!booking || booking.bookingLinkId !== bookingLink.id || booking.callerId !== callerId) {
+        throw new Error("Booking introuvable pour ce caller.");
+      }
+
+      const cancelMode = this.getCallerCancelMode(booking);
+      if (cancelMode !== "direct") {
+        throw new Error("Annulation directe indisponible. Utilisez la console admin.");
+      }
+
+      await provider.releaseExternalEvent(this, booking);
+
+      const createdAt = new Date().toISOString();
+      database.withTransaction(() => {
+        db.prepare(`
+          UPDATE bookings
+          SET schedule_state = 'cancelled',
+              status = 'cancelled',
+              cancelled_at = ?,
+              last_calendar_change_at = ?,
+              calendar_sync_state = 'synced'
+          WHERE id = ?
+        `).run(createdAt, createdAt, booking.id);
+
+        this.insertLegacyStatusHistory({
+          bookingId: booking.id,
+          fromStatus: getLegacyStatus(booking),
+          toStatus: "cancelled",
+          actorType: "caller",
+          actorLabel: caller.name,
+          reason: "Annulation depuis le workspace caller.",
+          createdAt,
+        });
+
+        this.insertTimelineEvent({
+          bookingId: booking.id,
+          type: "calendar_cancelled",
+          actorLabel: caller.name,
+          reason: "Annulation depuis le workspace caller.",
+          createdAt,
+        });
+      });
+
+      this.broadcastAvailability(bookingLink.slug);
+      this.broadcastAdmin("booking.updated");
+      return {
+        bookingId: booking.id,
+        releasedSlotStart: booking.startAt,
+      };
+    },
   };
 
   bootstrapTimeline(store, db);
@@ -2071,6 +2198,29 @@ function differenceInMinutesSafe(startIso, endIso) {
   const start = parseISO(startIso);
   const end = parseISO(endIso);
   return Math.max(15, Math.round((end.getTime() - start.getTime()) / 60000));
+}
+
+function parseOptionalIso(value) {
+  if (typeof value !== "string" || !value) {
+    return null;
+  }
+
+  const parsed = parseISO(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function clampDate(value, min, max) {
+  if (value < min) {
+    return min;
+  }
+  if (value > max) {
+    return max;
+  }
+  return value;
+}
+
+function maxDate(left, right) {
+  return left > right ? left : right;
 }
 
 function makeId(prefix) {

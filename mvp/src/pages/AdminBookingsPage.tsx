@@ -682,8 +682,10 @@ export function AdminBookingsPage() {
                     <StatusBadge status={detail.booking.displayStatus} />
                   </div>
                   <div className="grid gap-2 text-sm text-[#001E5B]/72">
-                    <p>Caller: {detail.booking.callerName}</p>
-                    <p>Rep: {detail.booking.assignedRepName}</p>
+                    <p>Client BeNice: {detail.booking.clientName}</p>
+                    <p>Caller BeNice: {detail.booking.callerName}</p>
+                    <p>Rep côté client: {detail.booking.assignedRepName}</p>
+                    <p>Taille société: {detail.booking.companySize} salariés</p>
                     <p>
                       Date courante:{" "}
                       {formatDateTime(
@@ -715,6 +717,37 @@ export function AdminBookingsPage() {
                         {formatRelativeShort(detail.booking.linkedTask.dueAt)}
                       </p>
                     ) : null}
+                  </div>
+                </div>
+
+                <div className="rounded-[1.25rem] border border-[#001E5B]/8 bg-white px-4 py-4">
+                  <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#001E5B]/40">
+                    Raison d’assignation
+                  </p>
+                  <div className="mt-3 grid gap-2 text-sm text-[#001E5B]/72">
+                    <p>
+                      Pool retenu:{" "}
+                      {detail.booking.assignmentReason.seniorityPool === "senior"
+                        ? "Senior uniquement"
+                        : "Pool complet"}
+                    </p>
+                    <p>
+                      Rôle choisi:{" "}
+                      {detail.booking.assignmentReason.chosenRole === "senior"
+                        ? "Senior"
+                        : "Junior"}
+                    </p>
+                    <p>
+                      Seuil de qualification:{" "}
+                      {detail.booking.assignmentReason.companySizeThreshold}
+                    </p>
+                    <p>
+                      Candidats éligibles:{" "}
+                      {(
+                        detail.booking.assignmentReason.candidateRepNames ??
+                        detail.booking.assignmentReason.candidateRepIds
+                      ).join(", ")}
+                    </p>
                   </div>
                 </div>
 

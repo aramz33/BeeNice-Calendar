@@ -7,7 +7,8 @@
     "dev": "node mvp/dev.mjs",
     "dev:api": "node mvp/server/index.mjs",
     "dev:web": "vite --config mvp/vite.config.ts",
-    "build": "vite build --config mvp/vite.config.ts"
+    "build": "vite build --config mvp/vite.config.ts",
+    "start": "node mvp/server/index.mjs"
   },
   "dependencies": {
     "@radix-ui/react-label": "2.1.2",

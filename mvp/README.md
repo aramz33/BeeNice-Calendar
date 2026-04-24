@@ -8,8 +8,9 @@ Standalone MVP built under `mvp/` so the original prototype stays untouched.
 - Admin bookings console at `/admin/bookings`
 - Local Node API with:
   - SQLite persistence on disk
-  - seeded client, callers, reps, bookings
+  - seeded clients, callers, reps, bookings
   - live availability computation
+  - weekly availability navigation over a 12-week booking window
   - weighted routing with company-size qualification
   - immutable status history
   - SSE slot invalidation
@@ -62,3 +63,16 @@ npm run dev
 ```
 
 The admin console exposes a minimal rep connection card so you can launch Hosted OAuth per rep.
+
+## Local staging mode
+
+Build the frontend, then serve the compiled app and the API from the same Node
+process:
+
+```bash
+npm run build
+npm run start
+```
+
+This is the recommended mode for validating Nylas callbacks locally or on a
+single staging origin.

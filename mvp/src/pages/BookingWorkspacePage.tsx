@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
+import { addWeeks, endOfWeek, parseISO, startOfWeek, subWeeks } from "date-fns";
 import { useNavigate, useParams } from "react-router";
-import { CalendarClock, RotateCcw, Users } from "lucide-react";
+import { CalendarClock, RotateCcw, Users, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@shared-ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@shared-ui/card";
@@ -23,6 +24,7 @@ import { formatDateTime, formatRelativeShort } from "@mvp/lib/time";
 import type {
   AvailabilityResponse,
   BookingLinkResponse,
+  BookingSummary,
   CallerBookingsResponse,
   FollowUpTask,
   PublicWorkspace,
@@ -36,6 +38,8 @@ const COMPANY_SIZE_OPTIONS = [
 ];
 
 const CALLER_STORAGE_KEY = "benice-mvp-caller";
+const WEEK_STARTS_ON = 1;
+const BOOKING_WINDOW_WEEKS = 12;
 const DEMO_WORKSPACES: PublicWorkspace[] = [
   {
     id: "booking-link-teamstarter",
@@ -67,6 +71,9 @@ export function BookingWorkspacePage() {
   const [loadingMeta, setLoadingMeta] = useState(true);
   const [loadingAvailability, setLoadingAvailability] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [cancellingBookingId, setCancellingBookingId] = useState<string | null>(
+    null,
+  );
   const [callerId, setCallerId] = useState("");
   const [companySize, setCompanySize] = useState("");
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
@@ -75,8 +82,25 @@ export function BookingWorkspacePage() {
   const [companyName, setCompanyName] = useState("");
   const [notes, setNotes] = useState("");
   const [sourceTask, setSourceTask] = useState<FollowUpTask | null>(null);
+  const [availabilityWeekStartIso, setAvailabilityWeekStartIso] = useState(() =>
+    startOfWeek(new Date(), { weekStartsOn: WEEK_STARTS_ON }).toISOString(),
+  );
 
   const timezone = payload?.bookingLink.timezone ?? "Europe/Paris";
+  const currentWeekStart = useMemo(
+    () => parseISO(availabilityWeekStartIso),
+    [availabilityWeekStartIso],
+  );
+  const firstBookableWeekStart = useMemo(
+    () => startOfWeek(new Date(), { weekStartsOn: WEEK_STARTS_ON }),
+    [],
+  );
+  const lastBookableWeekStart = useMemo(
+    () => addWeeks(firstBookableWeekStart, BOOKING_WINDOW_WEEKS - 1),
+    [firstBookableWeekStart],
+  );
+  const hasPreviousAvailabilityWeek = currentWeekStart > firstBookableWeekStart;
+  const hasNextAvailabilityWeek = currentWeekStart < lastBookableWeekStart;
   const selectedSlotLabel = selectedSlot
     ? formatDateTime(selectedSlot, timezone)
     : "Aucun créneau sélectionné";
@@ -142,8 +166,12 @@ export function BookingWorkspacePage() {
     }
   }, [callerId]);
 
-  const fetchAvailability = async () => {
-    if (!companySize) {
+  const fetchAvailability = async (
+    preferredSlot: string | null = selectedSlot,
+    weekStart: Date = currentWeekStart,
+    companySizeValue: string = companySize,
+  ) => {
+    if (!companySizeValue) {
       setAvailability(null);
       setSelectedSlot(null);
       return;
@@ -151,14 +179,19 @@ export function BookingWorkspacePage() {
 
     setLoadingAvailability(true);
     try {
-      const params = new URLSearchParams({ companySize });
+      const weekEnd = endOfWeek(weekStart, { weekStartsOn: WEEK_STARTS_ON });
+      const params = new URLSearchParams({
+        companySize: companySizeValue,
+        from: weekStart.toISOString(),
+        to: weekEnd.toISOString(),
+      });
       const data = await apiFetch<AvailabilityResponse>(
         `/api/book/${slug}/availability?${params.toString()}`,
       );
       setAvailability(data);
-      setSelectedSlot((current) =>
-        current && data.slots.some((slot) => slot.startAt === current)
-          ? current
+      setSelectedSlot(
+        preferredSlot && data.slots.some((slot) => slot.startAt === preferredSlot)
+          ? preferredSlot
           : null,
       );
     } catch (error) {
@@ -191,7 +224,7 @@ export function BookingWorkspacePage() {
 
   useEffect(() => {
     void fetchAvailability();
-  }, [slug, companySize]);
+  }, [slug, companySize, availabilityWeekStartIso]);
 
   useEffect(() => {
     void fetchCallerData();
@@ -205,7 +238,7 @@ export function BookingWorkspacePage() {
     });
     source.onerror = () => source.close();
     return () => source.close();
-  }, [slug, callerId, companySize]);
+  }, [slug, callerId, companySize, availabilityWeekStartIso]);
 
   const eligiblePoolLabel = useMemo(() => {
     if (!companySize || !payload) {
@@ -232,6 +265,7 @@ export function BookingWorkspacePage() {
     setAvailability(null);
     setSelectedSlot(null);
     setSourceTask(null);
+    setAvailabilityWeekStartIso(firstBookableWeekStart.toISOString());
     navigate(`/book/${nextSlug}`);
   };
 
@@ -240,6 +274,64 @@ export function BookingWorkspacePage() {
     setProspectName("");
     setCompanyName("");
     setNotes("");
+  };
+
+  const handlePreviousAvailabilityWeek = () => {
+    if (!hasPreviousAvailabilityWeek) {
+      return;
+    }
+
+    setAvailabilityWeekStartIso(
+      subWeeks(currentWeekStart, 1).toISOString(),
+    );
+  };
+
+  const handleNextAvailabilityWeek = () => {
+    if (!hasNextAvailabilityWeek) {
+      return;
+    }
+
+    setAvailabilityWeekStartIso(
+      addWeeks(currentWeekStart, 1).toISOString(),
+    );
+  };
+
+  const handleCancelBooking = async (booking: BookingSummary) => {
+    if (!callerId || booking.cancelMode !== "direct") {
+      return;
+    }
+
+    setCancellingBookingId(booking.id);
+    try {
+      const bookingWeekStart = startOfWeek(parseISO(booking.startAt), {
+        weekStartsOn: WEEK_STARTS_ON,
+      });
+      await apiFetch(
+        `/api/book/${slug}/callers/${callerId}/bookings/${booking.id}/cancel`,
+        {
+          method: "POST",
+        },
+      );
+
+      setSourceTask(null);
+      setCompanySize(String(booking.companySize));
+      setCompanyName(booking.companyName);
+      setProspectName(booking.prospectName);
+      setProspectEmail(booking.prospectEmail);
+      setNotes(booking.notes ?? "");
+      setAvailabilityWeekStartIso(bookingWeekStart.toISOString());
+      await Promise.all([
+        fetchAvailability(booking.startAt, bookingWeekStart, String(booking.companySize)),
+        fetchCallerData(),
+      ]);
+      toast.success(
+        "Rendez-vous annulé. Le créneau a été rechargé pour corriger l’email ou rebooker.",
+      );
+    } catch (error) {
+      toast.error((error as Error).message);
+    } finally {
+      setCancellingBookingId(null);
+    }
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -540,24 +632,46 @@ export function BookingWorkspacePage() {
                     key={booking.id}
                     className="rounded-[1.25rem] border border-[#001E5B]/8 bg-white px-4 py-4"
                   >
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <p className="font-semibold text-[#001E5B]">
-                            {booking.companyName}
+                    <div className="space-y-3">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="font-semibold text-[#001E5B]">
+                              {booking.companyName}
+                            </p>
+                            <StatusBadge status={booking.displayStatus} />
+                          </div>
+                          <p className="text-sm text-[#001E5B]/56">
+                            {booking.prospectName} · {booking.assignedRepName}
                           </p>
-                          <StatusBadge status={booking.displayStatus} />
+                          <p className="mt-2 text-xs text-[#001E5B]/48">
+                            {formatRelativeShort(booking.startAt)}
+                          </p>
                         </div>
-                        <p className="text-sm text-[#001E5B]/56">
-                          {booking.prospectName} · {booking.assignedRepName}
-                        </p>
-                        <p className="mt-2 text-xs text-[#001E5B]/48">
-                          {formatRelativeShort(booking.startAt)}
-                        </p>
+                        {booking.taskId ? (
+                          <div className="rounded-full border border-[#F7A600]/20 bg-[#FFF6E4] px-3 py-1 text-xs font-medium text-[#9C6400]">
+                            Relance ouverte
+                          </div>
+                        ) : booking.cancelMode === "admin_only" ? (
+                          <div className="rounded-full border border-[#001E5B]/10 bg-[#F9F4ED] px-3 py-1 text-xs font-medium text-[#001E5B]">
+                            Annulation via admin
+                          </div>
+                        ) : null}
                       </div>
-                      {booking.taskId ? (
-                        <div className="rounded-full border border-[#F7A600]/20 bg-[#FFF6E4] px-3 py-1 text-xs font-medium text-[#9C6400]">
-                          Relance ouverte
+                      {booking.canCancel ? (
+                        <div className="flex justify-end">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="rounded-full border-rose-200 text-rose-700"
+                            onClick={() => void handleCancelBooking(booking)}
+                            disabled={cancellingBookingId === booking.id}
+                          >
+                            <XCircle
+                              className={`h-4 w-4 ${cancellingBookingId === booking.id ? "animate-pulse" : ""}`}
+                            />
+                            Annuler et rebooker
+                          </Button>
                         </div>
                       ) : null}
                     </div>
@@ -605,6 +719,10 @@ export function BookingWorkspacePage() {
             selectedSlot={selectedSlot}
             onSelect={setSelectedSlot}
             loading={loadingAvailability}
+            onPreviousWeek={handlePreviousAvailabilityWeek}
+            onNextWeek={handleNextAvailabilityWeek}
+            hasPreviousWeek={hasPreviousAvailabilityWeek}
+            hasNextWeek={hasNextAvailabilityWeek}
           />
         </div>
       </div>

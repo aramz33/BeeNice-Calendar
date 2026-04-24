@@ -30,6 +30,10 @@ export function formatDateShort(iso: string) {
   return format(parseISO(iso), "dd/MM/yyyy", { locale: fr });
 }
 
+export function formatDateShortInTimezone(iso: string, timezone: string) {
+  return formatInTimeZone(iso, timezone, "dd/MM/yyyy", { locale: fr });
+}
+
 export function getWeekDays(referenceIso: string) {
   const reference = parseISO(referenceIso);
   return eachDayOfInterval({

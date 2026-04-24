@@ -1,17 +1,25 @@
 import { useMemo } from "react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale/fr";
-import { Clock3, Sparkles } from "lucide-react";
+import { ChevronLeft, ChevronRight, Clock3, Sparkles } from "lucide-react";
 import { Button } from "@shared-ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@shared-ui/card";
 import type { AvailabilityResponse } from "@mvp/lib/types";
-import { formatSlotDay, formatSlotTime } from "@mvp/lib/time";
+import {
+  formatDateShortInTimezone,
+  formatSlotDay,
+  formatSlotTime,
+} from "@mvp/lib/time";
 
 interface SlotPickerProps {
   availability: AvailabilityResponse | null;
   selectedSlot: string | null;
   onSelect: (slotStart: string) => void;
   loading: boolean;
+  onPreviousWeek: () => void;
+  onNextWeek: () => void;
+  hasPreviousWeek: boolean;
+  hasNextWeek: boolean;
 }
 
 export function SlotPicker({
@@ -19,6 +27,10 @@ export function SlotPicker({
   selectedSlot,
   onSelect,
   loading,
+  onPreviousWeek,
+  onNextWeek,
+  hasPreviousWeek,
+  hasNextWeek,
 }: SlotPickerProps) {
   const grouped = useMemo(() => {
     if (!availability) {
@@ -61,7 +73,7 @@ export function SlotPicker({
     );
   }
 
-  if (!availability || availability.slots.length === 0) {
+  if (!availability) {
     return (
       <Card className="surface-card">
         <CardHeader>
@@ -71,8 +83,34 @@ export function SlotPicker({
           <div className="flex items-center gap-2 text-muted-foreground">
             <Sparkles className="h-4 w-4" />
             <p className="text-sm">
-              Aucun créneau disponible pour ce niveau de qualification sur les 7
-              prochains jours.
+              Choisissez d’abord une tranche de société pour charger une
+              semaine de disponibilités.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (availability.slots.length === 0) {
+    return (
+      <Card className="surface-card">
+        <CardHeader>
+          <CardTitle>Disponibilités en direct</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <WeekNavigator
+            availability={availability}
+            onPreviousWeek={onPreviousWeek}
+            onNextWeek={onNextWeek}
+            hasPreviousWeek={hasPreviousWeek}
+            hasNextWeek={hasNextWeek}
+          />
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Sparkles className="h-4 w-4" />
+            <p className="text-sm">
+              Aucun créneau disponible sur cette semaine pour ce niveau de
+              qualification.
             </p>
           </div>
         </CardContent>
@@ -86,7 +124,8 @@ export function SlotPicker({
         <div>
           <CardTitle>Disponibilités en direct</CardTitle>
           <p className="mt-2 text-sm text-muted-foreground">
-            Les créneaux disparaissent dès qu’un autre caller les réserve.
+            Navigation hebdomadaire sur 12 semaines. Les créneaux disparaissent
+            dès qu’un autre caller les réserve.
           </p>
         </div>
         <div className="rounded-full border border-[#001E5B]/10 bg-[#F9F4ED] px-3 py-1 text-xs text-[#001E5B]">
@@ -94,6 +133,13 @@ export function SlotPicker({
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+        <WeekNavigator
+          availability={availability}
+          onPreviousWeek={onPreviousWeek}
+          onNextWeek={onNextWeek}
+          hasPreviousWeek={hasPreviousWeek}
+          hasNextWeek={hasNextWeek}
+        />
         <div className="slot-grid">
           {grouped.map(([day, slots]) => (
             <div key={day} className="slot-column space-y-3">
@@ -137,5 +183,48 @@ export function SlotPicker({
         </p>
       </CardContent>
     </Card>
+  );
+}
+
+function WeekNavigator({
+  availability,
+  onPreviousWeek,
+  onNextWeek,
+  hasPreviousWeek,
+  hasNextWeek,
+}: {
+  availability: AvailabilityResponse;
+  onPreviousWeek: () => void;
+  onNextWeek: () => void;
+  hasPreviousWeek: boolean;
+  hasNextWeek: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <Button
+        type="button"
+        variant="outline"
+        size="icon"
+        className="rounded-full"
+        onClick={onPreviousWeek}
+        disabled={!hasPreviousWeek}
+      >
+        <ChevronLeft className="h-4 w-4" />
+      </Button>
+      <div className="rounded-full border border-[#001E5B]/10 bg-white px-4 py-2 text-center text-sm font-medium text-[#001E5B]">
+        {formatDateShortInTimezone(availability.windowStart, availability.timezone)}{" "}
+        → {formatDateShortInTimezone(availability.windowEnd, availability.timezone)}
+      </div>
+      <Button
+        type="button"
+        variant="outline"
+        size="icon"
+        className="rounded-full"
+        onClick={onNextWeek}
+        disabled={!hasNextWeek}
+      >
+        <ChevronRight className="h-4 w-4" />
+      </Button>
+    </div>
   );
 }

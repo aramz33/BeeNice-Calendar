@@ -1,5 +1,7 @@
 import http from "node:http";
-import { URL } from "node:url";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath, URL } from "node:url";
 import { createCalendarProvider } from "./lib/provider.mjs";
 import { createStore } from "./lib/state.mjs";
 
@@ -7,6 +9,10 @@ const provider = createCalendarProvider();
 const store = createStore(provider);
 const PORT = Number(process.env.MVP_API_PORT ?? 8787);
 const HOST = process.env.MVP_API_HOST ?? "127.0.0.1";
+const DIST_DIR = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../dist",
+);
 
 const server = http.createServer(async (request, response) => {
   try {
@@ -37,7 +43,10 @@ const server = http.createServer(async (request, response) => {
       return json(
         response,
         200,
-        await store.listAvailability(slug, url.searchParams.get("companySize")),
+        await store.listAvailability(slug, url.searchParams.get("companySize"), {
+          from: url.searchParams.get("from"),
+          to: url.searchParams.get("to"),
+        }),
       );
     }
 
@@ -69,6 +78,18 @@ const server = http.createServer(async (request, response) => {
       const slug = pathname.split("/")[3];
       const body = await parseBody(request);
       return json(response, 201, await store.createBooking(slug, body));
+    }
+
+    if (
+      request.method === "POST" &&
+      match(pathname, /^\/api\/book\/([^/]+)\/callers\/([^/]+)\/bookings\/([^/]+)\/cancel$/)
+    ) {
+      const [, , , slug, , callerId, , bookingId] = pathname.split("/");
+      return json(
+        response,
+        200,
+        await store.cancelCallerBooking(slug, callerId, bookingId),
+      );
     }
 
     if (request.method === "GET" && pathname === "/api/admin/reps") {
@@ -261,6 +282,13 @@ const server = http.createServer(async (request, response) => {
       return json(response, 202, await store.handleWebhook(body));
     }
 
+    if (request.method === "GET" || request.method === "HEAD") {
+      const served = await serveAppAsset(pathname, response, request.method);
+      if (served) {
+        return;
+      }
+    }
+
     return json(response, 404, { error: "Route introuvable." });
   } catch (error) {
     const message =
@@ -356,6 +384,80 @@ async function parseBody(request) {
 
 function match(value, pattern) {
   return pattern.test(value);
+}
+
+async function serveAppAsset(pathname, response, method) {
+  const normalized = pathname === "/" ? "index.html" : pathname.replace(/^\/+/, "");
+  const filePath = safeJoinDist(normalized);
+  if (filePath) {
+    const asset = await tryReadFile(filePath);
+    if (asset) {
+      return file(response, 200, asset, getMimeType(filePath), method);
+    }
+  }
+
+  if (path.extname(pathname)) {
+    return false;
+  }
+
+  const indexPath = path.join(DIST_DIR, "index.html");
+  const asset = await tryReadFile(indexPath);
+  if (!asset) {
+    return false;
+  }
+
+  return file(response, 200, asset, "text/html; charset=utf-8", method);
+}
+
+function safeJoinDist(relativePath) {
+  const safePath = path.normalize(relativePath).replace(/^(\.\.(\/|\\|$))+/, "");
+  const candidate = path.join(DIST_DIR, safePath);
+  if (!candidate.startsWith(DIST_DIR)) {
+    return null;
+  }
+  return candidate;
+}
+
+async function tryReadFile(filePath) {
+  try {
+    return await readFile(filePath);
+  } catch {
+    return null;
+  }
+}
+
+function file(response, status, payload, contentType, method) {
+  response.writeHead(status, {
+    "Content-Type": contentType,
+  });
+  if (method === "HEAD") {
+    response.end();
+    return true;
+  }
+  response.end(payload);
+  return true;
+}
+
+function getMimeType(filePath) {
+  const extension = path.extname(filePath).toLowerCase();
+  switch (extension) {
+    case ".css":
+      return "text/css; charset=utf-8";
+    case ".html":
+      return "text/html; charset=utf-8";
+    case ".js":
+      return "text/javascript; charset=utf-8";
+    case ".json":
+      return "application/json; charset=utf-8";
+    case ".svg":
+      return "image/svg+xml";
+    case ".png":
+      return "image/png";
+    case ".ico":
+      return "image/x-icon";
+    default:
+      return "application/octet-stream";
+  }
 }
 
 function renderCallbackPage({ title, description, target }) {

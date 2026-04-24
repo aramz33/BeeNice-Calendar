@@ -5,6 +5,7 @@ Repo dédié au MVP du hub calendrier Be Nice.
 Le code principal de la démo est isolé dans [`mvp/`](./mvp) et couvre :
 
 - un workspace caller avec disponibilités live consolidées
+- une navigation hebdomadaire sur 12 semaines pour la prise de rendez-vous
 - un routing pondéré avec qualification par taille de société
 - une console admin avec historique de statuts
 - une API locale persistante avec SQLite
@@ -27,6 +28,20 @@ Par défaut :
 ```bash
 npm run build
 ```
+
+## Staging local same-origin
+
+Après le build, le serveur Node peut servir le frontend compilé et l’API sur la
+même origine, ce qui simplifie les callbacks OAuth Nylas :
+
+```bash
+npm run build
+npm run start
+```
+
+Par défaut :
+
+- app + API : `http://127.0.0.1:8787`
 
 ## Modes calendrier
 

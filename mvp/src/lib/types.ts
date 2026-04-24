@@ -21,6 +21,7 @@ export interface AssignmentReason {
   chosenRole: "senior" | "junior";
   roleDeficits: Record<string, number>;
   candidateRepIds: string[];
+  candidateRepNames?: string[];
 }
 
 export interface BookingSummary {
@@ -31,7 +32,9 @@ export interface BookingSummary {
   clientId: string;
   clientName: string;
   companyName: string;
+  companySize: number;
   prospectName: string;
+  prospectEmail: string;
   callerId: string;
   callerName: string;
   assignedRepId: string;
@@ -43,6 +46,8 @@ export interface BookingSummary {
   timezone: string;
   notes?: string;
   taskId?: string | null;
+  canCancel?: boolean;
+  cancelMode?: "direct" | "admin_only" | null;
 }
 
 export interface FollowUpTask {
@@ -123,6 +128,9 @@ export interface BookingLinkResponse {
 
 export interface AvailabilityResponse {
   timezone: string;
+  windowStart: string;
+  windowEnd: string;
+  maxWindowEnd: string;
   slots: Array<{
     startAt: string;
     endAt: string;
