@@ -26,6 +26,7 @@ export function RepConnectPage() {
   const { inviteToken = "" } = useParams();
   const [payload, setPayload] = useState<PublicRepConnectionResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
   const [formValues, setFormValues] = useState<Record<string, string>>({});
 
@@ -33,14 +34,21 @@ export function RepConnectPage() {
 
   const fetchPayload = async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const data = await apiFetch<PublicRepConnectionResponse>(
         `/api/connect/${inviteToken}`,
       );
-      setPayload(data);
-      setFormValues((current) => hydrateDefaultFieldValues(data.fields, current));
+      const normalizedPayload = normalizePayload(data);
+      setPayload(normalizedPayload);
+      setFormValues((current) =>
+        hydrateDefaultFieldValues(normalizedPayload.fields, current),
+      );
     } catch (error) {
-      toast.error((error as Error).message);
+      const message = (error as Error).message;
+      setPayload(null);
+      setLoadError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -128,6 +136,10 @@ export function RepConnectPage() {
                   className="h-12 animate-pulse rounded-[1rem] bg-[#001E5B]/5"
                 />
               ))
+            ) : loadError ? (
+              <div className="rounded-[1.25rem] border border-[#C96E12]/20 bg-[#FFF7ED] px-4 py-4 text-sm text-[#8A4B08]">
+                {loadError}
+              </div>
             ) : (
               <div className="space-y-4">
                 {fields.map((field) => (
@@ -149,7 +161,7 @@ export function RepConnectPage() {
             <Button
               className="w-full rounded-full"
               onClick={() => void handleConnect()}
-              disabled={connecting || loading}
+              disabled={connecting || loading || Boolean(loadError) || !payload}
             >
               <Cable className="h-4 w-4" />
               {connecting ? "Connexion en cours..." : "Connexion"}
@@ -162,7 +174,7 @@ export function RepConnectPage() {
 }
 
 function hydrateDefaultFieldValues(
-  fields: PublicRepConnectionField[],
+  fields: PublicRepConnectionField[] = [],
   currentValues: Record<string, string>,
 ) {
   const nextValues = { ...currentValues };
@@ -181,6 +193,21 @@ function hydrateDefaultFieldValues(
   });
 
   return nextValues;
+}
+
+function normalizePayload(
+  payload: PublicRepConnectionResponse,
+): PublicRepConnectionResponse {
+  return {
+    client: payload?.client ?? {
+      id: "",
+      name: "Client",
+      timezone: "Europe/Paris",
+      inviteToken: "",
+      routingMode: "pool_unique",
+    },
+    fields: Array.isArray(payload?.fields) ? payload.fields : [],
+  };
 }
 
 function RepConnectionFieldInput({
