@@ -1,4 +1,10 @@
-import { eachDayOfInterval, endOfWeek, format, parseISO, startOfWeek } from "date-fns";
+import {
+  eachDayOfInterval,
+  endOfWeek,
+  format,
+  parseISO,
+  startOfWeek,
+} from "date-fns";
 import { fr } from "date-fns/locale/fr";
 import { formatInTimeZone } from "date-fns-tz";
 
@@ -22,6 +28,10 @@ export function formatDayShort(iso: string, timezone: string) {
   return formatInTimeZone(iso, timezone, "EEE d", { locale: fr });
 }
 
+export function formatMonthYear(iso: string, timezone: string) {
+  return formatInTimeZone(iso, timezone, "MMMM yyyy", { locale: fr });
+}
+
 export function formatTimeOnly(iso: string, timezone: string) {
   return formatInTimeZone(iso, timezone, "HH:mm");
 }
@@ -40,4 +50,12 @@ export function getWeekDays(referenceIso: string) {
     start: startOfWeek(reference, { weekStartsOn: 1 }),
     end: endOfWeek(reference, { weekStartsOn: 1 }),
   });
+}
+
+export function getBusinessWeekDays(referenceIso: string) {
+  return getWeekDays(referenceIso).slice(0, 5);
+}
+
+export function formatDateKeyInTimezone(date: Date, timezone: string) {
+  return formatInTimeZone(date, timezone, "yyyy-MM-dd");
 }

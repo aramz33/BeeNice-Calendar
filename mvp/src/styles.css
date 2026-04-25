@@ -95,6 +95,11 @@ body {
   padding: 0.9rem;
 }
 
+.agenda-day-head-today {
+  background: #ffefcf;
+  border-color: rgba(247, 166, 0, 0.28);
+}
+
 .agenda-card {
   width: 100%;
   border-radius: 1rem;
@@ -133,13 +138,16 @@ body {
 
 .time-grid-container {
   display: grid;
-  grid-template-columns: 3.5rem repeat(7, minmax(0, 1fr));
 }
 
 .time-grid-day-col {
   position: relative;
   border-left: 1px solid rgba(0, 30, 91, 0.06);
   height: 792px;
+}
+
+.time-grid-day-col-today {
+  background: rgba(247, 166, 0, 0.08);
 }
 
 .time-grid-slot-line {

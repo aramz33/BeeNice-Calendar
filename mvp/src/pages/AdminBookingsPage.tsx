@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  addDays,
   addWeeks,
+  endOfDay,
   endOfWeek,
-  formatISO,
   parseISO,
   startOfWeek,
   subWeeks,
@@ -38,12 +39,13 @@ import { SlotPicker } from "@mvp/components/SlotPicker";
 import { StatusBadge } from "@mvp/components/StatusBadge";
 import { apiFetch } from "@mvp/lib/api";
 import {
-  formatDateShort,
+  formatDateKeyInTimezone,
   formatDateTime,
   formatDayShort,
+  formatMonthYear,
   formatRelativeShort,
   formatTimeOnly,
-  getWeekDays,
+  getBusinessWeekDays,
 } from "@mvp/lib/time";
 import type {
   AdminBookingsResponse,
@@ -88,6 +90,9 @@ export function AdminBookingsPage() {
   const [weekStartIso, setWeekStartIso] = useState(() =>
     startOfWeek(new Date(), { weekStartsOn: 1 }).toISOString(),
   );
+  const [todayDateKey, setTodayDateKey] = useState(() =>
+    formatDateKeyInTimezone(new Date(), "Europe/Paris"),
+  );
   const [filters, setFilters] = useState({
     status: "all",
     clientId: "all",
@@ -97,11 +102,20 @@ export function AdminBookingsPage() {
   });
 
   const weekStart = useMemo(() => parseISO(weekStartIso), [weekStartIso]);
-  const weekEnd = useMemo(
-    () => endOfWeek(weekStart, { weekStartsOn: 1 }),
+  const visibleWeekEnd = useMemo(
+    () => endOfDay(addDays(weekStart, 4)),
     [weekStart],
   );
-  const weekDays = useMemo(() => getWeekDays(weekStartIso), [weekStartIso]);
+  const weekDays = useMemo(
+    () => getBusinessWeekDays(weekStartIso),
+    [weekStartIso],
+  );
+  const agendaTimezone = payload?.timezone ?? "Europe/Paris";
+  const weekLabel = useMemo(() => {
+    // When a visible work week spans two months, use Monday's month as the label.
+    const referenceDay = weekDays[0] ?? weekStart;
+    return formatMonthYear(referenceDay.toISOString(), agendaTimezone);
+  }, [agendaTimezone, weekDays, weekStart]);
   const rescheduleWeekStart = useMemo(
     () => parseISO(rescheduleWeekStartIso),
     [rescheduleWeekStartIso],
@@ -137,7 +151,7 @@ export function AdminBookingsPage() {
 
       const calendarParams = new URLSearchParams(params);
       calendarParams.set("from", weekStart.toISOString());
-      calendarParams.set("to", weekEnd.toISOString());
+      calendarParams.set("to", visibleWeekEnd.toISOString());
 
       const [bookings, agenda, tasks, settings] = await Promise.all([
         apiFetch<AdminBookingsResponse>(
@@ -249,6 +263,29 @@ export function AdminBookingsPage() {
     setSelectedRescheduleSlot(null);
     void fetchRescheduleAvailability(detail.booking.id, nextWeekStart, null);
   }, [detail?.booking.id, detail?.booking.startAt, firstRescheduleWeekStart]);
+
+  useEffect(() => {
+    const syncToday = () => {
+      setTodayDateKey(formatDateKeyInTimezone(new Date(), agendaTimezone));
+    };
+
+    syncToday();
+
+    let intervalId: number | undefined;
+    const remainder = Date.now() % 60_000;
+    const msUntilNextMinute = remainder === 0 ? 60_000 : 60_000 - remainder;
+    const timeoutId = window.setTimeout(() => {
+      syncToday();
+      intervalId = window.setInterval(syncToday, 60_000);
+    }, msUntilNextMinute);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      if (intervalId !== undefined) {
+        window.clearInterval(intervalId);
+      }
+    };
+  }, [agendaTimezone]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -561,31 +598,43 @@ export function AdminBookingsPage() {
             </div>
 
             {activeView === "agenda" && (
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="rounded-full"
-                  onClick={() =>
-                    setWeekStartIso(subWeeks(weekStart, 1).toISOString())
-                  }
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <div className="rounded-full border border-[#001E5B]/10 bg-white px-4 py-2 text-sm font-medium text-[#001E5B]">
-                  {formatDateShort(weekStartIso)} →{" "}
-                  {formatDateShort(weekEnd.toISOString())}
+              <div className="flex flex-1 flex-wrap items-center justify-between gap-3">
+                <div className="text-lg font-semibold capitalize text-[#001E5B]">
+                  {weekLabel}
                 </div>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="rounded-full"
-                  onClick={() =>
-                    setWeekStartIso(addWeeks(weekStart, 1).toISOString())
-                  }
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="rounded-full"
+                    onClick={() =>
+                      setWeekStartIso(subWeeks(weekStart, 1).toISOString())
+                    }
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="rounded-full"
+                    onClick={() =>
+                      setWeekStartIso(
+                        startOfWeek(new Date(), { weekStartsOn: 1 }).toISOString(),
+                      )
+                    }
+                  >
+                    Aujourd'hui
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="rounded-full"
+                    onClick={() =>
+                      setWeekStartIso(addWeeks(weekStart, 1).toISOString())
+                    }
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
             )}
           </div>
@@ -597,7 +646,8 @@ export function AdminBookingsPage() {
               weekDays={weekDays}
               onSelect={setSelectedBookingId}
               selectedBookingId={selectedBookingId}
-              timezone={payload?.timezone ?? "Europe/Paris"}
+              timezone={agendaTimezone}
+              todayDateKey={todayDateKey}
             />
           )}
 
@@ -1230,6 +1280,7 @@ function AgendaBoard({
   selectedBookingId,
   onSelect,
   timezone,
+  todayDateKey,
 }: {
   loading: boolean;
   entries: BookingSummary[];
@@ -1237,11 +1288,12 @@ function AgendaBoard({
   selectedBookingId: string | null;
   onSelect: (id: string) => void;
   timezone: string;
+  todayDateKey: string;
 }) {
   const grouped = useMemo(() => {
     const map = new Map<string, BookingSummary[]>();
     weekDays.forEach((day) => {
-      map.set(formatISO(day, { representation: "date" }), []);
+      map.set(formatDateKeyInTimezone(day, timezone), []);
     });
     entries.forEach((entry) => {
       const startAt = parseIsoSafe(entry.startAt);
@@ -1249,9 +1301,7 @@ function AgendaBoard({
         return;
       }
 
-      const key = formatISO(startAt, {
-        representation: "date",
-      });
+      const key = formatDateKeyInTimezone(startAt, timezone);
       if (!map.has(key)) {
         map.set(key, []);
       }
@@ -1261,7 +1311,7 @@ function AgendaBoard({
       items.sort((left, right) => left.startAt.localeCompare(right.startAt)),
     );
     return map;
-  }, [entries, weekDays]);
+  }, [entries, timezone, weekDays]);
 
   return (
     <Card className="surface-card overflow-x-auto">
@@ -1270,8 +1320,13 @@ function AgendaBoard({
       </CardHeader>
       <CardContent>
         {loading ? (
-          <div className="grid gap-4 md:grid-cols-7">
-            {Array.from({ length: 7 }).map((_, index) => (
+          <div
+            className="grid gap-4"
+            style={{
+              gridTemplateColumns: `repeat(${weekDays.length}, minmax(0, 1fr))`,
+            }}
+          >
+            {Array.from({ length: weekDays.length }).map((_, index) => (
               <div
                 key={index}
                 className="h-72 animate-pulse rounded-[1.5rem] bg-[#001E5B]/5"
@@ -1279,22 +1334,26 @@ function AgendaBoard({
             ))}
           </div>
         ) : (
-          <div style={{ minWidth: "800px" }}>
+          <div style={{ minWidth: "680px" }}>
             {/* Day header row */}
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "3.5rem repeat(7, minmax(0, 1fr))",
+                gridTemplateColumns: `3.5rem repeat(${weekDays.length}, minmax(0, 1fr))`,
                 gap: "0 0.25rem",
                 marginBottom: "0.5rem",
               }}
             >
               <div />
               {weekDays.map((day) => {
-                const key = formatISO(day, { representation: "date" });
+                const key = formatDateKeyInTimezone(day, timezone);
                 const items = grouped.get(key) ?? [];
+                const isToday = key === todayDateKey;
                 return (
-                  <div key={key} className="agenda-day-head">
+                  <div
+                    key={key}
+                    className={`agenda-day-head ${isToday ? "agenda-day-head-today" : ""}`}
+                  >
                     <p className="text-sm font-semibold capitalize text-[#001E5B]">
                       {formatDayShort(day.toISOString(), timezone)}
                     </p>
@@ -1307,7 +1366,12 @@ function AgendaBoard({
             </div>
 
             {/* Time grid body */}
-            <div className="time-grid-container">
+            <div
+              className="time-grid-container"
+              style={{
+                gridTemplateColumns: `3.5rem repeat(${weekDays.length}, minmax(0, 1fr))`,
+              }}
+            >
               {/* Time axis column */}
               <div className="relative" style={{ height: TOTAL_HEIGHT_PX }}>
                 {CALENDAR_HOURS.map((hour, i) => (
@@ -1321,16 +1385,20 @@ function AgendaBoard({
                 ))}
               </div>
 
-              {/* 7 day columns */}
+              {/* 5 day columns */}
               {weekDays.map((day) => {
-                const key = formatISO(day, { representation: "date" });
+                const key = formatDateKeyInTimezone(day, timezone);
                 const inRange = (grouped.get(key) ?? []).filter((e) =>
                   isEventInRange(e, timezone),
                 );
                 const tracked = assignTracks(inRange, timezone);
+                const isToday = key === todayDateKey;
 
                 return (
-                  <div key={key} className="time-grid-day-col">
+                  <div
+                    key={key}
+                    className={`time-grid-day-col ${isToday ? "time-grid-day-col-today" : ""}`}
+                  >
                     {/* Horizontal slot lines */}
                     {Array.from({ length: TOTAL_SLOTS }).map((_, i) => (
                       <div
