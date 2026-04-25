@@ -623,9 +623,17 @@ export function BookingWorkspacePage() {
 
           <Card className="surface-card">
             <CardHeader>
-              <CardTitle>Rendez-vous récents du caller pour ce client</CardTitle>
+              <CardTitle>Rendez-vous du caller pour ce client</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
+              <p className="text-sm text-[#001E5B]/56">
+                Les rendez-vous a venir restent visibles ici. L'action
+                <span className="font-medium text-[#001E5B]">
+                  {" "}
+                  Annuler et rebooker
+                </span>{" "}
+                reste disponible jusqu'au debut du rendez-vous.
+              </p>
               {recentBookings.length ? (
                 recentBookings.map((booking) => (
                   <div

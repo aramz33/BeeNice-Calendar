@@ -93,6 +93,63 @@ export function createStore(provider) {
         throw new Error("Booking link introuvable.");
       }
 
+      return this.buildAvailability(bookingLink, companySizeValue, filters);
+    },
+
+    listCallerBookings(slug, callerId) {
+      const bookingLink = this.getBookingLinkBySlug(slug);
+      if (!bookingLink) {
+        throw new Error("Booking link introuvable.");
+      }
+
+      const bookings = db
+        .prepare(`
+          SELECT *
+          FROM bookings
+          WHERE booking_link_id = ? AND caller_id = ?
+          ORDER BY start_at DESC
+        `)
+        .all(bookingLink.id, callerId)
+        .map(fromBookingRow)
+        .map((booking) => this.toBookingSummary(booking));
+
+      const upcomingBookings = bookings
+        .filter(
+          (booking) =>
+            ACTIVE_SCHEDULE_STATES.has(booking.scheduleState) &&
+            booking.outcomeState === "pending" &&
+            parseISO(booking.startAt) >= new Date(),
+        )
+        .sort((left, right) => left.startAt.localeCompare(right.startAt));
+
+      const historicalBookings = bookings
+        .filter((booking) => !upcomingBookings.some((candidate) => candidate.id === booking.id))
+        .sort((left, right) => right.startAt.localeCompare(left.startAt))
+        .slice(0, 6);
+
+      return {
+        timezone: bookingLink.timezone,
+        bookings: [...upcomingBookings, ...historicalBookings],
+        tasks: this.listCallerTasks(callerId, bookingLink.clientId).tasks,
+      };
+    },
+
+    listCallerTasks(callerId, clientId = null) {
+      let tasks = this.listAllTasks();
+      tasks = tasks.filter(
+        (task) =>
+          task.callerId === callerId &&
+          task.status === "open" &&
+          (!clientId || task.clientId === clientId),
+      );
+
+      return {
+        timezone: "Europe/Paris",
+        tasks: tasks.sort((left, right) => left.dueAt.localeCompare(right.dueAt)),
+      };
+    },
+
+    async buildAvailability(bookingLink, companySizeValue, filters = {}, options = {}) {
       const companySize = Number(companySizeValue) || 0;
       const minimumStart = addMinutes(new Date(), bookingLink.minNoticeMinutes);
       const firstWeekStart = startOfWeek(minimumStart, {
@@ -128,8 +185,13 @@ export function createStore(provider) {
       };
 
       const eligibleReps = this.getEligibleReps(bookingLink.id, companySize);
-      const busyByRep = await this.getBusyIntervalsForReps(eligibleReps, interval);
+      const busyByRep = await this.getBusyIntervalsForReps(eligibleReps, interval, {
+        excludedBookingId: options.excludedBookingId ?? null,
+      });
       const slots = [];
+      const policy = this.getRoutingPolicy(bookingLink.id);
+      const seniorityPool =
+        companySize >= (policy?.companySizeThreshold ?? 200) ? "senior" : "all";
 
       for (const day of eachDayOfInterval({ start: windowStart, end: windowEnd })) {
         const weekday = getDay(day);
@@ -166,11 +228,13 @@ export function createStore(provider) {
               startAt: slot.toISOString(),
               endAt: addMinutes(slot, bookingLink.durationMinutes).toISOString(),
               availableRepCount: availableReps.length,
-              seniorityPool:
-                companySize >=
-                (this.getRoutingPolicy(bookingLink.id)?.companySizeThreshold ?? 200)
-                  ? "senior"
-                  : "all",
+              seniorityPool,
+              availableRepIds: options.includeRepDetails
+                ? availableReps.map((rep) => rep.id)
+                : undefined,
+              availableRepNames: options.includeRepDetails
+                ? availableReps.map((rep) => rep.name)
+                : undefined,
             });
           }
         }
@@ -182,46 +246,6 @@ export function createStore(provider) {
         windowEnd: windowEnd.toISOString(),
         maxWindowEnd: maximumWindowEnd.toISOString(),
         slots,
-      };
-    },
-
-    listCallerBookings(slug, callerId) {
-      const bookingLink = this.getBookingLinkBySlug(slug);
-      if (!bookingLink) {
-        throw new Error("Booking link introuvable.");
-      }
-
-      const bookings = db
-        .prepare(`
-          SELECT *
-          FROM bookings
-          WHERE booking_link_id = ? AND caller_id = ?
-          ORDER BY start_at DESC
-          LIMIT 6
-        `)
-        .all(bookingLink.id, callerId)
-        .map(fromBookingRow)
-        .map((booking) => this.toBookingSummary(booking));
-
-      return {
-        timezone: bookingLink.timezone,
-        bookings,
-        tasks: this.listCallerTasks(callerId, bookingLink.clientId).tasks,
-      };
-    },
-
-    listCallerTasks(callerId, clientId = null) {
-      let tasks = this.listAllTasks();
-      tasks = tasks.filter(
-        (task) =>
-          task.callerId === callerId &&
-          task.status === "open" &&
-          (!clientId || task.clientId === clientId),
-      );
-
-      return {
-        timezone: "Europe/Paris",
-        tasks: tasks.sort((left, right) => left.dueAt.localeCompare(right.dueAt)),
       };
     },
 
@@ -449,6 +473,7 @@ export function createStore(provider) {
           clients: this.listAllClients().map((client) => ({
             id: client.id,
             name: client.name,
+            connectionInviteToken: client.connectionInviteToken,
           })),
           callers: this.listAllCallers().map((caller) => ({
             id: caller.id,
@@ -456,6 +481,7 @@ export function createStore(provider) {
           })),
           reps: allReps.map((rep) => ({
             id: rep.id,
+            clientId: rep.clientId,
             name: rep.name,
             clientName: this.getClient(rep.clientId)?.name ?? "Client inconnu",
             seniority: rep.seniority,
@@ -543,6 +569,39 @@ export function createStore(provider) {
         },
         timeline: this.getTimelineForBooking(bookingId),
       };
+    },
+
+    async listBookingRescheduleAvailability(bookingId, filters = {}) {
+      const booking = this.getBooking(bookingId);
+      if (!booking) {
+        throw new Error("Booking introuvable.");
+      }
+
+      const bookingLink = this.getBookingLinkById(booking.bookingLinkId);
+      if (!bookingLink) {
+        throw new Error("Booking link introuvable.");
+      }
+
+      const fallbackWeekStart = startOfWeek(parseISO(booking.startAt), {
+        weekStartsOn: WEEK_STARTS_ON,
+      });
+
+      return this.buildAvailability(
+        bookingLink,
+        booking.companySize,
+        {
+          from: filters.from ?? fallbackWeekStart.toISOString(),
+          to:
+            filters.to ??
+            endOfWeek(fallbackWeekStart, {
+              weekStartsOn: WEEK_STARTS_ON,
+            }).toISOString(),
+        },
+        {
+          excludedBookingId: booking.id,
+          includeRepDetails: true,
+        },
+      );
     },
 
     async updateBookingOutcome(bookingId, outcomeState, reason = "") {
@@ -635,51 +694,96 @@ export function createStore(provider) {
         patch.cancelledAt = createdAt;
       }
 
-      if (scheduleState === "rescheduled" && nextStartAt) {
+      let assignment = null;
+      let externalEventId = booking.externalEventId;
+      if (scheduleState === "rescheduled") {
+        if (!nextStartAt) {
+          throw new Error("Nouvelle date obligatoire.");
+        }
+
+        const bookingLink = this.getBookingLinkById(booking.bookingLinkId);
+        if (!bookingLink) {
+          throw new Error("Booking link introuvable.");
+        }
+
         const nextStart = parseISO(nextStartAt);
         if (Number.isNaN(nextStart.getTime())) {
           throw new Error("Nouvelle date invalide.");
         }
+
+        const availableEligibleReps = await this.getAvailableEligibleRepsForSlot(
+          bookingLink,
+          booking.companySize,
+          nextStart,
+          {
+            excludedBookingId: booking.id,
+          },
+        );
+
+        if (availableEligibleReps.length === 0) {
+          throw new Error("Le créneau sélectionné n'est plus disponible.");
+        }
+
+        assignment = this.assignRep(
+          bookingLink,
+          booking.companySize,
+          nextStart,
+          availableEligibleReps,
+        );
+
         patch.previousStartAt = booking.startAt;
         patch.startAt = nextStart.toISOString();
-        patch.endAt = addMinutes(
-          nextStart,
-          differenceInMinutesSafe(booking.startAt, booking.endAt),
-        ).toISOString();
-      }
-
-      if (scheduleState === "cancelled") {
-        await provider.releaseExternalEvent(this, booking);
+        patch.endAt = addMinutes(nextStart, bookingLink.durationMinutes).toISOString();
       }
 
       const nextBooking = {
         ...booking,
         scheduleState,
+        assignedRepId: assignment?.rep.id ?? booking.assignedRepId,
         previousStartAt: patch.previousStartAt,
         startAt: patch.startAt,
         endAt: patch.endAt,
+        assignmentReason: assignment?.reason ?? booking.assignmentReason,
       };
+
+      if (scheduleState === "cancelled") {
+        await provider.releaseExternalEvent(this, booking);
+      }
+
+      if (scheduleState === "rescheduled" && assignment) {
+        externalEventId = await this.replaceExternalEventForReschedule(
+          booking,
+          nextBooking,
+          assignment.rep,
+        );
+      }
 
       database.withTransaction(() => {
         db.prepare(`
           UPDATE bookings
           SET schedule_state = ?,
               status = ?,
+              assigned_rep_id = ?,
               previous_start_at = ?,
               start_at = ?,
               end_at = ?,
               cancelled_at = ?,
               last_calendar_change_at = ?,
-              calendar_sync_state = 'synced'
+              calendar_sync_state = 'synced',
+              external_event_id = ?,
+              assignment_reason_json = ?
           WHERE id = ?
         `).run(
           scheduleState,
           getLegacyStatus(nextBooking),
+          nextBooking.assignedRepId,
           patch.previousStartAt,
           patch.startAt,
           patch.endAt,
           patch.cancelledAt,
           patch.lastCalendarChangeAt,
+          scheduleState === "cancelled" ? null : externalEventId,
+          JSON.stringify(nextBooking.assignmentReason),
           bookingId,
         );
 
@@ -708,7 +812,12 @@ export function createStore(provider) {
           createdAt,
           meta:
             scheduleState === "rescheduled" && nextStartAt
-              ? { previousStartAt: booking.startAt, nextStartAt: patch.startAt }
+              ? {
+                  previousStartAt: booking.startAt,
+                  nextStartAt: patch.startAt,
+                  previousRepId: booking.assignedRepId,
+                  nextRepId: nextBooking.assignedRepId,
+                }
               : undefined,
         });
 
@@ -932,13 +1041,20 @@ export function createStore(provider) {
         id: makeId("client"),
         name: payload.name.trim(),
         timezone: payload.timezone?.trim() || "Europe/Paris",
+        connectionInviteToken: `invite-${randomUUID()}`,
         active: payload.active !== false,
       };
 
       db.prepare(`
-        INSERT INTO clients (id, name, timezone, active)
-        VALUES (?, ?, ?, ?)
-      `).run(client.id, client.name, client.timezone, toDbBool(client.active));
+        INSERT INTO clients (id, name, timezone, connection_invite_token, active)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(
+        client.id,
+        client.name,
+        client.timezone,
+        client.connectionInviteToken,
+        toDbBool(client.active),
+      );
 
       this.broadcastAdmin("settings.updated");
       return client;
@@ -1129,6 +1245,69 @@ export function createStore(provider) {
       return row ? fromClientRow(row) : null;
     },
 
+    getClientByInviteToken(inviteToken) {
+      const row = db
+        .prepare("SELECT * FROM clients WHERE connection_invite_token = ? AND active = 1")
+        .get(inviteToken);
+      return row ? fromClientRow(row) : null;
+    },
+
+    getPublicRepConnectionPayload(inviteToken) {
+      const client = this.getClientByInviteToken(inviteToken);
+      if (!client) {
+        throw new Error("Lien de connexion introuvable.");
+      }
+
+      return {
+        client: {
+          id: client.id,
+          name: client.name,
+          timezone: client.timezone,
+          inviteToken: client.connectionInviteToken,
+        },
+        providers: [
+          { id: "google", label: "Google" },
+          { id: "microsoft", label: "Microsoft" },
+        ],
+        reps: this.listAllReps()
+          .filter((rep) => rep.clientId === client.id && rep.active)
+          .map((rep) => {
+            const connection = this.getConnection(rep.id);
+            return {
+              id: rep.id,
+              name: rep.name,
+              email: rep.email,
+              seniority: rep.seniority,
+              connectionStatus: connection?.status ?? "disconnected",
+              providerEmail: connection?.providerEmail ?? rep.email,
+              lastSyncAt: connection?.lastSyncAt ?? null,
+            };
+          }),
+      };
+    },
+
+    async startPublicRepConnection(inviteToken, payload = {}) {
+      const client = this.getClientByInviteToken(inviteToken);
+      if (!client) {
+        throw new Error("Lien de connexion introuvable.");
+      }
+
+      if (!["google", "microsoft"].includes(payload.provider)) {
+        throw new Error("Provider de connexion invalide.");
+      }
+
+      const rep = this.getRep(payload.repId);
+      if (!rep || !rep.active || rep.clientId !== client.id) {
+        throw new Error("Rep introuvable pour ce client.");
+      }
+
+      return this.startRepConnection(rep.id, {
+        provider: payload.provider,
+        source: "public_invite",
+        inviteToken,
+      });
+    },
+
     listAllCallers() {
       return db
         .prepare("SELECT * FROM callers ORDER BY name ASC")
@@ -1299,17 +1478,17 @@ export function createStore(provider) {
       return reps;
     },
 
-    async getBusyIntervalsForReps(reps, interval) {
+    async getBusyIntervalsForReps(reps, interval, options = {}) {
       const entries = await Promise.all(
         reps.map(async (rep) => [
           rep.id,
-          await this.getBusyIntervals(rep.id, interval),
+          await this.getBusyIntervals(rep.id, interval, options),
         ]),
       );
       return new Map(entries);
     },
 
-    async getBusyIntervals(repId, interval) {
+    async getBusyIntervals(repId, interval, options = {}) {
       const localCalendarBusy = db
         .prepare(`
           SELECT start_at, end_at
@@ -1332,8 +1511,15 @@ export function createStore(provider) {
             AND end_at > ?
             AND start_at < ?
             AND schedule_state != 'cancelled'
+            AND (? IS NULL OR id != ?)
         `)
-        .all(repId, interval.start.toISOString(), interval.end.toISOString())
+        .all(
+          repId,
+          interval.start.toISOString(),
+          interval.end.toISOString(),
+          options.excludedBookingId ?? null,
+          options.excludedBookingId ?? null,
+        )
         .map((booking) => ({
           startAt: parseISO(booking.start_at),
           endAt: parseISO(booking.end_at),
@@ -1349,7 +1535,7 @@ export function createStore(provider) {
       return [...localCalendarBusy, ...bookingBusy, ...providerBusy];
     },
 
-    async getAvailableEligibleRepsForSlot(bookingLink, companySize, slotStart) {
+    async getAvailableEligibleRepsForSlot(bookingLink, companySize, slotStart, options = {}) {
       const eligibleReps = this.getEligibleReps(bookingLink.id, companySize);
       const interval = {
         start: subMinutes(slotStart, bookingLink.bufferBeforeMinutes),
@@ -1358,7 +1544,9 @@ export function createStore(provider) {
           bookingLink.bufferAfterMinutes,
         ),
       };
-      const busyByRep = await this.getBusyIntervalsForReps(eligibleReps, interval);
+      const busyByRep = await this.getBusyIntervalsForReps(eligibleReps, interval, {
+        excludedBookingId: options.excludedBookingId ?? null,
+      });
       return eligibleReps.filter((rep) =>
         isRepAvailableAgainstIntervals(
           busyByRep.get(rep.id) ?? [],
@@ -1531,6 +1719,32 @@ export function createStore(provider) {
       return row ? fromTaskRow(row) : null;
     },
 
+    async replaceExternalEventForReschedule(currentBooking, nextBooking, nextRep) {
+      const nextExternalEventId = await provider.createExternalEvent(
+        this,
+        nextRep,
+        nextBooking,
+      );
+
+      try {
+        if (currentBooking.externalEventId) {
+          await provider.releaseExternalEvent(this, currentBooking);
+        }
+      } catch (error) {
+        try {
+          await provider.releaseExternalEvent(this, {
+            assignedRepId: nextRep.id,
+            externalEventId: nextExternalEventId,
+          });
+        } catch {
+          // Best effort cleanup only.
+        }
+        throw error;
+      }
+
+      return nextExternalEventId;
+    },
+
     getTimelineForBooking(bookingId) {
       return db
         .prepare(`
@@ -1583,6 +1797,10 @@ export function createStore(provider) {
         !ACTIVE_SCHEDULE_STATES.has(booking.scheduleState) ||
         booking.outcomeState !== "pending"
       ) {
+        return null;
+      }
+
+      if (parseISO(booking.startAt) <= new Date()) {
         return null;
       }
 
@@ -2232,6 +2450,7 @@ function fromClientRow(row) {
     id: row.id,
     name: row.name,
     timezone: row.timezone,
+    connectionInviteToken: row.connection_invite_token ?? null,
     active: Boolean(row.active),
   };
 }

@@ -15,6 +15,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock3,
+  Copy,
   ListTodo,
   RefreshCw,
   Settings2,
@@ -34,6 +35,7 @@ import {
 } from "@shared-ui/select";
 import { AppChrome } from "@mvp/components/AppChrome";
 import { MetricCard } from "@mvp/components/MetricCard";
+import { SlotPicker } from "@mvp/components/SlotPicker";
 import { StatusBadge } from "@mvp/components/StatusBadge";
 import { apiFetch } from "@mvp/lib/api";
 import {
@@ -48,6 +50,7 @@ import type {
   AdminBookingsResponse,
   AdminCalendarResponse,
   AdminTasksResponse,
+  AvailabilityResponse,
   BookingDetailResponse,
   BookingSummary,
   FollowUpTask,
@@ -77,7 +80,16 @@ export function AdminBookingsPage() {
     Record<string, string>
   >({});
   const [statusReason, setStatusReason] = useState("");
-  const [manualStartAt, setManualStartAt] = useState("");
+  const [rescheduleAvailability, setRescheduleAvailability] =
+    useState<AvailabilityResponse | null>(null);
+  const [rescheduleWeekStartIso, setRescheduleWeekStartIso] = useState(() =>
+    startOfWeek(new Date(), { weekStartsOn: 1 }).toISOString(),
+  );
+  const [loadingRescheduleAvailability, setLoadingRescheduleAvailability] =
+    useState(false);
+  const [selectedRescheduleSlot, setSelectedRescheduleSlot] = useState<string | null>(
+    null,
+  );
   const [activeView, setActiveView] = useState<ViewMode>("agenda");
   const [weekStartIso, setWeekStartIso] = useState(() =>
     startOfWeek(new Date(), { weekStartsOn: 1 }).toISOString(),
@@ -96,6 +108,28 @@ export function AdminBookingsPage() {
     [weekStart],
   );
   const weekDays = useMemo(() => getWeekDays(weekStartIso), [weekStartIso]);
+  const rescheduleWeekStart = useMemo(
+    () => parseISO(rescheduleWeekStartIso),
+    [rescheduleWeekStartIso],
+  );
+  const firstRescheduleWeekStart = useMemo(
+    () => startOfWeek(new Date(), { weekStartsOn: 1 }),
+    [],
+  );
+  const lastRescheduleWeekStart = useMemo(
+    () => addWeeks(firstRescheduleWeekStart, 11),
+    [firstRescheduleWeekStart],
+  );
+  const hasPreviousRescheduleWeek =
+    rescheduleWeekStart > firstRescheduleWeekStart;
+  const hasNextRescheduleWeek = rescheduleWeekStart < lastRescheduleWeekStart;
+  const rescheduleSelectedSlot = useMemo(
+    () =>
+      rescheduleAvailability?.slots.find(
+        (slot) => slot.startAt === selectedRescheduleSlot,
+      ) ?? null,
+    [rescheduleAvailability, selectedRescheduleSlot],
+  );
 
   const fetchDashboard = async () => {
     setLoadingDashboard(true);
@@ -156,6 +190,34 @@ export function AdminBookingsPage() {
     }
   };
 
+  const fetchRescheduleAvailability = async (
+    bookingId: string,
+    nextWeekStart: Date = rescheduleWeekStart,
+    preferredSlot: string | null = selectedRescheduleSlot,
+  ) => {
+    setLoadingRescheduleAvailability(true);
+    try {
+      const weekEnd = endOfWeek(nextWeekStart, { weekStartsOn: 1 });
+      const params = new URLSearchParams({
+        from: nextWeekStart.toISOString(),
+        to: weekEnd.toISOString(),
+      });
+      const data = await apiFetch<AvailabilityResponse>(
+        `/api/admin/bookings/${bookingId}/availability?${params.toString()}`,
+      );
+      setRescheduleAvailability(data);
+      setSelectedRescheduleSlot(
+        preferredSlot && data.slots.some((slot) => slot.startAt === preferredSlot)
+          ? preferredSlot
+          : null,
+      );
+    } catch (error) {
+      toast.error((error as Error).message);
+    } finally {
+      setLoadingRescheduleAvailability(false);
+    }
+  };
+
   useEffect(() => {
     void fetchDashboard();
   }, [
@@ -170,10 +232,29 @@ export function AdminBookingsPage() {
   useEffect(() => {
     if (!selectedBookingId) {
       setDetail(null);
+      setRescheduleAvailability(null);
+      setSelectedRescheduleSlot(null);
       return;
     }
     void fetchDetail(selectedBookingId);
   }, [selectedBookingId]);
+
+  useEffect(() => {
+    if (!detail) {
+      return;
+    }
+
+    const bookingWeekStart = startOfWeek(parseISO(detail.booking.startAt), {
+      weekStartsOn: 1,
+    });
+    const nextWeekStart =
+      bookingWeekStart < firstRescheduleWeekStart
+        ? firstRescheduleWeekStart
+        : bookingWeekStart;
+    setRescheduleWeekStartIso(nextWeekStart.toISOString());
+    setSelectedRescheduleSlot(null);
+    void fetchRescheduleAvailability(detail.booking.id, nextWeekStart, null);
+  }, [detail?.booking.id, detail?.booking.startAt, firstRescheduleWeekStart]);
 
   useEffect(() => {
     if (!payload) return;
@@ -316,22 +397,23 @@ export function AdminBookingsPage() {
   };
 
   const rescheduleBooking = async () => {
-    if (!detail || !manualStartAt) return;
+    if (!detail || !selectedRescheduleSlot) return;
     setUpdatingBooking(true);
     try {
       await apiFetch(`/api/admin/bookings/${detail.booking.id}/schedule`, {
         method: "PATCH",
         body: JSON.stringify({
           scheduleState: "rescheduled",
-          nextStartAt: new Date(manualStartAt).toISOString(),
+          nextStartAt: selectedRescheduleSlot,
           reason: statusReason,
         }),
       });
       toast.success("Booking déplacé.");
       setStatusReason("");
-      setManualStartAt("");
+      setSelectedRescheduleSlot(null);
       await fetchDashboard();
       await fetchDetail(detail.booking.id);
+      await fetchRescheduleAvailability(detail.booking.id, rescheduleWeekStart, null);
     } catch (error) {
       toast.error((error as Error).message);
     } finally {
@@ -353,6 +435,46 @@ export function AdminBookingsPage() {
       toast.error((error as Error).message);
     }
   };
+
+  const buildInviteLink = (inviteToken?: string | null) => {
+    if (!inviteToken) {
+      return "";
+    }
+
+    const relativePath = `/connect/${inviteToken}`;
+    if (typeof window === "undefined") {
+      return relativePath;
+    }
+
+    return `${window.location.origin}${relativePath}`;
+  };
+
+  const copyInviteLink = async (inviteToken?: string | null) => {
+    const inviteLink = buildInviteLink(inviteToken);
+    if (!inviteLink) {
+      toast.error("Lien de connexion indisponible.");
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(inviteLink);
+      toast.success("Lien de connexion copie.");
+    } catch {
+      toast.error("Copie du lien impossible.");
+    }
+  };
+
+  const connectionGroups = useMemo(() => {
+    const reps = payload?.filters.reps ?? [];
+    const clients = settingsPayload?.clients ?? [];
+
+    return clients
+      .map((client) => ({
+        client,
+        reps: reps.filter((rep) => rep.clientId === client.id),
+      }))
+      .filter((group) => group.reps.length > 0);
+  }, [payload?.filters.reps, settingsPayload?.clients]);
 
   return (
     <AppChrome title="Admin">
@@ -583,74 +705,119 @@ export function AdminBookingsPage() {
                   </p>
                 </div>
 
-                {payload?.filters.reps.map((rep) => (
+                {connectionGroups.map((group) => (
                   <div
-                    key={rep.id}
-                    className="rounded-[1.25rem] border border-[#001E5B]/8 bg-white px-4 py-4"
+                    key={group.client.id}
+                    className="rounded-[1.5rem] border border-[#001E5B]/8 bg-white px-4 py-4"
                   >
                     <div className="flex flex-wrap items-start justify-between gap-4">
                       <div>
                         <p className="font-semibold text-[#001E5B]">
-                          {rep.name}
+                          {group.client.name}
                         </p>
-                        <p className="text-sm text-[#001E5B]/56">
-                          {rep.seniority === "senior" ? "Senior" : "Junior"}
-                          {rep.providerEmail ? ` · ${rep.providerEmail}` : ""}
+                        <p className="mt-2 text-sm text-[#001E5B]/64">
+                          Lien generique a envoyer aux reps du client pour qu'ils
+                          connectent eux-memes leur agenda.
                         </p>
-                        <div className="mt-2 space-y-1 text-xs text-[#001E5B]/56">
-                          <p>
-                            Dernière synchro:{" "}
-                            {rep.lastSyncAt
-                              ? formatRelativeShort(rep.lastSyncAt)
-                              : "jamais"}
-                          </p>
-                          <p>
-                            Dernier webhook:{" "}
-                            {rep.lastWebhookAt
-                              ? formatRelativeShort(rep.lastWebhookAt)
-                              : "jamais"}
-                          </p>
-                          {rep.lastError ? (
-                            <p className="text-rose-600">{rep.lastError}</p>
-                          ) : null}
-                        </div>
                       </div>
-                      <div className="space-y-3">
-                        <div className="rounded-full border border-[#001E5B]/10 bg-[#F9F4ED] px-3 py-1 text-xs font-medium text-[#001E5B]">
-                          {rep.connectionStatus}
-                        </div>
-                        <div className="flex gap-2">
-                          <Select
-                            value={providerChoiceByRep[rep.id] ?? "google"}
-                            onValueChange={(value) =>
-                              setProviderChoiceByRep((current) => ({
-                                ...current,
-                                [rep.id]: value,
-                              }))
-                            }
-                          >
-                            <SelectTrigger className="w-32">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="google">Google</SelectItem>
-                              <SelectItem value="microsoft">
-                                Microsoft
-                              </SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <Button
-                            className="rounded-full"
-                            onClick={() => void handleConnectRep(rep.id)}
-                            disabled={connectingRepId === rep.id}
-                          >
-                            <RefreshCw
-                              className={`h-4 w-4 ${connectingRepId === rep.id ? "animate-spin" : ""}`}
-                            />
-                            Connecter
-                          </Button>
-                        </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          variant="outline"
+                          className="rounded-full"
+                          onClick={() =>
+                            void copyInviteLink(group.client.connectionInviteToken)
+                          }
+                        >
+                          <Copy className="h-4 w-4" />
+                          Copier le lien
+                        </Button>
+                        <a
+                          href={buildInviteLink(group.client.connectionInviteToken)}
+                          className="inline-flex items-center rounded-full border border-[#001E5B]/10 bg-[#F9F4ED] px-3 py-2 text-sm font-medium text-[#001E5B]"
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Ouvrir le lien
+                        </a>
                       </div>
+                    </div>
+
+                    <div className="mt-4 rounded-[1.25rem] border border-dashed border-[#001E5B]/12 bg-[#F9F4ED] px-4 py-3 text-xs text-[#001E5B]/64">
+                      {buildInviteLink(group.client.connectionInviteToken)}
+                    </div>
+
+                    <div className="mt-4 space-y-3">
+                      {group.reps.map((rep) => (
+                        <div
+                          key={rep.id}
+                          className="rounded-[1.25rem] border border-[#001E5B]/8 bg-white px-4 py-4"
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-4">
+                            <div>
+                              <p className="font-semibold text-[#001E5B]">
+                                {rep.name}
+                              </p>
+                              <p className="text-sm text-[#001E5B]/56">
+                                {rep.seniority === "senior" ? "Senior" : "Junior"}
+                                {rep.providerEmail ? ` · ${rep.providerEmail}` : ""}
+                              </p>
+                              <div className="mt-2 space-y-1 text-xs text-[#001E5B]/56">
+                                <p>
+                                  Dernière synchro:{" "}
+                                  {rep.lastSyncAt
+                                    ? formatRelativeShort(rep.lastSyncAt)
+                                    : "jamais"}
+                                </p>
+                                <p>
+                                  Dernier webhook:{" "}
+                                  {rep.lastWebhookAt
+                                    ? formatRelativeShort(rep.lastWebhookAt)
+                                    : "jamais"}
+                                </p>
+                                {rep.lastError ? (
+                                  <p className="text-rose-600">{rep.lastError}</p>
+                                ) : null}
+                              </div>
+                            </div>
+                            <div className="space-y-3">
+                              <div className="rounded-full border border-[#001E5B]/10 bg-[#F9F4ED] px-3 py-1 text-xs font-medium text-[#001E5B]">
+                                {rep.connectionStatus}
+                              </div>
+                              <div className="flex gap-2">
+                                <Select
+                                  value={providerChoiceByRep[rep.id] ?? "google"}
+                                  onValueChange={(value) =>
+                                    setProviderChoiceByRep((current) => ({
+                                      ...current,
+                                      [rep.id]: value,
+                                    }))
+                                  }
+                                >
+                                  <SelectTrigger className="w-32">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="google">Google</SelectItem>
+                                    <SelectItem value="microsoft">
+                                      Microsoft
+                                    </SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                <Button
+                                  className="rounded-full"
+                                  onClick={() => void handleConnectRep(rep.id)}
+                                  disabled={connectingRepId === rep.id}
+                                >
+                                  <RefreshCw
+                                    className={`h-4 w-4 ${connectingRepId === rep.id ? "animate-spin" : ""}`}
+                                  />
+                                  Connecter
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 ))}
@@ -799,18 +966,69 @@ export function AdminBookingsPage() {
                   </Button>
                 </div>
 
-                <div className="space-y-2 rounded-[1.25rem] border border-dashed border-[#001E5B]/12 bg-[#F9F4ED] px-4 py-4">
-                  <Label htmlFor="manual-start">Déplacer manuellement</Label>
-                  <Input
-                    id="manual-start"
-                    type="datetime-local"
-                    value={manualStartAt}
-                    onChange={(event) => setManualStartAt(event.target.value)}
+                <div className="space-y-4 rounded-[1.25rem] border border-dashed border-[#001E5B]/12 bg-[#F9F4ED] px-4 py-4">
+                  <div className="space-y-2">
+                    <Label>Déplacer selon les disponibilités</Label>
+                    <p className="text-sm text-[#001E5B]/64">
+                      Le nouveau créneau est choisi sur les disponibilités live du
+                      client. Le routage réassigne automatiquement le rendez-vous
+                      au rep éligible disponible sur ce créneau.
+                    </p>
+                  </div>
+
+                  <SlotPicker
+                    availability={rescheduleAvailability}
+                    selectedSlot={selectedRescheduleSlot}
+                    onSelect={setSelectedRescheduleSlot}
+                    loading={loadingRescheduleAvailability}
+                    onPreviousWeek={() => {
+                      if (!detail || !hasPreviousRescheduleWeek) {
+                        return;
+                      }
+                      const nextWeek = subWeeks(rescheduleWeekStart, 1);
+                      setRescheduleWeekStartIso(nextWeek.toISOString());
+                      void fetchRescheduleAvailability(
+                        detail.booking.id,
+                        nextWeek,
+                        selectedRescheduleSlot,
+                      );
+                    }}
+                    onNextWeek={() => {
+                      if (!detail || !hasNextRescheduleWeek) {
+                        return;
+                      }
+                      const nextWeek = addWeeks(rescheduleWeekStart, 1);
+                      setRescheduleWeekStartIso(nextWeek.toISOString());
+                      void fetchRescheduleAvailability(
+                        detail.booking.id,
+                        nextWeek,
+                        selectedRescheduleSlot,
+                      );
+                    }}
+                    hasPreviousWeek={hasPreviousRescheduleWeek}
+                    hasNextWeek={hasNextRescheduleWeek}
                   />
+
+                  {rescheduleSelectedSlot ? (
+                    <div className="rounded-[1.25rem] border border-[#001E5B]/8 bg-white px-4 py-4 text-sm text-[#001E5B]/72">
+                      <p className="font-medium text-[#001E5B]">
+                        Créneau sélectionné:{" "}
+                        {formatDateTime(
+                          rescheduleSelectedSlot.startAt,
+                          detail.booking.timezone,
+                        )}
+                      </p>
+                      <p className="mt-2">
+                        Reps disponibles:{" "}
+                        {(rescheduleSelectedSlot.availableRepNames ?? []).join(", ")}
+                      </p>
+                    </div>
+                  ) : null}
+
                   <Button
                     variant="outline"
                     className="rounded-full"
-                    disabled={!manualStartAt || updatingBooking}
+                    disabled={!selectedRescheduleSlot || updatingBooking}
                     onClick={() => void rescheduleBooking()}
                   >
                     Déplacer le rendez-vous

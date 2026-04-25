@@ -64,6 +64,8 @@ export function createCalendarProvider(
         repId,
         provider,
         nonce: randomUUID(),
+        source: payload.source ?? "admin",
+        inviteToken: payload.inviteToken ?? null,
       });
 
       const params = new URLSearchParams({
@@ -166,6 +168,10 @@ export function createCalendarProvider(
       return {
         repId: state.repId,
         provider: state.provider,
+        redirectTarget:
+          state.source === "public_invite" && state.inviteToken
+            ? `/connect/${encodeURIComponent(state.inviteToken)}?connected=${encodeURIComponent(state.repId)}`
+            : `/admin/bookings?connected=${encodeURIComponent(state.repId)}`,
       };
     },
 

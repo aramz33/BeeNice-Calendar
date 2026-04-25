@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -69,6 +70,7 @@ function initSchema(db) {
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       timezone TEXT NOT NULL,
+      connection_invite_token TEXT UNIQUE,
       active INTEGER NOT NULL DEFAULT 1
     );
 
@@ -227,6 +229,7 @@ function initSchema(db) {
 
 function migrateSchema(db) {
   ensureColumn(db, "clients", "active", "INTEGER NOT NULL DEFAULT 1");
+  ensureColumn(db, "clients", "connection_invite_token", "TEXT UNIQUE");
   ensureColumn(db, "bookings", "schedule_state", "TEXT NOT NULL DEFAULT 'scheduled'");
   ensureColumn(db, "bookings", "outcome_state", "TEXT NOT NULL DEFAULT 'pending'");
   ensureColumn(db, "bookings", "original_start_at", "TEXT");
@@ -236,6 +239,20 @@ function migrateSchema(db) {
   ensureColumn(db, "bookings", "cancelled_at", "TEXT");
   ensureColumn(db, "bookings", "completed_at", "TEXT");
   ensureColumn(db, "bookings", "no_show_at", "TEXT");
+
+  const clientsMissingInviteToken = db
+    .prepare("SELECT id FROM clients WHERE connection_invite_token IS NULL OR connection_invite_token = ''")
+    .all();
+
+  const updateInviteToken = db.prepare(`
+    UPDATE clients
+    SET connection_invite_token = ?
+    WHERE id = ?
+  `);
+
+  clientsMissingInviteToken.forEach((client) => {
+    updateInviteToken.run(`invite-${randomUUID()}`, client.id);
+  });
 }
 
 function ensureColumn(db, table, column, definition) {
@@ -255,10 +272,16 @@ function seedDatabase(db, providerMode) {
   const seed = createSeedState(providerMode);
 
   const insertClient = db.prepare(
-    "INSERT INTO clients (id, name, timezone, active) VALUES (?, ?, ?, ?)",
+    "INSERT INTO clients (id, name, timezone, connection_invite_token, active) VALUES (?, ?, ?, ?, ?)",
   );
   seed.clients.forEach((client) => {
-    insertClient.run(client.id, client.name, client.timezone, toDbBool(true));
+    insertClient.run(
+      client.id,
+      client.name,
+      client.timezone,
+      client.connectionInviteToken,
+      toDbBool(true),
+    );
   });
 
   const insertCaller = db.prepare(

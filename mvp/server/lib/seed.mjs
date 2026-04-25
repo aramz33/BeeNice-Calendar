@@ -71,6 +71,7 @@ export function createSeedState(providerMode = "mock") {
     id: "client-teamstarter",
     name: "TeamStarter",
     timezone: TIMEZONE,
+    connectionInviteToken: "invite-teamstarter",
   };
 
   const callers = [
@@ -300,6 +301,7 @@ export function createSeedState(providerMode = "mock") {
     id: "client-doctolib",
     name: "Doctolib",
     timezone: TIMEZONE,
+    connectionInviteToken: "invite-doctolib",
   };
 
   const doctolibReps = [

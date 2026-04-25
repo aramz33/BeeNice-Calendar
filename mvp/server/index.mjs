@@ -92,6 +92,23 @@ const server = http.createServer(async (request, response) => {
       );
     }
 
+    if (
+      request.method === "GET" &&
+      match(pathname, /^\/api\/connect\/([^/]+)$/)
+    ) {
+      const inviteToken = pathname.split("/")[3];
+      return json(response, 200, store.getPublicRepConnectionPayload(inviteToken));
+    }
+
+    if (
+      request.method === "POST" &&
+      match(pathname, /^\/api\/connect\/([^/]+)\/start$/)
+    ) {
+      const inviteToken = pathname.split("/")[3];
+      const body = await parseBody(request);
+      return json(response, 200, await store.startPublicRepConnection(inviteToken, body));
+    }
+
     if (request.method === "GET" && pathname === "/api/admin/reps") {
       return json(response, 200, {
         reps: store.listReps(),
@@ -150,6 +167,21 @@ const server = http.createServer(async (request, response) => {
       match(pathname, /^\/api\/admin\/bookings\/([^/]+)$/)
     ) {
       return json(response, 200, store.getBookingDetail(pathname.split("/").at(-1)));
+    }
+
+    if (
+      request.method === "GET" &&
+      match(pathname, /^\/api\/admin\/bookings\/([^/]+)\/availability$/)
+    ) {
+      const bookingId = pathname.split("/")[4];
+      return json(
+        response,
+        200,
+        await store.listBookingRescheduleAvailability(bookingId, {
+          from: url.searchParams.get("from"),
+          to: url.searchParams.get("to"),
+        }),
+      );
     }
 
     if (
@@ -244,21 +276,33 @@ const server = http.createServer(async (request, response) => {
           200,
           renderCallbackPage({
             title: "Connexion calendrier active",
-            description:
-              "La connexion Nylas est terminée. Vous pouvez revenir à la console admin.",
-            target: `/admin/bookings?connected=${encodeURIComponent(result.repId)}`,
+            description: result.redirectTarget.startsWith("/connect/")
+              ? "La connexion Nylas est terminée. Vous pouvez revenir à la page de connexion."
+              : "La connexion Nylas est terminée. Vous pouvez revenir à la console admin.",
+            target: result.redirectTarget,
+            ctaLabel: result.redirectTarget.startsWith("/connect/")
+              ? "Retourner à la page de connexion"
+              : "Retourner à la console admin",
           }),
         );
       } catch (error) {
         const message =
           error instanceof Error ? error.message : "Connexion Nylas impossible.";
+        const state = decodeCallbackState(url.searchParams.get("state"));
+        const target =
+          state?.source === "public_invite" && state.inviteToken
+            ? `/connect/${encodeURIComponent(state.inviteToken)}?connectionError=${encodeURIComponent(message)}`
+            : `/admin/bookings?connectionError=${encodeURIComponent(message)}`;
         return html(
           response,
           400,
           renderCallbackPage({
             title: "Connexion calendrier échouée",
             description: message,
-            target: `/admin/bookings?connectionError=${encodeURIComponent(message)}`,
+            target,
+            ctaLabel: target.startsWith("/connect/")
+              ? "Retourner à la page de connexion"
+              : "Retourner à la console admin",
           }),
         );
       }
@@ -460,7 +504,7 @@ function getMimeType(filePath) {
   }
 }
 
-function renderCallbackPage({ title, description, target }) {
+function renderCallbackPage({ title, description, target, ctaLabel = "Retourner" }) {
   return `<!doctype html>
 <html lang="fr">
   <head>
@@ -514,10 +558,22 @@ function renderCallbackPage({ title, description, target }) {
     <main>
       <h1>${escapeHtml(title)}</h1>
       <p>${escapeHtml(description)}</p>
-      <a href="${escapeHtml(target)}">Retourner à la console admin</a>
+      <a href="${escapeHtml(target)}">${escapeHtml(ctaLabel)}</a>
     </main>
   </body>
 </html>`;
+}
+
+function decodeCallbackState(value) {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(Buffer.from(value, "base64url").toString("utf8"));
+  } catch {
+    return null;
+  }
 }
 
 function escapeHtml(value) {

@@ -136,6 +136,8 @@ export interface AvailabilityResponse {
     endAt: string;
     availableRepCount: number;
     seniorityPool: "all" | "senior";
+    availableRepIds?: string[];
+    availableRepNames?: string[];
   }>;
 }
 
@@ -164,10 +166,11 @@ export interface AdminBookingsResponse {
   clientStats: ClientStat[];
   bookings: BookingSummary[];
   filters: {
-    clients: Array<{ id: string; name: string }>;
+    clients: Array<{ id: string; name: string; connectionInviteToken?: string | null }>;
     callers: Array<{ id: string; name: string }>;
     reps: Array<{
       id: string;
+      clientId: string;
       name: string;
       clientName: string;
       seniority: "senior" | "junior";
@@ -248,10 +251,38 @@ export interface StartRepConnectionResponse {
 }
 
 export interface SettingsPayload {
-  clients: Array<{ id: string; name: string; timezone: string; active: boolean }>;
+  clients: Array<{
+    id: string;
+    name: string;
+    timezone: string;
+    connectionInviteToken?: string | null;
+    active: boolean;
+  }>;
   callers: Array<{ id: string; name: string; active: boolean }>;
 }
 
 export interface PublicWorkspacesResponse {
   workspaces: PublicWorkspace[];
+}
+
+export interface PublicRepConnectionResponse {
+  client: {
+    id: string;
+    name: string;
+    timezone: string;
+    inviteToken: string;
+  };
+  providers: Array<{
+    id: "google" | "microsoft";
+    label: string;
+  }>;
+  reps: Array<{
+    id: string;
+    name: string;
+    email: string;
+    seniority: "senior" | "junior";
+    connectionStatus: string;
+    providerEmail?: string | null;
+    lastSyncAt?: string | null;
+  }>;
 }
