@@ -710,7 +710,12 @@ export function BookingWorkspacePage() {
                     <div>
                       <p className="font-semibold text-[#001E5B]">{rep.name}</p>
                       <p className="text-sm text-[#001E5B]/56">
-                        {rep.seniority === "senior" ? "Senior" : "Junior"} ·{" "}
+                        {rep.seniority === "senior"
+                          ? "Senior"
+                          : rep.seniority === "junior"
+                            ? "Junior"
+                            : "Non défini"}{" "}
+                        ·{" "}
                         {rep.connectionStatus}
                       </p>
                     </div>

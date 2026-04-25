@@ -4,6 +4,13 @@ import { Button } from "@shared-ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@shared-ui/card";
 import { Input } from "@shared-ui/input";
 import { Label } from "@shared-ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@shared-ui/select";
 import { AppChrome } from "@mvp/components/AppChrome";
 import { apiFetch } from "@mvp/lib/api";
 import type { SettingsPayload } from "@mvp/lib/types";
@@ -13,6 +20,7 @@ export function AdminSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [clientName, setClientName] = useState("");
   const [clientTimezone, setClientTimezone] = useState("Europe/Paris");
+  const [clientRoutingMode, setClientRoutingMode] = useState("pool_unique");
   const [callerName, setCallerName] = useState("");
 
   const fetchSettings = async () => {
@@ -39,11 +47,13 @@ export function AdminSettingsPage() {
         body: JSON.stringify({
           name: clientName,
           timezone: clientTimezone,
+          routingMode: clientRoutingMode,
         }),
       });
       toast.success("Client ajouté.");
       setClientName("");
       setClientTimezone("Europe/Paris");
+      setClientRoutingMode("pool_unique");
       await fetchSettings();
     } catch (error) {
       toast.error((error as Error).message);
@@ -77,6 +87,21 @@ export function AdminSettingsPage() {
     }
   };
 
+  const updateClientRoutingMode = async (
+    clientId: string,
+    routingMode: "pool_unique" | "weighted_seniority",
+  ) => {
+    try {
+      await apiFetch(`/api/admin/settings/clients/${clientId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ routingMode }),
+      });
+      await fetchSettings();
+    } catch (error) {
+      toast.error((error as Error).message);
+    }
+  };
+
   const toggleCaller = async (callerId: string, active: boolean) => {
     try {
       await apiFetch(`/api/admin/settings/callers/${callerId}`, {
@@ -97,7 +122,10 @@ export function AdminSettingsPage() {
             <CardTitle>Clients</CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
-            <form className="grid gap-3 md:grid-cols-[1fr_220px_auto]" onSubmit={createClient}>
+            <form
+              className="grid gap-3 md:grid-cols-[1fr_220px_220px_auto]"
+              onSubmit={createClient}
+            >
               <div className="space-y-2">
                 <Label htmlFor="client-name">Nom du client</Label>
                 <Input
@@ -114,6 +142,23 @@ export function AdminSettingsPage() {
                   value={clientTimezone}
                   onChange={(event) => setClientTimezone(event.target.value)}
                 />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="client-routing-mode">Routing</Label>
+                <Select
+                  value={clientRoutingMode}
+                  onValueChange={setClientRoutingMode}
+                >
+                  <SelectTrigger id="client-routing-mode">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pool_unique">Pool unique</SelectItem>
+                    <SelectItem value="weighted_seniority">
+                      Routing senior/junior
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div className="flex items-end">
                 <Button type="submit" className="w-full rounded-full">
@@ -136,14 +181,40 @@ export function AdminSettingsPage() {
                     <div>
                       <p className="font-semibold text-[#001E5B]">{client.name}</p>
                       <p className="text-sm text-[#001E5B]/56">{client.timezone}</p>
+                      <p className="text-sm text-[#001E5B]/56">
+                        {client.routingMode === "weighted_seniority"
+                          ? "Routing senior/junior"
+                          : "Pool unique"}
+                      </p>
                     </div>
-                    <Button
-                      variant={client.active ? "outline" : "default"}
-                      className="rounded-full"
-                      onClick={() => void toggleClient(client.id, client.active)}
-                    >
-                      {client.active ? "Désactiver" : "Réactiver"}
-                    </Button>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Select
+                        value={client.routingMode}
+                        onValueChange={(value) =>
+                          void updateClientRoutingMode(
+                            client.id,
+                            value as "pool_unique" | "weighted_seniority",
+                          )
+                        }
+                      >
+                        <SelectTrigger className="w-52">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="pool_unique">Pool unique</SelectItem>
+                          <SelectItem value="weighted_seniority">
+                            Routing senior/junior
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        variant={client.active ? "outline" : "default"}
+                        className="rounded-full"
+                        onClick={() => void toggleClient(client.id, client.active)}
+                      >
+                        {client.active ? "Désactiver" : "Réactiver"}
+                      </Button>
+                    </div>
                   </div>
                 ))
               )}

@@ -168,10 +168,8 @@ export function createCalendarProvider(
       return {
         repId: state.repId,
         provider: state.provider,
-        redirectTarget:
-          state.source === "public_invite" && state.inviteToken
-            ? `/connect/${encodeURIComponent(state.inviteToken)}?connected=${encodeURIComponent(state.repId)}`
-            : `/admin/bookings?connected=${encodeURIComponent(state.repId)}`,
+        callbackMode:
+          state.source === "public_invite" ? "public_terminal" : "admin_redirect",
       };
     },
 

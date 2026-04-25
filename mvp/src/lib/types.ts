@@ -1,4 +1,6 @@
 export type ScheduleState = "scheduled" | "rescheduled" | "cancelled";
+export type Seniority = "senior" | "junior" | "non_defini";
+export type RoutingMode = "pool_unique" | "weighted_seniority";
 export type OutcomeState =
   | "pending"
   | "completed"
@@ -16,10 +18,11 @@ export type FollowUpTaskStatus = "open" | "done" | "dismissed";
 export type FollowUpTaskTrigger = "no_show" | "cancelled";
 
 export interface AssignmentReason {
+  routingMode: RoutingMode;
   companySizeThreshold: number;
   seniorityPool: "all" | "senior";
-  chosenRole: "senior" | "junior";
-  roleDeficits: Record<string, number>;
+  chosenRole: Seniority | "pool_unique";
+  roleDeficits?: Record<string, number> | null;
   candidateRepIds: string[];
   candidateRepNames?: string[];
 }
@@ -118,7 +121,7 @@ export interface BookingLinkResponse {
     reps: Array<{
       id: string;
       name: string;
-      seniority: "senior" | "junior";
+      seniority: Seniority;
       connectionStatus: string;
     }>;
   };
@@ -173,7 +176,7 @@ export interface AdminBookingsResponse {
       clientId: string;
       name: string;
       clientName: string;
-      seniority: "senior" | "junior";
+      seniority: Seniority;
       connectionStatus: string;
       provider: string;
       providerEmail?: string | null;
@@ -256,6 +259,8 @@ export interface SettingsPayload {
     name: string;
     timezone: string;
     connectionInviteToken?: string | null;
+    routingMode: RoutingMode;
+    repConnectionFormConfig: PublicRepConnectionField[];
     active: boolean;
   }>;
   callers: Array<{ id: string; name: string; active: boolean }>;
@@ -271,18 +276,18 @@ export interface PublicRepConnectionResponse {
     name: string;
     timezone: string;
     inviteToken: string;
+    routingMode: RoutingMode;
   };
-  providers: Array<{
-    id: "google" | "microsoft";
-    label: string;
-  }>;
-  reps: Array<{
+  fields: PublicRepConnectionField[];
+}
+
+export interface PublicRepConnectionField {
+  id: string;
+  label: string;
+  type: "text" | "select";
+  required: boolean;
+  options?: Array<{
     id: string;
-    name: string;
-    email: string;
-    seniority: "senior" | "junior";
-    connectionStatus: string;
-    providerEmail?: string | null;
-    lastSyncAt?: string | null;
+    label: string;
   }>;
 }

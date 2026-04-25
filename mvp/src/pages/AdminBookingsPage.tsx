@@ -17,7 +17,6 @@ import {
   Clock3,
   Copy,
   ListTodo,
-  RefreshCw,
   Settings2,
   XCircle,
 } from "lucide-react";
@@ -55,7 +54,6 @@ import type {
   BookingSummary,
   FollowUpTask,
   SettingsPayload,
-  StartRepConnectionResponse,
 } from "@mvp/lib/types";
 
 type ViewMode = "agenda" | "list" | "tasks" | "connections";
@@ -74,11 +72,7 @@ export function AdminBookingsPage() {
   const [detail, setDetail] = useState<BookingDetailResponse | null>(null);
   const [loadingDashboard, setLoadingDashboard] = useState(true);
   const [loadingDetail, setLoadingDetail] = useState(false);
-  const [connectingRepId, setConnectingRepId] = useState<string | null>(null);
   const [updatingBooking, setUpdatingBooking] = useState(false);
-  const [providerChoiceByRep, setProviderChoiceByRep] = useState<
-    Record<string, string>
-  >({});
   const [statusReason, setStatusReason] = useState("");
   const [rescheduleAvailability, setRescheduleAvailability] =
     useState<AvailabilityResponse | null>(null);
@@ -257,22 +251,6 @@ export function AdminBookingsPage() {
   }, [detail?.booking.id, detail?.booking.startAt, firstRescheduleWeekStart]);
 
   useEffect(() => {
-    if (!payload) return;
-    setProviderChoiceByRep((current) => {
-      const next = { ...current };
-      payload.filters.reps.forEach((rep) => {
-        if (!next[rep.id]) {
-          next[rep.id] =
-            rep.provider === "microsoft" || rep.provider === "google"
-              ? rep.provider
-              : "google";
-        }
-      });
-      return next;
-    });
-  }, [payload]);
-
-  useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const connected = params.get("connected");
     const connectionError = params.get("connectionError");
@@ -325,33 +303,6 @@ export function AdminBookingsPage() {
       .length ?? 0;
   const selectedTaskCount =
     tasksPayload?.tasks.filter((task) => task.status === "open").length ?? 0;
-
-  const handleConnectRep = async (repId: string) => {
-    setConnectingRepId(repId);
-    try {
-      const result = await apiFetch<StartRepConnectionResponse>(
-        `/api/admin/reps/${repId}/connect-nylas/start`,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            provider: providerChoiceByRep[repId] ?? "google",
-          }),
-        },
-      );
-
-      if (result.authUrl) {
-        window.location.assign(result.authUrl);
-        return;
-      }
-
-      toast.success("Connexion calendrier simulée activée.");
-      await fetchDashboard();
-    } catch (error) {
-      toast.error((error as Error).message);
-    } finally {
-      setConnectingRepId(null);
-    }
-  };
 
   const updateOutcome = async (
     outcomeState: "completed" | "no_show" | "not_qualified",
@@ -464,16 +415,24 @@ export function AdminBookingsPage() {
     }
   };
 
+  const formatRepSeniority = (seniority: string) => {
+    if (seniority === "senior") {
+      return "Senior";
+    }
+    if (seniority === "junior") {
+      return "Junior";
+    }
+    return "Non défini";
+  };
+
   const connectionGroups = useMemo(() => {
     const reps = payload?.filters.reps ?? [];
-    const clients = settingsPayload?.clients ?? [];
+    const clients = (settingsPayload?.clients ?? []).filter((client) => client.active);
 
-    return clients
-      .map((client) => ({
-        client,
-        reps: reps.filter((rep) => rep.clientId === client.id),
-      }))
-      .filter((group) => group.reps.length > 0);
+    return clients.map((client) => ({
+      client,
+      reps: reps.filter((rep) => rep.clientId === client.id),
+    }));
   }, [payload?.filters.reps, settingsPayload?.clients]);
 
   return (
@@ -719,6 +678,11 @@ export function AdminBookingsPage() {
                           Lien generique a envoyer aux reps du client pour qu'ils
                           connectent eux-memes leur agenda.
                         </p>
+                        <p className="mt-1 text-xs text-[#001E5B]/48">
+                          {group.client.routingMode === "weighted_seniority"
+                            ? "Routing senior/junior"
+                            : "Pool unique"}
+                        </p>
                       </div>
                       <div className="flex flex-wrap gap-2">
                         <Button
@@ -747,77 +711,50 @@ export function AdminBookingsPage() {
                     </div>
 
                     <div className="mt-4 space-y-3">
-                      {group.reps.map((rep) => (
-                        <div
-                          key={rep.id}
-                          className="rounded-[1.25rem] border border-[#001E5B]/8 bg-white px-4 py-4"
-                        >
-                          <div className="flex flex-wrap items-start justify-between gap-4">
-                            <div>
-                              <p className="font-semibold text-[#001E5B]">
-                                {rep.name}
-                              </p>
-                              <p className="text-sm text-[#001E5B]/56">
-                                {rep.seniority === "senior" ? "Senior" : "Junior"}
-                                {rep.providerEmail ? ` · ${rep.providerEmail}` : ""}
-                              </p>
-                              <div className="mt-2 space-y-1 text-xs text-[#001E5B]/56">
-                                <p>
-                                  Dernière synchro:{" "}
-                                  {rep.lastSyncAt
-                                    ? formatRelativeShort(rep.lastSyncAt)
-                                    : "jamais"}
+                      {group.reps.length ? (
+                        group.reps.map((rep) => (
+                          <div
+                            key={rep.id}
+                            className="rounded-[1.25rem] border border-[#001E5B]/8 bg-white px-4 py-4"
+                          >
+                            <div className="flex flex-wrap items-start justify-between gap-4">
+                              <div>
+                                <p className="font-semibold text-[#001E5B]">
+                                  {rep.name}
                                 </p>
-                                <p>
-                                  Dernier webhook:{" "}
-                                  {rep.lastWebhookAt
-                                    ? formatRelativeShort(rep.lastWebhookAt)
-                                    : "jamais"}
+                                <p className="text-sm text-[#001E5B]/56">
+                                  {formatRepSeniority(rep.seniority)}
+                                  {rep.providerEmail ? ` · ${rep.providerEmail}` : ""}
                                 </p>
-                                {rep.lastError ? (
-                                  <p className="text-rose-600">{rep.lastError}</p>
-                                ) : null}
+                                <div className="mt-2 space-y-1 text-xs text-[#001E5B]/56">
+                                  <p>
+                                    Dernière synchro:{" "}
+                                    {rep.lastSyncAt
+                                      ? formatRelativeShort(rep.lastSyncAt)
+                                      : "jamais"}
+                                  </p>
+                                  <p>
+                                    Dernier webhook:{" "}
+                                    {rep.lastWebhookAt
+                                      ? formatRelativeShort(rep.lastWebhookAt)
+                                      : "jamais"}
+                                  </p>
+                                  {rep.lastError ? (
+                                    <p className="text-rose-600">{rep.lastError}</p>
+                                  ) : null}
+                                </div>
                               </div>
-                            </div>
-                            <div className="space-y-3">
                               <div className="rounded-full border border-[#001E5B]/10 bg-[#F9F4ED] px-3 py-1 text-xs font-medium text-[#001E5B]">
                                 {rep.connectionStatus}
                               </div>
-                              <div className="flex gap-2">
-                                <Select
-                                  value={providerChoiceByRep[rep.id] ?? "google"}
-                                  onValueChange={(value) =>
-                                    setProviderChoiceByRep((current) => ({
-                                      ...current,
-                                      [rep.id]: value,
-                                    }))
-                                  }
-                                >
-                                  <SelectTrigger className="w-32">
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="google">Google</SelectItem>
-                                    <SelectItem value="microsoft">
-                                      Microsoft
-                                    </SelectItem>
-                                  </SelectContent>
-                                </Select>
-                                <Button
-                                  className="rounded-full"
-                                  onClick={() => void handleConnectRep(rep.id)}
-                                  disabled={connectingRepId === rep.id}
-                                >
-                                  <RefreshCw
-                                    className={`h-4 w-4 ${connectingRepId === rep.id ? "animate-spin" : ""}`}
-                                  />
-                                  Connecter
-                                </Button>
-                              </div>
                             </div>
                           </div>
+                        ))
+                      ) : (
+                        <div className="rounded-[1.25rem] border border-dashed border-[#001E5B]/12 px-4 py-8 text-sm text-[#001E5B]/44">
+                          Aucun rep n'est encore connecté pour ce client.
                         </div>
-                      ))}
+                      )}
                     </div>
                   </div>
                 ))}
@@ -893,6 +830,13 @@ export function AdminBookingsPage() {
                   </p>
                   <div className="mt-3 grid gap-2 text-sm text-[#001E5B]/72">
                     <p>
+                      Mode de routing:{" "}
+                      {detail.booking.assignmentReason.routingMode ===
+                      "weighted_seniority"
+                        ? "Routing senior/junior"
+                        : "Pool unique"}
+                    </p>
+                    <p>
                       Pool retenu:{" "}
                       {detail.booking.assignmentReason.seniorityPool === "senior"
                         ? "Senior uniquement"
@@ -902,7 +846,12 @@ export function AdminBookingsPage() {
                       Rôle choisi:{" "}
                       {detail.booking.assignmentReason.chosenRole === "senior"
                         ? "Senior"
-                        : "Junior"}
+                        : detail.booking.assignmentReason.chosenRole === "junior"
+                          ? "Junior"
+                          : detail.booking.assignmentReason.chosenRole ===
+                              "non_defini"
+                            ? "Non défini"
+                            : "Pool unique"}
                     </p>
                     <p>
                       Seuil de qualification:{" "}

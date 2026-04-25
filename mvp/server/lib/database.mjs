@@ -71,6 +71,8 @@ function initSchema(db) {
       name TEXT NOT NULL,
       timezone TEXT NOT NULL,
       connection_invite_token TEXT UNIQUE,
+      routing_mode TEXT NOT NULL DEFAULT 'pool_unique',
+      rep_connection_form_config_json TEXT NOT NULL DEFAULT '[]',
       active INTEGER NOT NULL DEFAULT 1
     );
 
@@ -229,7 +231,14 @@ function initSchema(db) {
 
 function migrateSchema(db) {
   ensureColumn(db, "clients", "active", "INTEGER NOT NULL DEFAULT 1");
-  ensureColumn(db, "clients", "connection_invite_token", "TEXT UNIQUE");
+  ensureColumn(db, "clients", "connection_invite_token", "TEXT");
+  ensureColumn(db, "clients", "routing_mode", "TEXT NOT NULL DEFAULT 'weighted_seniority'");
+  ensureColumn(
+    db,
+    "clients",
+    "rep_connection_form_config_json",
+    "TEXT NOT NULL DEFAULT '[]'",
+  );
   ensureColumn(db, "bookings", "schedule_state", "TEXT NOT NULL DEFAULT 'scheduled'");
   ensureColumn(db, "bookings", "outcome_state", "TEXT NOT NULL DEFAULT 'pending'");
   ensureColumn(db, "bookings", "original_start_at", "TEXT");
@@ -253,6 +262,24 @@ function migrateSchema(db) {
   clientsMissingInviteToken.forEach((client) => {
     updateInviteToken.run(`invite-${randomUUID()}`, client.id);
   });
+
+  db.exec(`
+    UPDATE clients
+    SET routing_mode = 'weighted_seniority'
+    WHERE routing_mode IS NULL OR routing_mode = ''
+  `);
+
+  db.exec(`
+    UPDATE clients
+    SET rep_connection_form_config_json = '[]'
+    WHERE rep_connection_form_config_json IS NULL OR rep_connection_form_config_json = ''
+  `);
+
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_clients_connection_invite_token
+    ON clients(connection_invite_token)
+    WHERE connection_invite_token IS NOT NULL
+  `);
 }
 
 function ensureColumn(db, table, column, definition) {
@@ -271,15 +298,25 @@ function seedDatabase(db, providerMode) {
 
   const seed = createSeedState(providerMode);
 
-  const insertClient = db.prepare(
-    "INSERT INTO clients (id, name, timezone, connection_invite_token, active) VALUES (?, ?, ?, ?, ?)",
-  );
+  const insertClient = db.prepare(`
+    INSERT INTO clients (
+      id,
+      name,
+      timezone,
+      connection_invite_token,
+      routing_mode,
+      rep_connection_form_config_json,
+      active
+    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+  `);
   seed.clients.forEach((client) => {
     insertClient.run(
       client.id,
       client.name,
       client.timezone,
       client.connectionInviteToken,
+      client.routingMode,
+      JSON.stringify(client.repConnectionFormConfig ?? []),
       toDbBool(true),
     );
   });

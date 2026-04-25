@@ -34,6 +34,12 @@ const OUTCOME_STATES = [
 ];
 
 const SCHEDULE_STATES = ["scheduled", "rescheduled", "cancelled"];
+const ROUTING_MODES = ["pool_unique", "weighted_seniority"];
+const REP_ROLES = ["senior", "junior", "non_defini"];
+const PUBLIC_PROVIDER_OPTIONS = [
+  { id: "google", label: "Google" },
+  { id: "microsoft", label: "Microsoft" },
+];
 
 const ACTIVE_SCHEDULE_STATES = new Set(["scheduled", "rescheduled"]);
 const BOOKING_WINDOW_WEEKS = 12;
@@ -73,6 +79,7 @@ export function createStore(provider) {
           intervalMinutes: bookingLink.intervalMinutes,
           bufferBeforeMinutes: bookingLink.bufferBeforeMinutes,
           bufferAfterMinutes: bookingLink.bufferAfterMinutes,
+          routingMode: client?.routingMode ?? "pool_unique",
           companySizeThreshold: routingPolicy?.companySizeThreshold ?? 200,
           providerMode: provider.mode === "nylas" ? "nylas" : "mock",
           reps: reps.map((rep) => ({
@@ -189,9 +196,13 @@ export function createStore(provider) {
         excludedBookingId: options.excludedBookingId ?? null,
       });
       const slots = [];
+      const client = this.getClient(bookingLink.clientId);
       const policy = this.getRoutingPolicy(bookingLink.id);
       const seniorityPool =
-        companySize >= (policy?.companySizeThreshold ?? 200) ? "senior" : "all";
+        client?.routingMode === "weighted_seniority" &&
+        companySize >= (policy?.companySizeThreshold ?? 200)
+          ? "senior"
+          : "all";
 
       for (const day of eachDayOfInterval({ start: windowStart, end: windowEnd })) {
         const weekday = getDay(day);
@@ -1042,17 +1053,33 @@ export function createStore(provider) {
         name: payload.name.trim(),
         timezone: payload.timezone?.trim() || "Europe/Paris",
         connectionInviteToken: `invite-${randomUUID()}`,
+        routingMode: ROUTING_MODES.includes(payload.routingMode)
+          ? payload.routingMode
+          : "pool_unique",
+        repConnectionFormConfig: Array.isArray(payload.repConnectionFormConfig)
+          ? payload.repConnectionFormConfig
+          : [],
         active: payload.active !== false,
       };
 
       db.prepare(`
-        INSERT INTO clients (id, name, timezone, connection_invite_token, active)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO clients (
+          id,
+          name,
+          timezone,
+          connection_invite_token,
+          routing_mode,
+          rep_connection_form_config_json,
+          active
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?)
       `).run(
         client.id,
         client.name,
         client.timezone,
         client.connectionInviteToken,
+        client.routingMode,
+        JSON.stringify(client.repConnectionFormConfig),
         toDbBool(client.active),
       );
 
@@ -1070,11 +1097,21 @@ export function createStore(provider) {
         UPDATE clients
         SET name = ?,
             timezone = ?,
+            routing_mode = ?,
+            rep_connection_form_config_json = ?,
             active = ?
         WHERE id = ?
       `).run(
         payload.name?.trim() || client.name,
         payload.timezone?.trim() || client.timezone,
+        ROUTING_MODES.includes(payload.routingMode)
+          ? payload.routingMode
+          : client.routingMode,
+        JSON.stringify(
+          Array.isArray(payload.repConnectionFormConfig)
+            ? payload.repConnectionFormConfig
+            : client.repConnectionFormConfig,
+        ),
         toDbBool(payload.active ?? client.active),
         clientId,
       );
@@ -1264,25 +1301,41 @@ export function createStore(provider) {
           name: client.name,
           timezone: client.timezone,
           inviteToken: client.connectionInviteToken,
+          routingMode: client.routingMode,
         },
-        providers: [
-          { id: "google", label: "Google" },
-          { id: "microsoft", label: "Microsoft" },
+        fields: [
+          {
+            id: "firstName",
+            label: "Prénom",
+            type: "text",
+            required: true,
+          },
+          {
+            id: "lastName",
+            label: "Nom",
+            type: "text",
+            required: true,
+          },
+          {
+            id: "provider",
+            label: "Provider calendrier",
+            type: "select",
+            required: true,
+            options: PUBLIC_PROVIDER_OPTIONS,
+          },
+          {
+            id: "role",
+            label: "Rôle",
+            type: "select",
+            required: true,
+            options: [
+              { id: "junior", label: "Actif junior" },
+              { id: "senior", label: "Actif senior" },
+              { id: "non_defini", label: "Non défini" },
+            ],
+          },
+          ...normalizePublicRepConnectionFields(client.repConnectionFormConfig),
         ],
-        reps: this.listAllReps()
-          .filter((rep) => rep.clientId === client.id && rep.active)
-          .map((rep) => {
-            const connection = this.getConnection(rep.id);
-            return {
-              id: rep.id,
-              name: rep.name,
-              email: rep.email,
-              seniority: rep.seniority,
-              connectionStatus: connection?.status ?? "disconnected",
-              providerEmail: connection?.providerEmail ?? rep.email,
-              lastSyncAt: connection?.lastSyncAt ?? null,
-            };
-          }),
       };
     },
 
@@ -1296,10 +1349,15 @@ export function createStore(provider) {
         throw new Error("Provider de connexion invalide.");
       }
 
-      const rep = this.getRep(payload.repId);
-      if (!rep || !rep.active || rep.clientId !== client.id) {
-        throw new Error("Rep introuvable pour ce client.");
+      if (!payload.firstName?.trim() || !payload.lastName?.trim()) {
+        throw new Error("Le prénom et le nom sont obligatoires.");
       }
+
+      if (!REP_ROLES.includes(payload.role)) {
+        throw new Error("Rôle de rep invalide.");
+      }
+
+      const rep = this.findOrCreateRepForPublicConnection(client, payload);
 
       return this.startRepConnection(rep.id, {
         provider: payload.provider,
@@ -1334,6 +1392,124 @@ export function createStore(provider) {
     getRep(repId) {
       const row = db.prepare("SELECT * FROM reps WHERE id = ?").get(repId);
       return row ? fromRepRow(row) : null;
+    },
+
+    findRepsByNormalizedName(clientId, fullName) {
+      const normalizedName = normalizePersonName(fullName);
+      return this.listAllReps().filter(
+        (rep) =>
+          rep.clientId === clientId &&
+          normalizePersonName(rep.name) === normalizedName,
+      );
+    },
+
+    updateRep(repId, payload = {}) {
+      const rep = this.getRep(repId);
+      if (!rep) {
+        throw new Error("Rep introuvable.");
+      }
+
+      db.prepare(`
+        UPDATE reps
+        SET name = ?,
+            email = ?,
+            seniority = ?,
+            timezone = ?,
+            active = ?,
+            sort_order = ?
+        WHERE id = ?
+      `).run(
+        payload.name?.trim() || rep.name,
+        payload.email ?? rep.email,
+        REP_ROLES.includes(payload.seniority) ? payload.seniority : rep.seniority,
+        payload.timezone?.trim() || rep.timezone,
+        toDbBool(payload.active ?? rep.active),
+        payload.sortOrder ?? rep.sortOrder,
+        repId,
+      );
+
+      return this.getRep(repId);
+    },
+
+    createRep(payload = {}) {
+      const client = this.getClient(payload.clientId);
+      if (!client) {
+        throw new Error("Client introuvable pour ce rep.");
+      }
+
+      const maxSortOrderRow = db
+        .prepare("SELECT COALESCE(MAX(sort_order), 0) AS max_sort_order FROM reps WHERE client_id = ?")
+        .get(client.id);
+
+      const rep = {
+        id: makeId("rep"),
+        clientId: client.id,
+        name: payload.name?.trim(),
+        email: payload.email ?? "",
+        seniority: REP_ROLES.includes(payload.seniority)
+          ? payload.seniority
+          : "non_defini",
+        timezone: payload.timezone?.trim() || client.timezone,
+        active: payload.active !== false,
+        sortOrder: payload.sortOrder ?? (maxSortOrderRow?.max_sort_order ?? 0) + 1,
+      };
+
+      if (!rep.name) {
+        throw new Error("Le nom du rep est obligatoire.");
+      }
+
+      db.prepare(`
+        INSERT INTO reps (
+          id,
+          client_id,
+          name,
+          email,
+          seniority,
+          timezone,
+          active,
+          sort_order
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        rep.id,
+        rep.clientId,
+        rep.name,
+        rep.email,
+        rep.seniority,
+        rep.timezone,
+        toDbBool(rep.active),
+        rep.sortOrder,
+      );
+
+      this.broadcastAdmin("settings.updated");
+      return this.getRep(rep.id);
+    },
+
+    findOrCreateRepForPublicConnection(client, payload = {}) {
+      const fullName = `${payload.firstName?.trim() ?? ""} ${payload.lastName?.trim() ?? ""}`.trim();
+      const matchingReps = this.findRepsByNormalizedName(client.id, fullName);
+
+      if (matchingReps.length > 1) {
+        throw new Error(
+          "Plusieurs commerciaux correspondent à ce nom. Contactez Be Nice pour finaliser la connexion.",
+        );
+      }
+
+      if (matchingReps.length === 1) {
+        return this.updateRep(matchingReps[0].id, {
+          name: fullName,
+          seniority: payload.role,
+          active: true,
+        });
+      }
+
+      return this.createRep({
+        clientId: client.id,
+        name: fullName,
+        seniority: payload.role,
+        timezone: client.timezone,
+        email: "",
+        active: true,
+      });
     },
 
     getConnection(repId) {
@@ -1468,8 +1644,10 @@ export function createStore(provider) {
 
     getEligibleReps(bookingLinkId, companySize) {
       const reps = this.getRepsForLink(bookingLinkId);
+      const bookingLink = this.getBookingLinkById(bookingLinkId);
+      const client = bookingLink ? this.getClient(bookingLink.clientId) : null;
       const policy = this.getRoutingPolicy(bookingLinkId);
-      if (!policy) {
+      if (!policy || client?.routingMode !== "weighted_seniority") {
         return reps;
       }
       if (companySize >= policy.companySizeThreshold) {
@@ -1561,7 +1739,35 @@ export function createStore(provider) {
         throw new Error("Aucun rep disponible pour ce créneau.");
       }
 
+      const client = this.getClient(bookingLink.clientId);
       const policy = this.getRoutingPolicy(bookingLink.id);
+      if (!policy || client?.routingMode !== "weighted_seniority") {
+        const rep = [...eligibleReps].sort((left, right) => {
+          const loadDelta =
+            this.getRepRollingLoad(left.id, bookingLink.id) -
+            this.getRepRollingLoad(right.id, bookingLink.id);
+          if (loadDelta !== 0) {
+            return loadDelta;
+          }
+          if (left.sortOrder !== right.sortOrder) {
+            return left.sortOrder - right.sortOrder;
+          }
+          return left.id.localeCompare(right.id);
+        })[0];
+
+        return {
+          rep,
+          reason: {
+            routingMode: client?.routingMode ?? "pool_unique",
+            companySizeThreshold: policy?.companySizeThreshold ?? 0,
+            seniorityPool: "all",
+            chosenRole: "pool_unique",
+            roleDeficits: null,
+            candidateRepIds: eligibleReps.map((candidate) => candidate.id),
+          },
+        };
+      }
+
       const counts = this.getRollingCounts(bookingLink.id);
       const total = counts.senior + counts.junior;
       const deficits = {
@@ -1572,11 +1778,12 @@ export function createStore(provider) {
       const byRole = {
         senior: eligibleReps.filter((rep) => rep.seniority === "senior"),
         junior: eligibleReps.filter((rep) => rep.seniority === "junior"),
+        non_defini: eligibleReps.filter((rep) => rep.seniority === "non_defini"),
       };
 
       let chosenRole = "senior";
       if (byRole.senior.length === 0) {
-        chosenRole = "junior";
+        chosenRole = byRole.junior.length > 0 ? "junior" : "non_defini";
       } else if (byRole.junior.length === 0) {
         chosenRole = "senior";
       } else if (deficits.junior > deficits.senior) {
@@ -1599,6 +1806,7 @@ export function createStore(provider) {
       return {
         rep,
         reason: {
+          routingMode: "weighted_seniority",
           companySizeThreshold: policy.companySizeThreshold,
           seniorityPool:
             companySize >= policy.companySizeThreshold ? "senior" : "all",
@@ -1620,10 +1828,10 @@ export function createStore(provider) {
         `)
         .all(bookingLinkId, lowerBound);
 
-      const counts = { senior: 0, junior: 0 };
+      const counts = { senior: 0, junior: 0, non_defini: 0 };
       rows.forEach((row) => {
         const rep = this.getRep(row.assigned_rep_id);
-        if (rep) {
+        if (rep && Object.hasOwn(counts, rep.seniority)) {
           counts[rep.seniority] += 1;
         }
       });
@@ -2451,6 +2659,9 @@ function fromClientRow(row) {
     name: row.name,
     timezone: row.timezone,
     connectionInviteToken: row.connection_invite_token ?? null,
+    routingMode:
+      ROUTING_MODES.includes(row.routing_mode) ? row.routing_mode : "pool_unique",
+    repConnectionFormConfig: parseJson(row.rep_connection_form_config_json, []),
     active: Boolean(row.active),
   };
 }
@@ -2574,16 +2785,58 @@ function fromTaskRow(row) {
   };
 }
 
-function parseJson(value) {
+function parseJson(value, fallback = {}) {
   if (!value) {
-    return {};
+    return fallback;
   }
 
   try {
     return JSON.parse(value);
   } catch {
-    return {};
+    return fallback;
   }
+}
+
+function normalizePersonName(value) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+}
+
+function normalizePublicRepConnectionFields(fields) {
+  if (!Array.isArray(fields)) {
+    return [];
+  }
+
+  return fields
+    .filter((field) => field && typeof field.id === "string" && typeof field.label === "string")
+    .map((field) => ({
+      id: field.id,
+      label: field.label,
+      type: field.type === "select" ? "select" : "text",
+      required: field.required !== false,
+      options:
+        field.type === "select" && Array.isArray(field.options)
+          ? field.options
+              .filter(
+                (option) =>
+                  option &&
+                  typeof option.id === "string" &&
+                  typeof option.label === "string",
+              )
+              .map((option) => ({
+                id: option.id,
+                label: option.label,
+              }))
+          : undefined,
+    }))
+    .filter(
+      (field) =>
+        !["firstName", "lastName", "provider", "role"].includes(field.id),
+    );
 }
 
 function toDbBool(value) {

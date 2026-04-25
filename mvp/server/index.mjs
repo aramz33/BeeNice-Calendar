@@ -275,34 +275,39 @@ const server = http.createServer(async (request, response) => {
           response,
           200,
           renderCallbackPage({
-            title: "Connexion calendrier active",
-            description: result.redirectTarget.startsWith("/connect/")
-              ? "La connexion Nylas est terminée. Vous pouvez revenir à la page de connexion."
-              : "La connexion Nylas est terminée. Vous pouvez revenir à la console admin.",
-            target: result.redirectTarget,
-            ctaLabel: result.redirectTarget.startsWith("/connect/")
-              ? "Retourner à la page de connexion"
-              : "Retourner à la console admin",
+            title:
+              result.callbackMode === "public_terminal"
+                ? "Authentification réussie"
+                : "Connexion calendrier active",
+            description:
+              result.callbackMode === "public_terminal"
+                ? "L'authentification a réussi, merci."
+                : "La connexion Nylas est terminée. Vous pouvez revenir à la console admin.",
+            target:
+              result.callbackMode === "public_terminal"
+                ? null
+                : `/admin/bookings?connected=${encodeURIComponent(result.repId)}`,
+            ctaLabel: "Retourner à la console admin",
           }),
         );
       } catch (error) {
         const message =
           error instanceof Error ? error.message : "Connexion Nylas impossible.";
         const state = decodeCallbackState(url.searchParams.get("state"));
-        const target =
-          state?.source === "public_invite" && state.inviteToken
-            ? `/connect/${encodeURIComponent(state.inviteToken)}?connectionError=${encodeURIComponent(message)}`
-            : `/admin/bookings?connectionError=${encodeURIComponent(message)}`;
         return html(
           response,
           400,
           renderCallbackPage({
-            title: "Connexion calendrier échouée",
+            title:
+              state?.source === "public_invite"
+                ? "Authentification échouée"
+                : "Connexion calendrier échouée",
             description: message,
-            target,
-            ctaLabel: target.startsWith("/connect/")
-              ? "Retourner à la page de connexion"
-              : "Retourner à la console admin",
+            target:
+              state?.source === "public_invite"
+                ? null
+                : `/admin/bookings?connectionError=${encodeURIComponent(message)}`,
+            ctaLabel: "Retourner à la console admin",
           }),
         );
       }
@@ -504,7 +509,7 @@ function getMimeType(filePath) {
   }
 }
 
-function renderCallbackPage({ title, description, target, ctaLabel = "Retourner" }) {
+function renderCallbackPage({ title, description, target = null, ctaLabel = "Retourner" }) {
   return `<!doctype html>
 <html lang="fr">
   <head>
@@ -558,7 +563,11 @@ function renderCallbackPage({ title, description, target, ctaLabel = "Retourner"
     <main>
       <h1>${escapeHtml(title)}</h1>
       <p>${escapeHtml(description)}</p>
-      <a href="${escapeHtml(target)}">${escapeHtml(ctaLabel)}</a>
+      ${
+        target
+          ? `<a href="${escapeHtml(target)}">${escapeHtml(ctaLabel)}</a>`
+          : ""
+      }
     </main>
   </body>
 </html>`;
