@@ -1,14 +1,17 @@
 import { useMemo } from "react";
+import { getDay } from "date-fns";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale/fr";
+import { formatInTimeZone } from "date-fns-tz";
 import { ChevronLeft, ChevronRight, Clock3, Sparkles } from "lucide-react";
 import { Button } from "@shared-ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@shared-ui/card";
 import type { AvailabilityResponse } from "@mvp/lib/types";
 import {
   formatDateShortInTimezone,
-  formatSlotDay,
+  formatDayShort,
   formatSlotTime,
+  getWeekDays,
 } from "@mvp/lib/time";
 
 interface SlotPickerProps {
@@ -32,6 +35,17 @@ export function SlotPicker({
   hasPreviousWeek,
   hasNextWeek,
 }: SlotPickerProps) {
+  const weekDays = useMemo(() => {
+    if (!availability) {
+      return [];
+    }
+
+    return getWeekDays(availability.windowStart).filter((day) => {
+      const weekday = getDay(day);
+      return weekday >= 1 && weekday <= 5;
+    });
+  }, [availability]);
+
   const grouped = useMemo(() => {
     if (!availability) {
       return [];
@@ -42,16 +56,34 @@ export function SlotPicker({
       Array<AvailabilityResponse["slots"][number]>
     >();
 
+    for (const day of weekDays) {
+      map.set(
+        formatInTimeZone(day, availability.timezone, "yyyy-MM-dd"),
+        [],
+      );
+    }
+
     for (const slot of availability.slots) {
-      const key = formatSlotDay(slot.startAt, availability.timezone);
+      const key = formatInTimeZone(
+        slot.startAt,
+        availability.timezone,
+        "yyyy-MM-dd",
+      );
       if (!map.has(key)) {
         map.set(key, []);
       }
       map.get(key)?.push(slot);
     }
 
-    return Array.from(map.entries());
-  }, [availability]);
+    return weekDays.map((day) => {
+      const key = formatInTimeZone(day, availability.timezone, "yyyy-MM-dd");
+      return {
+        key,
+        label: formatDayShort(day.toISOString(), availability.timezone),
+        slots: map.get(key) ?? [],
+      };
+    });
+  }, [availability, weekDays]);
 
   if (loading) {
     return (
@@ -92,34 +124,8 @@ export function SlotPicker({
     );
   }
 
-  if (availability.slots.length === 0) {
-    return (
-      <Card className="surface-card">
-        <CardHeader>
-          <CardTitle>Disponibilités en direct</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <WeekNavigator
-            availability={availability}
-            onPreviousWeek={onPreviousWeek}
-            onNextWeek={onNextWeek}
-            hasPreviousWeek={hasPreviousWeek}
-            hasNextWeek={hasNextWeek}
-          />
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <Sparkles className="h-4 w-4" />
-            <p className="text-sm">
-              Aucun créneau disponible sur cette semaine pour ce niveau de
-              qualification.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
   return (
-      <Card className="surface-card">
+    <Card className="surface-card">
       <CardHeader className="flex flex-row items-center justify-between">
         <div>
           <CardTitle>Disponibilités en direct</CardTitle>
@@ -140,39 +146,54 @@ export function SlotPicker({
           hasPreviousWeek={hasPreviousWeek}
           hasNextWeek={hasNextWeek}
         />
+        {availability.slots.length === 0 ? (
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Sparkles className="h-4 w-4" />
+            <p className="text-sm">
+              Aucun créneau disponible sur cette semaine pour ce niveau de
+              qualification.
+            </p>
+          </div>
+        ) : null}
         <div className="slot-grid">
-          {grouped.map(([day, slots]) => (
-            <div key={day} className="slot-column space-y-3">
+          {grouped.map(({ key, label, slots }) => (
+            <div key={key} className="slot-column space-y-3">
               <div className="rounded-2xl bg-muted/40 px-4 py-3">
-                <p className="text-sm font-medium capitalize">{day}</p>
+                <p className="text-sm font-medium capitalize">{label}</p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {slots.length} créneau{slots.length > 1 ? "x" : ""}
                 </p>
               </div>
               <div className="space-y-2">
-                {slots.map((slot) => {
-                  const isSelected = selectedSlot === slot.startAt;
-                  return (
-                    <Button
-                      key={slot.startAt}
-                      type="button"
-                      variant={isSelected ? "default" : "outline"}
-                      className="slot-button h-auto px-4 py-3"
-                      onClick={() => onSelect(slot.startAt)}
-                    >
-                      <Clock3 className="h-4 w-4" />
-                      <div className="flex flex-col items-start">
-                        <span className="font-semibold">
-                          {formatSlotTime(slot.startAt, availability.timezone)}
-                        </span>
-                        <span className="text-xs opacity-75">
-                          {slot.availableRepCount} rep
-                          {slot.availableRepCount > 1 ? "s" : ""} dispo
-                        </span>
-                      </div>
-                    </Button>
-                  );
-                })}
+                {slots.length > 0 ? (
+                  slots.map((slot) => {
+                    const isSelected = selectedSlot === slot.startAt;
+                    return (
+                      <Button
+                        key={slot.startAt}
+                        type="button"
+                        variant={isSelected ? "default" : "outline"}
+                        className="slot-button h-auto px-4 py-3"
+                        onClick={() => onSelect(slot.startAt)}
+                      >
+                        <Clock3 className="h-4 w-4 shrink-0" />
+                        <div className="flex min-w-0 flex-col items-start">
+                          <span className="font-semibold">
+                            {formatSlotTime(slot.startAt, availability.timezone)}
+                          </span>
+                          <span className="text-xs opacity-75">
+                            {slot.availableRepCount} rep
+                            {slot.availableRepCount > 1 ? "s" : ""} dispo
+                          </span>
+                        </div>
+                      </Button>
+                    );
+                  })
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-[#001E5B]/12 bg-white px-4 py-6 text-sm text-[#001E5B]/44">
+                    Aucun créneau
+                  </div>
+                )}
               </div>
             </div>
           ))}

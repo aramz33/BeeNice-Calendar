@@ -155,10 +155,7 @@ export function AdminBookingsPage() {
       setTasksPayload(tasks);
       setSettingsPayload(settings);
       setSelectedBookingId((current) => {
-        if (
-          current &&
-          bookings.bookings.some((booking) => booking.id === current)
-        ) {
+        if (current) {
           return current;
         }
         return bookings.bookings[0]?.id ?? null;
@@ -178,6 +175,9 @@ export function AdminBookingsPage() {
       );
       setDetail(data);
     } catch (error) {
+      setDetail(null);
+      setRescheduleAvailability(null);
+      setSelectedRescheduleSlot(null);
       toast.error((error as Error).message);
     } finally {
       setLoadingDetail(false);

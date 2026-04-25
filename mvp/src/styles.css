@@ -33,11 +33,16 @@ body {
 .slot-grid {
   display: grid;
   gap: 1rem;
-  grid-template-columns: repeat(auto-fit, minmax(188px, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.slot-column {
+  min-width: 0;
 }
 
 .slot-button {
   width: 100%;
+  min-width: 0;
   justify-content: flex-start;
   border-radius: 1rem;
   border-width: 2px;
