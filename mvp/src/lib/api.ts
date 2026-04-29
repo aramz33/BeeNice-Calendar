@@ -4,8 +4,8 @@ export async function apiFetch<T>(
 ): Promise<T> {
   const response = await fetch(input, {
     headers: {
-      "Content-Type": "application/json",
       ...(init?.headers ?? {}),
+      "Content-Type": "application/json",
     },
     ...init,
   });

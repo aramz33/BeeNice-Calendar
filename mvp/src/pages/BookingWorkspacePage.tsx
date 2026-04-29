@@ -20,6 +20,7 @@ import { MetricCard } from "@mvp/components/MetricCard";
 import { SlotPicker } from "@mvp/components/SlotPicker";
 import { StatusBadge } from "@mvp/components/StatusBadge";
 import { apiFetch } from "@mvp/lib/api";
+import { formatRepSeniority } from "@mvp/lib/format";
 import { formatDateTime, formatRelativeShort } from "@mvp/lib/time";
 import type {
   AvailabilityResponse,
@@ -171,7 +172,7 @@ export function BookingWorkspacePage() {
     weekStart: Date = currentWeekStart,
     companySizeValue: string = companySize,
   ) => {
-    if (!companySizeValue) {
+    if (!companySizeValue || Number.isNaN(Number(companySizeValue))) {
       setAvailability(null);
       setSelectedSlot(null);
       return;
@@ -190,7 +191,8 @@ export function BookingWorkspacePage() {
       );
       setAvailability(data);
       setSelectedSlot(
-        preferredSlot && data.slots.some((slot) => slot.startAt === preferredSlot)
+        preferredSlot &&
+          data.slots.some((slot) => slot.startAt === preferredSlot)
           ? preferredSlot
           : null,
       );
@@ -281,9 +283,7 @@ export function BookingWorkspacePage() {
       return;
     }
 
-    setAvailabilityWeekStartIso(
-      subWeeks(currentWeekStart, 1).toISOString(),
-    );
+    setAvailabilityWeekStartIso(subWeeks(currentWeekStart, 1).toISOString());
   };
 
   const handleNextAvailabilityWeek = () => {
@@ -291,9 +291,7 @@ export function BookingWorkspacePage() {
       return;
     }
 
-    setAvailabilityWeekStartIso(
-      addWeeks(currentWeekStart, 1).toISOString(),
-    );
+    setAvailabilityWeekStartIso(addWeeks(currentWeekStart, 1).toISOString());
   };
 
   const handleCancelBooking = async (booking: BookingSummary) => {
@@ -321,7 +319,11 @@ export function BookingWorkspacePage() {
       setNotes(booking.notes ?? "");
       setAvailabilityWeekStartIso(bookingWeekStart.toISOString());
       await Promise.all([
-        fetchAvailability(booking.startAt, bookingWeekStart, String(booking.companySize)),
+        fetchAvailability(
+          booking.startAt,
+          bookingWeekStart,
+          String(booking.companySize),
+        ),
         fetchCallerData(),
       ]);
       toast.success(
@@ -710,12 +712,7 @@ export function BookingWorkspacePage() {
                     <div>
                       <p className="font-semibold text-[#001E5B]">{rep.name}</p>
                       <p className="text-sm text-[#001E5B]/56">
-                        {rep.seniority === "senior"
-                          ? "Senior"
-                          : rep.seniority === "junior"
-                            ? "Junior"
-                            : "Non défini"}{" "}
-                        ·{" "}
+                        {formatRepSeniority(rep.seniority)} ·{" "}
                         {rep.connectionStatus}
                       </p>
                     </div>

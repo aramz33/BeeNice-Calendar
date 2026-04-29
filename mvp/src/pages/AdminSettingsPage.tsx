@@ -45,14 +45,17 @@ export function AdminSettingsPage() {
   const createClient = async (event: React.FormEvent) => {
     event.preventDefault();
     try {
-      const result = await apiFetch<ClientCreationResponse>("/api/admin/settings/clients", {
-        method: "POST",
-        body: JSON.stringify({
-          name: clientName,
-          timezone: clientTimezone,
-          routingMode: clientRoutingMode,
-        }),
-      });
+      const result = await apiFetch<ClientCreationResponse>(
+        "/api/admin/settings/clients",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            name: clientName,
+            timezone: clientTimezone,
+            routingMode: clientRoutingMode,
+          }),
+        },
+      );
       toast.success("Client ajouté.", {
         description: `${result.client.name} est prêt.`,
         action: {
@@ -84,9 +87,9 @@ export function AdminSettingsPage() {
     }
   };
 
-  const toggleClient = async (clientId: string, active: boolean) => {
+  const toggleEntity = async (path: string, active: boolean) => {
     try {
-      await apiFetch(`/api/admin/settings/clients/${clientId}`, {
+      await apiFetch(path, {
         method: "PATCH",
         body: JSON.stringify({ active: !active }),
       });
@@ -104,18 +107,6 @@ export function AdminSettingsPage() {
       await apiFetch(`/api/admin/settings/clients/${clientId}`, {
         method: "PATCH",
         body: JSON.stringify({ routingMode }),
-      });
-      await fetchSettings();
-    } catch (error) {
-      toast.error((error as Error).message);
-    }
-  };
-
-  const toggleCaller = async (callerId: string, active: boolean) => {
-    try {
-      await apiFetch(`/api/admin/settings/callers/${callerId}`, {
-        method: "PATCH",
-        body: JSON.stringify({ active: !active }),
       });
       await fetchSettings();
     } catch (error) {
@@ -177,56 +168,68 @@ export function AdminSettingsPage() {
             </form>
 
             <div className="space-y-3">
-              {loading ? (
-                Array.from({ length: 3 }).map((_, index) => (
-                  <div key={index} className="h-20 animate-pulse rounded-[1.25rem] bg-[#001E5B]/5" />
-                ))
-              ) : (
-                payload?.clients.map((client) => (
-                  <div
-                    key={client.id}
-                    className="flex flex-wrap items-center justify-between gap-3 rounded-[1.25rem] border border-[#001E5B]/8 bg-white px-4 py-4"
-                  >
-                    <div>
-                      <p className="font-semibold text-[#001E5B]">{client.name}</p>
-                      <p className="text-sm text-[#001E5B]/56">{client.timezone}</p>
-                      <p className="text-sm text-[#001E5B]/56">
-                        {client.routingMode === "weighted_seniority"
-                          ? "Routing senior/junior"
-                          : "Pool unique"}
-                      </p>
+              {loading
+                ? Array.from({ length: 3 }).map((_, index) => (
+                    <div
+                      key={index}
+                      className="h-20 animate-pulse rounded-[1.25rem] bg-[#001E5B]/5"
+                    />
+                  ))
+                : payload?.clients.map((client) => (
+                    <div
+                      key={client.id}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-[1.25rem] border border-[#001E5B]/8 bg-white px-4 py-4"
+                    >
+                      <div>
+                        <p className="font-semibold text-[#001E5B]">
+                          {client.name}
+                        </p>
+                        <p className="text-sm text-[#001E5B]/56">
+                          {client.timezone}
+                        </p>
+                        <p className="text-sm text-[#001E5B]/56">
+                          {client.routingMode === "weighted_seniority"
+                            ? "Routing senior/junior"
+                            : "Pool unique"}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Select
+                          value={client.routingMode}
+                          onValueChange={(value) =>
+                            void updateClientRoutingMode(
+                              client.id,
+                              value as "pool_unique" | "weighted_seniority",
+                            )
+                          }
+                        >
+                          <SelectTrigger className="w-52">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="pool_unique">
+                              Pool unique
+                            </SelectItem>
+                            <SelectItem value="weighted_seniority">
+                              Routing senior/junior
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          variant={client.active ? "outline" : "default"}
+                          className="rounded-full"
+                          onClick={() =>
+                            void toggleEntity(
+                              `/api/admin/settings/clients/${client.id}`,
+                              client.active,
+                            )
+                          }
+                        >
+                          {client.active ? "Désactiver" : "Réactiver"}
+                        </Button>
+                      </div>
                     </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Select
-                        value={client.routingMode}
-                        onValueChange={(value) =>
-                          void updateClientRoutingMode(
-                            client.id,
-                            value as "pool_unique" | "weighted_seniority",
-                          )
-                        }
-                      >
-                        <SelectTrigger className="w-52">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="pool_unique">Pool unique</SelectItem>
-                          <SelectItem value="weighted_seniority">
-                            Routing senior/junior
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <Button
-                        variant={client.active ? "outline" : "default"}
-                        className="rounded-full"
-                        onClick={() => void toggleClient(client.id, client.active)}
-                      >
-                        {client.active ? "Désactiver" : "Réactiver"}
-                      </Button>
-                    </div>
-                  </div>
-                ))
-              )}
+                  ))}
             </div>
           </CardContent>
         </Card>
@@ -236,7 +239,10 @@ export function AdminSettingsPage() {
             <CardTitle>Callers</CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
-            <form className="grid gap-3 md:grid-cols-[1fr_auto]" onSubmit={createCaller}>
+            <form
+              className="grid gap-3 md:grid-cols-[1fr_auto]"
+              onSubmit={createCaller}
+            >
               <div className="space-y-2">
                 <Label htmlFor="caller-name">Nom du caller</Label>
                 <Input
@@ -254,27 +260,35 @@ export function AdminSettingsPage() {
             </form>
 
             <div className="space-y-3">
-              {loading ? (
-                Array.from({ length: 3 }).map((_, index) => (
-                  <div key={index} className="h-20 animate-pulse rounded-[1.25rem] bg-[#001E5B]/5" />
-                ))
-              ) : (
-                payload?.callers.map((caller) => (
-                  <div
-                    key={caller.id}
-                    className="flex flex-wrap items-center justify-between gap-3 rounded-[1.25rem] border border-[#001E5B]/8 bg-white px-4 py-4"
-                  >
-                    <p className="font-semibold text-[#001E5B]">{caller.name}</p>
-                    <Button
-                      variant={caller.active ? "outline" : "default"}
-                      className="rounded-full"
-                      onClick={() => void toggleCaller(caller.id, caller.active)}
+              {loading
+                ? Array.from({ length: 3 }).map((_, index) => (
+                    <div
+                      key={index}
+                      className="h-20 animate-pulse rounded-[1.25rem] bg-[#001E5B]/5"
+                    />
+                  ))
+                : payload?.callers.map((caller) => (
+                    <div
+                      key={caller.id}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-[1.25rem] border border-[#001E5B]/8 bg-white px-4 py-4"
                     >
-                      {caller.active ? "Désactiver" : "Réactiver"}
-                    </Button>
-                  </div>
-                ))
-              )}
+                      <p className="font-semibold text-[#001E5B]">
+                        {caller.name}
+                      </p>
+                      <Button
+                        variant={caller.active ? "outline" : "default"}
+                        className="rounded-full"
+                        onClick={() =>
+                          void toggleEntity(
+                            `/api/admin/settings/callers/${caller.id}`,
+                            caller.active,
+                          )
+                        }
+                      >
+                        {caller.active ? "Désactiver" : "Réactiver"}
+                      </Button>
+                    </div>
+                  ))}
             </div>
           </CardContent>
         </Card>

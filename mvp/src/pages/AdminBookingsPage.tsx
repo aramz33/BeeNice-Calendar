@@ -39,6 +39,16 @@ import { SlotPicker } from "@mvp/components/SlotPicker";
 import { StatusBadge } from "@mvp/components/StatusBadge";
 import { apiFetch } from "@mvp/lib/api";
 import {
+  CALENDAR_HOURS,
+  SLOT_HEIGHT_PX,
+  TOTAL_HEIGHT_PX,
+  TOTAL_SLOTS,
+  assignTracks,
+  isEventInRange,
+  parseIsoSafe,
+} from "@mvp/lib/calendar";
+import { formatRepSeniority } from "@mvp/lib/format";
+import {
   formatDateKeyInTimezone,
   formatDateTime,
   formatDayShort,
@@ -83,9 +93,9 @@ export function AdminBookingsPage() {
   );
   const [loadingRescheduleAvailability, setLoadingRescheduleAvailability] =
     useState(false);
-  const [selectedRescheduleSlot, setSelectedRescheduleSlot] = useState<string | null>(
-    null,
-  );
+  const [selectedRescheduleSlot, setSelectedRescheduleSlot] = useState<
+    string | null
+  >(null);
   const [activeView, setActiveView] = useState<ViewMode>("agenda");
   const [weekStartIso, setWeekStartIso] = useState(() =>
     startOfWeek(new Date(), { weekStartsOn: 1 }).toISOString(),
@@ -215,7 +225,8 @@ export function AdminBookingsPage() {
       );
       setRescheduleAvailability(data);
       setSelectedRescheduleSlot(
-        preferredSlot && data.slots.some((slot) => slot.startAt === preferredSlot)
+        preferredSlot &&
+          data.slots.some((slot) => slot.startAt === preferredSlot)
           ? preferredSlot
           : null,
       );
@@ -401,7 +412,11 @@ export function AdminBookingsPage() {
       setSelectedRescheduleSlot(null);
       await fetchDashboard();
       await fetchDetail(detail.booking.id);
-      await fetchRescheduleAvailability(detail.booking.id, rescheduleWeekStart, null);
+      await fetchRescheduleAvailability(
+        detail.booking.id,
+        rescheduleWeekStart,
+        null,
+      );
     } catch (error) {
       toast.error((error as Error).message);
     } finally {
@@ -452,19 +467,11 @@ export function AdminBookingsPage() {
     }
   };
 
-  const formatRepSeniority = (seniority: string) => {
-    if (seniority === "senior") {
-      return "Senior";
-    }
-    if (seniority === "junior") {
-      return "Junior";
-    }
-    return "Non défini";
-  };
-
   const connectionGroups = useMemo(() => {
     const reps = payload?.filters.reps ?? [];
-    const clients = (settingsPayload?.clients ?? []).filter((client) => client.active);
+    const clients = (settingsPayload?.clients ?? []).filter(
+      (client) => client.active,
+    );
 
     return clients.map((client) => ({
       client,
@@ -618,7 +625,9 @@ export function AdminBookingsPage() {
                     className="rounded-full"
                     onClick={() =>
                       setWeekStartIso(
-                        startOfWeek(new Date(), { weekStartsOn: 1 }).toISOString(),
+                        startOfWeek(new Date(), {
+                          weekStartsOn: 1,
+                        }).toISOString(),
                       )
                     }
                   >
@@ -725,8 +734,8 @@ export function AdminBookingsPage() {
                           {group.client.name}
                         </p>
                         <p className="mt-2 text-sm text-[#001E5B]/64">
-                          Lien generique a envoyer aux reps du client pour qu'ils
-                          connectent eux-memes leur agenda.
+                          Lien generique a envoyer aux reps du client pour
+                          qu'ils connectent eux-memes leur agenda.
                         </p>
                         <p className="mt-1 text-xs text-[#001E5B]/48">
                           {group.client.routingMode === "weighted_seniority"
@@ -739,14 +748,18 @@ export function AdminBookingsPage() {
                           variant="outline"
                           className="rounded-full"
                           onClick={() =>
-                            void copyInviteLink(group.client.connectionInviteToken)
+                            void copyInviteLink(
+                              group.client.connectionInviteToken,
+                            )
                           }
                         >
                           <Copy className="h-4 w-4" />
                           Copier le lien
                         </Button>
                         <a
-                          href={buildInviteLink(group.client.connectionInviteToken)}
+                          href={buildInviteLink(
+                            group.client.connectionInviteToken,
+                          )}
                           className="inline-flex items-center rounded-full border border-[#001E5B]/10 bg-[#F9F4ED] px-3 py-2 text-sm font-medium text-[#001E5B]"
                           target="_blank"
                           rel="noreferrer"
@@ -774,14 +787,19 @@ export function AdminBookingsPage() {
                                 </p>
                                 <p className="text-sm text-[#001E5B]/56">
                                   {formatRepSeniority(rep.seniority)}
-                                  {rep.businessEmail ? ` · ${rep.businessEmail}` : ""}
+                                  {rep.businessEmail
+                                    ? ` · ${rep.businessEmail}`
+                                    : ""}
                                 </p>
                                 <div className="mt-2 space-y-1 text-xs text-[#001E5B]/56">
                                   {rep.providerEmail ? (
                                     <p>Calendrier: {rep.providerEmail}</p>
                                   ) : null}
                                   {rep.connectedAt ? (
-                                    <p>Connecté: {formatRelativeShort(rep.connectedAt)}</p>
+                                    <p>
+                                      Connecté:{" "}
+                                      {formatRelativeShort(rep.connectedAt)}
+                                    </p>
                                   ) : null}
                                   <p>
                                     Dernière synchro:{" "}
@@ -796,7 +814,9 @@ export function AdminBookingsPage() {
                                       : "jamais"}
                                   </p>
                                   {rep.lastError ? (
-                                    <p className="text-rose-600">{rep.lastError}</p>
+                                    <p className="text-rose-600">
+                                      {rep.lastError}
+                                    </p>
                                   ) : null}
                                 </div>
                               </div>
@@ -894,7 +914,8 @@ export function AdminBookingsPage() {
                     </p>
                     <p>
                       Pool retenu:{" "}
-                      {detail.booking.assignmentReason.seniorityPool === "senior"
+                      {detail.booking.assignmentReason.seniorityPool ===
+                      "senior"
                         ? "Senior uniquement"
                         : "Pool complet"}
                     </p>
@@ -902,7 +923,8 @@ export function AdminBookingsPage() {
                       Rôle choisi:{" "}
                       {detail.booking.assignmentReason.chosenRole === "senior"
                         ? "Senior"
-                        : detail.booking.assignmentReason.chosenRole === "junior"
+                        : detail.booking.assignmentReason.chosenRole ===
+                            "junior"
                           ? "Junior"
                           : detail.booking.assignmentReason.chosenRole ===
                               "non_defini"
@@ -975,9 +997,9 @@ export function AdminBookingsPage() {
                   <div className="space-y-2">
                     <Label>Déplacer selon les disponibilités</Label>
                     <p className="text-sm text-[#001E5B]/64">
-                      Le nouveau créneau est choisi sur les disponibilités live du
-                      client. Le routage réassigne automatiquement le rendez-vous
-                      au rep éligible disponible sur ce créneau.
+                      Le nouveau créneau est choisi sur les disponibilités live
+                      du client. Le routage réassigne automatiquement le
+                      rendez-vous au rep éligible disponible sur ce créneau.
                     </p>
                   </div>
 
@@ -1025,7 +1047,9 @@ export function AdminBookingsPage() {
                       </p>
                       <p className="mt-2">
                         Reps disponibles:{" "}
-                        {(rescheduleSelectedSlot.availableRepNames ?? []).join(", ")}
+                        {(rescheduleSelectedSlot.availableRepNames ?? []).join(
+                          ", ",
+                        )}
                       </p>
                     </div>
                   ) : null}
@@ -1128,155 +1152,6 @@ function ViewButton({
       {label}
     </Button>
   );
-}
-
-const CALENDAR_START_HOUR = 9;
-const CALENDAR_END_HOUR = 18;
-const SLOT_MINUTES = 30;
-const SLOT_HEIGHT_PX = 44;
-const TOTAL_SLOTS =
-  (CALENDAR_END_HOUR - CALENDAR_START_HOUR) * (60 / SLOT_MINUTES);
-const TOTAL_HEIGHT_PX = TOTAL_SLOTS * SLOT_HEIGHT_PX;
-const CALENDAR_START_MINUTES = CALENDAR_START_HOUR * 60;
-const CALENDAR_END_MINUTES = CALENDAR_END_HOUR * 60;
-const CALENDAR_HOURS = Array.from(
-  { length: CALENDAR_END_HOUR - CALENDAR_START_HOUR + 1 },
-  (_, i) => CALENDAR_START_HOUR + i,
-);
-
-type EventTiming = {
-  entry: BookingSummary;
-  startMin: number;
-  endMin: number;
-  visibleStartMin: number;
-  visibleEndMin: number;
-};
-
-function parseIsoSafe(value: string | null | undefined): Date | null {
-  if (typeof value !== "string" || !value) {
-    return null;
-  }
-
-  const parsed = parseISO(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return null;
-  }
-
-  return parsed;
-}
-
-function getTimeInMinutes(
-  iso: string | null | undefined,
-  timezone: string,
-): number | null {
-  if (typeof iso !== "string" || !iso) {
-    return null;
-  }
-
-  const timeStr = formatTimeOnly(iso, timezone);
-  const [h, m] = timeStr.split(":").map(Number);
-  if (Number.isNaN(h) || Number.isNaN(m ?? 0)) {
-    return null;
-  }
-
-  return h * 60 + (m ?? 0);
-}
-
-function getEventTiming(
-  entry: BookingSummary,
-  timezone: string,
-): EventTiming | null {
-  const startMin = getTimeInMinutes(entry.startAt, timezone);
-  if (startMin === null) {
-    return null;
-  }
-
-  const startAt = parseIsoSafe(entry.startAt);
-  const endAt = parseIsoSafe(entry.endAt);
-  const durationMinutes =
-    startAt && endAt
-      ? Math.max(
-          SLOT_MINUTES,
-          Math.round((endAt.getTime() - startAt.getTime()) / (60 * 1000)),
-        )
-      : SLOT_MINUTES;
-  const endMin = startMin + durationMinutes;
-
-  return {
-    entry,
-    startMin,
-    endMin,
-    visibleStartMin: Math.max(startMin, CALENDAR_START_MINUTES),
-    visibleEndMin: Math.min(endMin, CALENDAR_END_MINUTES),
-  };
-}
-
-function calcEventTop(startMin: number): number {
-  return ((startMin - CALENDAR_START_MINUTES) / SLOT_MINUTES) * SLOT_HEIGHT_PX;
-}
-
-function calcEventHeight(startMin: number, endMin: number): number {
-  return ((endMin - startMin) / SLOT_MINUTES) * SLOT_HEIGHT_PX;
-}
-
-function isEventInRange(entry: BookingSummary, timezone: string): boolean {
-  const timing = getEventTiming(entry, timezone);
-  return timing ? timing.visibleStartMin < timing.visibleEndMin : false;
-}
-
-function assignTracks(
-  events: BookingSummary[],
-  timezone: string,
-): Array<{
-  entry: BookingSummary;
-  track: number;
-  trackCount: number;
-  top: number;
-  height: number;
-}> {
-  const sorted = events
-    .map((entry) => getEventTiming(entry, timezone))
-    .filter((timing): timing is EventTiming => timing !== null)
-    .sort((a, b) => {
-      if (a.startMin !== b.startMin) {
-        return a.startMin - b.startMin;
-      }
-      return a.endMin - b.endMin;
-    });
-  const trackEnds: number[] = [];
-  const result: Array<{
-    entry: BookingSummary;
-    track: number;
-    trackCount: number;
-    startMin: number;
-    endMin: number;
-    top: number;
-    height: number;
-  }> = [];
-
-  sorted.forEach((timing) => {
-    const { entry, startMin, endMin, visibleStartMin, visibleEndMin } = timing;
-    let track = trackEnds.findIndex((end) => end <= startMin);
-    if (track === -1) track = trackEnds.length;
-    trackEnds[track] = endMin;
-    result.push({
-      entry,
-      track,
-      trackCount: 0,
-      startMin,
-      endMin,
-      top: calcEventTop(visibleStartMin),
-      height: calcEventHeight(visibleStartMin, visibleEndMin),
-    });
-  });
-
-  result.forEach((item) => {
-    item.trackCount = result.filter((other) => {
-      return other.startMin < item.endMin && other.endMin > item.startMin;
-    }).length;
-  });
-
-  return result.map(({ startMin: _startMin, endMin: _endMin, ...item }) => item);
 }
 
 function AgendaBoard({
@@ -1415,37 +1290,39 @@ function AgendaBoard({
                     ))}
 
                     {/* Event blocks */}
-                    {tracked.map(({ entry, track, trackCount, top, height }) => {
-                      const widthPct = 100 / Math.max(trackCount, 1);
-                      const leftPct = track * widthPct;
-                      const rightPct = 100 - leftPct - widthPct;
-                      return (
-                        <button
-                          key={entry.id}
-                          type="button"
-                          className={`time-grid-event ${selectedBookingId === entry.id ? "time-grid-event-selected" : ""}`}
-                          style={{
-                            top,
-                            height,
-                            left: `calc(3px + ${leftPct}%)`,
-                            right: `calc(3px + ${rightPct}%)`,
-                          }}
-                          onClick={() => onSelect(entry.id)}
-                          title={`${entry.clientName} - ${entry.prospectName}`}
-                        >
-                          <p className="time-grid-event-time">
-                            {formatTimeOnly(entry.startAt, timezone)}
-                          </p>
-                          <p className="time-grid-event-context">
-                            {entry.clientName} - {entry.prospectName}
-                          </p>
-                          <StatusBadge
-                            status={entry.displayStatus}
-                            className="time-grid-event-badge"
-                          />
-                        </button>
-                      );
-                    })}
+                    {tracked.map(
+                      ({ entry, track, trackCount, top, height }) => {
+                        const widthPct = 100 / Math.max(trackCount, 1);
+                        const leftPct = track * widthPct;
+                        const rightPct = 100 - leftPct - widthPct;
+                        return (
+                          <button
+                            key={entry.id}
+                            type="button"
+                            className={`time-grid-event ${selectedBookingId === entry.id ? "time-grid-event-selected" : ""}`}
+                            style={{
+                              top,
+                              height,
+                              left: `calc(3px + ${leftPct}%)`,
+                              right: `calc(3px + ${rightPct}%)`,
+                            }}
+                            onClick={() => onSelect(entry.id)}
+                            title={`${entry.clientName} - ${entry.prospectName}`}
+                          >
+                            <p className="time-grid-event-time">
+                              {formatTimeOnly(entry.startAt, timezone)}
+                            </p>
+                            <p className="time-grid-event-context">
+                              {entry.clientName} - {entry.prospectName}
+                            </p>
+                            <StatusBadge
+                              status={entry.displayStatus}
+                              className="time-grid-event-badge"
+                            />
+                          </button>
+                        );
+                      },
+                    )}
                   </div>
                 );
               })}

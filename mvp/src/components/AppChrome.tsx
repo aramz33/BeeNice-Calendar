@@ -9,6 +9,32 @@ interface AppChromeProps {
   children: ReactNode;
 }
 
+function NavButton({
+  to,
+  children,
+}: {
+  to: string;
+  children: ReactNode;
+}): ReactNode {
+  return (
+    <NavLink to={to}>
+      {({ isActive }) => (
+        <Button
+          variant="outline"
+          size="sm"
+          className={
+            isActive
+              ? "rounded-full border-transparent bg-[#F7A600] text-[#001E5B] hover:bg-[#FFC755]"
+              : "rounded-full border-white/30 bg-transparent text-white hover:bg-white/10 hover:text-white"
+          }
+        >
+          {children}
+        </Button>
+      )}
+    </NavLink>
+  );
+}
+
 export function AppChrome({ title, children }: AppChromeProps) {
   return (
     <div className="min-h-screen">
@@ -27,53 +53,15 @@ export function AppChrome({ title, children }: AppChromeProps) {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <NavLink to="/">
-              {({ isActive }) => (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className={
-                    isActive
-                      ? "rounded-full border-transparent bg-[#F7A600] text-[#001E5B] hover:bg-[#FFC755]"
-                      : "rounded-full border-white/30 bg-transparent text-white hover:bg-white/10 hover:text-white"
-                  }
-                >
-                  Accueil
-                </Button>
-              )}
-            </NavLink>
-            <NavLink to="/admin/bookings">
-              {({ isActive }) => (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className={
-                    isActive
-                      ? "rounded-full border-transparent bg-[#F7A600] text-[#001E5B] hover:bg-[#FFC755]"
-                      : "rounded-full border-white/30 bg-transparent text-white hover:bg-white/10 hover:text-white"
-                  }
-                >
-                  <LayoutDashboard className="h-4 w-4" />
-                  Admin
-                </Button>
-              )}
-            </NavLink>
-            <NavLink to="/admin/settings">
-              {({ isActive }) => (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className={
-                    isActive
-                      ? "rounded-full border-transparent bg-[#F7A600] text-[#001E5B] hover:bg-[#FFC755]"
-                      : "rounded-full border-white/30 bg-transparent text-white hover:bg-white/10 hover:text-white"
-                  }
-                >
-                  <Settings2 className="h-4 w-4" />
-                  Paramètres
-                </Button>
-              )}
-            </NavLink>
+            <NavButton to="/">Accueil</NavButton>
+            <NavButton to="/admin/bookings">
+              <LayoutDashboard className="h-4 w-4" />
+              Admin
+            </NavButton>
+            <NavButton to="/admin/settings">
+              <Settings2 className="h-4 w-4" />
+              Paramètres
+            </NavButton>
           </div>
         </div>
       </header>

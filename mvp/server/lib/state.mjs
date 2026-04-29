@@ -169,7 +169,10 @@ export function createStore(provider) {
     },
 
     async buildAvailability(bookingLink, companySizeValue, filters = {}, options = {}) {
-      const companySize = Number(companySizeValue) || 0;
+      const companySize = Number(companySizeValue);
+      if (Number.isNaN(companySize)) {
+        throw new Error("Taille d'entreprise invalide.");
+      }
       const minimumStart = addMinutes(new Date(), bookingLink.minNoticeMinutes);
       const firstWeekStart = startOfWeek(minimumStart, {
         weekStartsOn: WEEK_STARTS_ON,
@@ -1654,40 +1657,23 @@ export function createStore(provider) {
           .prepare("SELECT * FROM rep_calendar_connections WHERE rep_id = ?")
           .get(repId) ?? null;
 
+      const pick = (patchVal, currentVal) =>
+        patchVal !== undefined ? patchVal : currentVal ?? null;
+
       const next = {
         id: current?.id ?? `connection-${repId}`,
         repId,
         provider: patch.provider ?? current?.provider ?? provider.mode,
-        providerEmail:
-          patch.providerEmail !== undefined
-            ? patch.providerEmail
-            : current?.provider_email ?? null,
-        providerGrantId:
-          patch.providerGrantId !== undefined
-            ? patch.providerGrantId
-            : current?.provider_grant_id ?? null,
-        providerAccountId:
-          patch.providerAccountId !== undefined
-            ? patch.providerAccountId
-            : current?.provider_account_id ?? null,
-        bookingCalendarId:
-          patch.bookingCalendarId !== undefined
-            ? patch.bookingCalendarId
-            : current?.booking_calendar_id ?? null,
+        providerEmail: pick(patch.providerEmail, current?.provider_email),
+        providerGrantId: pick(patch.providerGrantId, current?.provider_grant_id),
+        providerAccountId: pick(patch.providerAccountId, current?.provider_account_id),
+        bookingCalendarId: pick(patch.bookingCalendarId, current?.booking_calendar_id),
         status: patch.status ?? current?.status ?? "disconnected",
-        authUrl: patch.authUrl !== undefined ? patch.authUrl : current?.auth_url ?? null,
-        lastSyncAt:
-          patch.lastSyncAt !== undefined ? patch.lastSyncAt : current?.last_sync_at ?? null,
-        connectedAt:
-          patch.connectedAt !== undefined
-            ? patch.connectedAt
-            : current?.connected_at ?? null,
-        lastWebhookAt:
-          patch.lastWebhookAt !== undefined
-            ? patch.lastWebhookAt
-            : current?.last_webhook_at ?? null,
-        lastError:
-          patch.lastError !== undefined ? patch.lastError : current?.last_error ?? null,
+        authUrl: pick(patch.authUrl, current?.auth_url),
+        lastSyncAt: pick(patch.lastSyncAt, current?.last_sync_at),
+        connectedAt: pick(patch.connectedAt, current?.connected_at),
+        lastWebhookAt: pick(patch.lastWebhookAt, current?.last_webhook_at),
+        lastError: pick(patch.lastError, current?.last_error),
       };
 
       if (current) {
@@ -2008,59 +1994,35 @@ export function createStore(provider) {
       return row ? fromBookingRow(row) : null;
     },
 
+    _taskBaseQuery(whereClause = "") {
+      return db.prepare(`
+        SELECT t.*, b.company_name, b.prospect_name, b.start_at, c.name AS client_name, u.name AS caller_name
+        FROM follow_up_tasks t
+        JOIN bookings b ON b.id = t.source_booking_id
+        JOIN clients c ON c.id = t.client_id
+        JOIN callers u ON u.id = t.caller_id
+        ${whereClause}
+      `);
+    },
+
     listAllTasks() {
-      return db
-        .prepare(`
-          SELECT t.*, b.company_name, b.prospect_name, b.start_at, c.name AS client_name, u.name AS caller_name
-          FROM follow_up_tasks t
-          JOIN bookings b ON b.id = t.source_booking_id
-          JOIN clients c ON c.id = t.client_id
-          JOIN callers u ON u.id = t.caller_id
-          ORDER BY t.due_at ASC, t.created_at DESC
-        `)
+      return this._taskBaseQuery("ORDER BY t.due_at ASC, t.created_at DESC")
         .all()
         .map(fromTaskRow);
     },
 
     getTask(taskId) {
-      const row = db
-        .prepare(`
-          SELECT t.*, b.company_name, b.prospect_name, b.start_at, c.name AS client_name, u.name AS caller_name
-          FROM follow_up_tasks t
-          JOIN bookings b ON b.id = t.source_booking_id
-          JOIN clients c ON c.id = t.client_id
-          JOIN callers u ON u.id = t.caller_id
-          WHERE t.id = ?
-        `)
-        .get(taskId);
+      const row = this._taskBaseQuery("WHERE t.id = ?").get(taskId);
       return row ? fromTaskRow(row) : null;
     },
 
     getOpenTaskByBookingId(bookingId) {
-      const row = db
-        .prepare(`
-          SELECT t.*, b.company_name, b.prospect_name, b.start_at, c.name AS client_name, u.name AS caller_name
-          FROM follow_up_tasks t
-          JOIN bookings b ON b.id = t.source_booking_id
-          JOIN clients c ON c.id = t.client_id
-          JOIN callers u ON u.id = t.caller_id
-          WHERE t.source_booking_id = ? AND t.status = 'open'
-        `)
-        .get(bookingId);
+      const row = this._taskBaseQuery("WHERE t.source_booking_id = ? AND t.status = 'open'").get(bookingId);
       return row ? fromTaskRow(row) : null;
     },
 
     getTaskByReplacement(bookingId) {
-      const row = db
-        .prepare(`
-          SELECT t.*, b.company_name, b.prospect_name, b.start_at, c.name AS client_name, u.name AS caller_name
-          FROM follow_up_tasks t
-          JOIN bookings b ON b.id = t.source_booking_id
-          JOIN clients c ON c.id = t.client_id
-          JOIN callers u ON u.id = t.caller_id
-          WHERE t.replacement_booking_id = ?
-        `)
-        .get(bookingId);
+      const row = this._taskBaseQuery("WHERE t.replacement_booking_id = ?").get(bookingId);
       return row ? fromTaskRow(row) : null;
     },
 
@@ -2250,20 +2212,10 @@ export function createStore(provider) {
           return false;
         }
         if (filters.query) {
-          const query = filters.query.toLowerCase();
           const clientName = this.getClient(booking.clientId)?.name ?? "";
           const callerName = this.getCaller(booking.callerId)?.name ?? "";
           const repName = this.getRep(booking.assignedRepId)?.name ?? "";
-          const haystack = [
-            booking.companyName,
-            booking.prospectName,
-            clientName,
-            callerName,
-            repName,
-          ]
-            .join(" ")
-            .toLowerCase();
-          if (!haystack.includes(query)) {
+          if (!matchesQuery(filters.query, [booking.companyName, booking.prospectName, clientName, callerName, repName])) {
             return false;
           }
         }
@@ -2280,16 +2232,7 @@ export function createStore(provider) {
           return false;
         }
         if (filters.query) {
-          const query = filters.query.toLowerCase();
-          const haystack = [
-            task.clientName,
-            task.callerName,
-            task.companyName,
-            task.prospectName,
-          ]
-            .join(" ")
-            .toLowerCase();
-          if (!haystack.includes(query)) {
+          if (!matchesQuery(filters.query, [task.clientName, task.callerName, task.companyName, task.prospectName])) {
             return false;
           }
         }
@@ -2443,27 +2386,14 @@ export function createStore(provider) {
       return this.getTask(taskId);
     },
 
-    async applyProviderCancellation(booking, reason) {
-      if (booking.scheduleState === "cancelled") {
-        return;
-      }
-
-      const createdAt = new Date().toISOString();
+    _applyProviderBookingChange(booking, { updateStmt, historyStatus, timelineType, timelineMeta, reason, createdAt }) {
       database.withTransaction(() => {
-        db.prepare(`
-          UPDATE bookings
-          SET schedule_state = 'cancelled',
-              status = 'cancelled',
-              cancelled_at = ?,
-              last_calendar_change_at = ?,
-              calendar_sync_state = 'synced'
-          WHERE id = ?
-        `).run(createdAt, createdAt, booking.id);
+        updateStmt();
 
         this.insertLegacyStatusHistory({
           bookingId: booking.id,
           fromStatus: getLegacyStatus(booking),
-          toStatus: "cancelled",
+          toStatus: historyStatus,
           actorType: "system",
           actorLabel: "Calendrier client",
           reason,
@@ -2472,13 +2402,16 @@ export function createStore(provider) {
 
         this.insertTimelineEvent({
           bookingId: booking.id,
-          type: "calendar_cancelled",
+          type: timelineType,
           actorLabel: "Calendrier client",
           reason,
           createdAt,
+          ...(timelineMeta ? { meta: timelineMeta } : {}),
         });
 
-        this.ensureFollowUpTask(booking.id, "cancelled", createdAt);
+        if (historyStatus === "cancelled") {
+          this.ensureFollowUpTask(booking.id, "cancelled", createdAt);
+        }
       });
 
       const link = this.getBookingLinkById(booking.bookingLinkId);
@@ -2487,11 +2420,33 @@ export function createStore(provider) {
       }
     },
 
+    async applyProviderCancellation(booking, reason) {
+      if (booking.scheduleState === "cancelled") {
+        return;
+      }
+
+      const createdAt = new Date().toISOString();
+      this._applyProviderBookingChange(booking, {
+        updateStmt: () => db.prepare(`
+          UPDATE bookings
+          SET schedule_state = 'cancelled',
+              status = 'cancelled',
+              cancelled_at = ?,
+              last_calendar_change_at = ?,
+              calendar_sync_state = 'synced'
+          WHERE id = ?
+        `).run(createdAt, createdAt, booking.id),
+        historyStatus: "cancelled",
+        timelineType: "calendar_cancelled",
+        reason,
+        createdAt,
+      });
+    },
+
     async applyProviderReschedule(booking, nextStartAt, nextEndAt, reason) {
       const createdAt = new Date().toISOString();
-
-      database.withTransaction(() => {
-        db.prepare(`
+      this._applyProviderBookingChange(booking, {
+        updateStmt: () => db.prepare(`
           UPDATE bookings
           SET schedule_state = 'rescheduled',
               status = 'rescheduled',
@@ -2501,32 +2456,13 @@ export function createStore(provider) {
               last_calendar_change_at = ?,
               calendar_sync_state = 'synced'
           WHERE id = ?
-        `).run(booking.startAt, nextStartAt, nextEndAt, createdAt, booking.id);
-
-        this.insertLegacyStatusHistory({
-          bookingId: booking.id,
-          fromStatus: getLegacyStatus(booking),
-          toStatus: "rescheduled",
-          actorType: "system",
-          actorLabel: "Calendrier client",
-          reason,
-          createdAt,
-        });
-
-        this.insertTimelineEvent({
-          bookingId: booking.id,
-          type: "calendar_rescheduled",
-          actorLabel: "Calendrier client",
-          reason,
-          createdAt,
-          meta: { previousStartAt: booking.startAt, nextStartAt },
-        });
+        `).run(booking.startAt, nextStartAt, nextEndAt, createdAt, booking.id),
+        historyStatus: "rescheduled",
+        timelineType: "calendar_rescheduled",
+        timelineMeta: { previousStartAt: booking.startAt, nextStartAt },
+        reason,
+        createdAt,
       });
-
-      const link = this.getBookingLinkById(booking.bookingLinkId);
-      if (link) {
-        this.broadcastAvailability(link.slug);
-      }
     },
 
     async cancelCallerBooking(slug, callerId, bookingId) {
@@ -2710,6 +2646,12 @@ function isRepAvailableAgainstIntervals(intervals, slotStart, bookingLink) {
 
 function rangesOverlap(startA, endA, startB, endB) {
   return startA < endB && startB < endA;
+}
+
+function matchesQuery(query, fields) {
+  const needle = query.toLowerCase();
+  const haystack = fields.join(" ").toLowerCase();
+  return haystack.includes(needle);
 }
 
 function blankStatusCounts() {

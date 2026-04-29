@@ -600,44 +600,44 @@ function normalizeLegacyData(db, providerMode) {
   normalizeConnectionOwnership(db, providerMode);
 }
 
-function normalizeConnectionOwnership(db, providerMode) {
-  if (providerMode === "nylas") {
-    db.exec(`
-      UPDATE rep_calendar_connections
-      SET provider_email = NULL,
-          provider_grant_id = NULL,
-          provider_account_id = NULL,
-          booking_calendar_id = NULL,
-          status = 'disconnected',
-          auth_url = NULL,
-          last_sync_at = NULL,
-          connected_at = NULL,
-          last_webhook_at = NULL,
-          last_error = NULL
-      WHERE provider = 'mock'
-        AND status = 'connected'
-    `);
+function clearMockConnectionsInNylasMode(db) {
+  db.exec(`
+    UPDATE rep_calendar_connections
+    SET provider_email = NULL,
+        provider_grant_id = NULL,
+        provider_account_id = NULL,
+        booking_calendar_id = NULL,
+        status = 'disconnected',
+        auth_url = NULL,
+        last_sync_at = NULL,
+        connected_at = NULL,
+        last_webhook_at = NULL,
+        last_error = NULL
+    WHERE provider = 'mock'
+      AND status = 'connected'
+  `);
 
-    db.exec(`
-      UPDATE rep_calendar_connections
-      SET provider_grant_id = NULL,
-          provider_account_id = NULL,
-          booking_calendar_id = NULL,
-          status = CASE WHEN status = 'connected' THEN 'disconnected' ELSE status END,
-          provider_email = CASE WHEN status = 'connected' THEN NULL ELSE provider_email END,
-          auth_url = CASE WHEN status = 'connected' THEN NULL ELSE auth_url END,
-          last_sync_at = CASE WHEN status = 'connected' THEN NULL ELSE last_sync_at END,
-          connected_at = CASE WHEN status = 'connected' THEN NULL ELSE connected_at END,
-          last_webhook_at = CASE WHEN status = 'connected' THEN NULL ELSE last_webhook_at END,
-          last_error = CASE WHEN status = 'connected' THEN NULL ELSE last_error END
-      WHERE provider = 'nylas'
-        AND (
-          provider_grant_id LIKE 'mock-grant-%'
-          OR provider_account_id LIKE 'mock-account-%'
-        )
-    `);
-  }
+  db.exec(`
+    UPDATE rep_calendar_connections
+    SET provider_grant_id = NULL,
+        provider_account_id = NULL,
+        booking_calendar_id = NULL,
+        status = CASE WHEN status = 'connected' THEN 'disconnected' ELSE status END,
+        provider_email = CASE WHEN status = 'connected' THEN NULL ELSE provider_email END,
+        auth_url = CASE WHEN status = 'connected' THEN NULL ELSE auth_url END,
+        last_sync_at = CASE WHEN status = 'connected' THEN NULL ELSE last_sync_at END,
+        connected_at = CASE WHEN status = 'connected' THEN NULL ELSE connected_at END,
+        last_webhook_at = CASE WHEN status = 'connected' THEN NULL ELSE last_webhook_at END,
+        last_error = CASE WHEN status = 'connected' THEN NULL ELSE last_error END
+    WHERE provider = 'nylas'
+      AND (
+        provider_grant_id LIKE 'mock-grant-%'
+        OR provider_account_id LIKE 'mock-account-%'
+      )
+  `);
+}
 
+function resolveConflictingConnections(db) {
   const rows = db
     .prepare(`
       SELECT
@@ -685,14 +685,12 @@ function normalizeConnectionOwnership(db, providerMode) {
       return;
     }
 
-    if (grantId) {
-      claimedGrantIds.add(grantId);
-    }
-    if (accountId) {
-      claimedAccountIds.add(accountId);
-    }
+    if (grantId) claimedGrantIds.add(grantId);
+    if (accountId) claimedAccountIds.add(accountId);
   });
+}
 
+function backfillConnectedAt(db) {
   db.exec(`
     UPDATE rep_calendar_connections
     SET connected_at = COALESCE(connected_at, last_sync_at)
@@ -700,6 +698,14 @@ function normalizeConnectionOwnership(db, providerMode) {
       AND connected_at IS NULL
       AND last_sync_at IS NOT NULL
   `);
+}
+
+function normalizeConnectionOwnership(db, providerMode) {
+  if (providerMode === "nylas") {
+    clearMockConnectionsInNylasMode(db);
+  }
+  resolveConflictingConnections(db);
+  backfillConnectedAt(db);
 }
 
 function compareConnectionOwnershipRows(left, right) {
