@@ -2,12 +2,17 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { fileURLToPath } from "node:url";
 import { createSeedState } from "./seed.mjs";
 
 const DEFAULT_DB_PATH = path.resolve(
-  process.cwd(),
-  "mvp/server/data/mvp.sqlite",
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../data/mvp.sqlite",
 );
+
+export function getDefaultDatabasePath() {
+  return DEFAULT_DB_PATH;
+}
 
 export function createDatabase(
   providerMode = process.env.MVP_CALENDAR_PROVIDER ?? "mock",
@@ -20,9 +25,9 @@ export function createDatabase(
   db.exec("PRAGMA foreign_keys = ON;");
 
   initSchema(db);
-  migrateSchema(db);
+  migrateSchema(db, providerMode);
   seedDatabase(db, providerMode);
-  normalizeLegacyData(db);
+  normalizeLegacyData(db, providerMode);
 
   return {
     db,
@@ -118,6 +123,7 @@ function initSchema(db) {
       status TEXT NOT NULL,
       auth_url TEXT,
       last_sync_at TEXT,
+      connected_at TEXT,
       last_webhook_at TEXT,
       last_error TEXT
     );
@@ -217,6 +223,7 @@ function initSchema(db) {
     );
 
     CREATE INDEX IF NOT EXISTS idx_booking_links_slug ON booking_links(slug);
+    CREATE INDEX IF NOT EXISTS idx_reps_client_id ON reps(client_id);
     CREATE INDEX IF NOT EXISTS idx_bookings_link_start ON bookings(booking_link_id, start_at);
     CREATE INDEX IF NOT EXISTS idx_bookings_rep_start ON bookings(assigned_rep_id, start_at);
     CREATE INDEX IF NOT EXISTS idx_bookings_external_event ON bookings(external_event_id);
@@ -229,7 +236,7 @@ function initSchema(db) {
   `);
 }
 
-function migrateSchema(db) {
+function migrateSchema(db, providerMode) {
   ensureColumn(db, "clients", "active", "INTEGER NOT NULL DEFAULT 1");
   ensureColumn(db, "clients", "connection_invite_token", "TEXT");
   ensureColumn(db, "clients", "routing_mode", "TEXT NOT NULL DEFAULT 'weighted_seniority'");
@@ -248,6 +255,7 @@ function migrateSchema(db) {
   ensureColumn(db, "bookings", "cancelled_at", "TEXT");
   ensureColumn(db, "bookings", "completed_at", "TEXT");
   ensureColumn(db, "bookings", "no_show_at", "TEXT");
+  ensureColumn(db, "rep_calendar_connections", "connected_at", "TEXT");
 
   const clientsMissingInviteToken = db
     .prepare("SELECT id FROM clients WHERE connection_invite_token IS NULL OR connection_invite_token = ''")
@@ -279,6 +287,18 @@ function migrateSchema(db) {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_clients_connection_invite_token
     ON clients(connection_invite_token)
     WHERE connection_invite_token IS NOT NULL
+  `);
+  db.exec("CREATE INDEX IF NOT EXISTS idx_reps_client_id ON reps(client_id)");
+  normalizeConnectionOwnership(db, providerMode);
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_connections_provider_grant_unique
+    ON rep_calendar_connections(provider_grant_id)
+    WHERE provider_grant_id IS NOT NULL
+  `);
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_connections_provider_account_unique
+    ON rep_calendar_connections(provider_account_id)
+    WHERE provider_account_id IS NOT NULL
   `);
 }
 
@@ -396,9 +416,10 @@ function seedDatabase(db, providerMode) {
       status,
       auth_url,
       last_sync_at,
+      connected_at,
       last_webhook_at,
       last_error
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   seed.repCalendarConnections.forEach((connection) => {
     insertConnection.run(
@@ -412,6 +433,7 @@ function seedDatabase(db, providerMode) {
       connection.status,
       connection.authUrl,
       connection.lastSyncAt,
+      connection.connectedAt ?? connection.lastSyncAt ?? null,
       connection.lastWebhookAt,
       connection.lastError,
     );
@@ -541,7 +563,7 @@ function seedDatabase(db, providerMode) {
   });
 }
 
-function normalizeLegacyData(db) {
+function normalizeLegacyData(db, providerMode) {
   db.exec("UPDATE clients SET active = COALESCE(active, 1)");
   db.exec(`
     UPDATE bookings
@@ -575,6 +597,172 @@ function normalizeLegacyData(db) {
         buffer_after_minutes = 0
     WHERE buffer_before_minutes != 0 OR buffer_after_minutes != 0
   `);
+  normalizeConnectionOwnership(db, providerMode);
+}
+
+function normalizeConnectionOwnership(db, providerMode) {
+  if (providerMode === "nylas") {
+    db.exec(`
+      UPDATE rep_calendar_connections
+      SET provider_email = NULL,
+          provider_grant_id = NULL,
+          provider_account_id = NULL,
+          booking_calendar_id = NULL,
+          status = 'disconnected',
+          auth_url = NULL,
+          last_sync_at = NULL,
+          connected_at = NULL,
+          last_webhook_at = NULL,
+          last_error = NULL
+      WHERE provider = 'mock'
+        AND status = 'connected'
+    `);
+
+    db.exec(`
+      UPDATE rep_calendar_connections
+      SET provider_grant_id = NULL,
+          provider_account_id = NULL,
+          booking_calendar_id = NULL,
+          status = CASE WHEN status = 'connected' THEN 'disconnected' ELSE status END,
+          provider_email = CASE WHEN status = 'connected' THEN NULL ELSE provider_email END,
+          auth_url = CASE WHEN status = 'connected' THEN NULL ELSE auth_url END,
+          last_sync_at = CASE WHEN status = 'connected' THEN NULL ELSE last_sync_at END,
+          connected_at = CASE WHEN status = 'connected' THEN NULL ELSE connected_at END,
+          last_webhook_at = CASE WHEN status = 'connected' THEN NULL ELSE last_webhook_at END,
+          last_error = CASE WHEN status = 'connected' THEN NULL ELSE last_error END
+      WHERE provider = 'nylas'
+        AND (
+          provider_grant_id LIKE 'mock-grant-%'
+          OR provider_account_id LIKE 'mock-account-%'
+        )
+    `);
+  }
+
+  const rows = db
+    .prepare(`
+      SELECT
+        cc.rowid AS rowid,
+        cc.*,
+        reps.email AS business_email
+      FROM rep_calendar_connections cc
+      JOIN reps ON reps.id = cc.rep_id
+      WHERE cc.provider = 'nylas'
+    `)
+    .all();
+
+  rows.sort(compareConnectionOwnershipRows);
+
+  const claimedGrantIds = new Set();
+  const claimedAccountIds = new Set();
+  const disconnectConnection = db.prepare(`
+    UPDATE rep_calendar_connections
+    SET provider_email = NULL,
+        provider_grant_id = NULL,
+        provider_account_id = NULL,
+        booking_calendar_id = NULL,
+        status = 'disconnected',
+        auth_url = NULL,
+        last_sync_at = NULL,
+        connected_at = NULL,
+        last_webhook_at = NULL,
+        last_error = NULL
+    WHERE rep_id = ?
+  `);
+
+  rows.forEach((row) => {
+    const grantId = row.provider_grant_id ?? null;
+    const accountId = row.provider_account_id ?? null;
+    if (!grantId && !accountId) {
+      return;
+    }
+
+    const alreadyClaimed =
+      (grantId && claimedGrantIds.has(grantId)) ||
+      (accountId && claimedAccountIds.has(accountId));
+
+    if (alreadyClaimed) {
+      disconnectConnection.run(row.rep_id);
+      return;
+    }
+
+    if (grantId) {
+      claimedGrantIds.add(grantId);
+    }
+    if (accountId) {
+      claimedAccountIds.add(accountId);
+    }
+  });
+
+  db.exec(`
+    UPDATE rep_calendar_connections
+    SET connected_at = COALESCE(connected_at, last_sync_at)
+    WHERE status = 'connected'
+      AND connected_at IS NULL
+      AND last_sync_at IS NOT NULL
+  `);
+}
+
+function compareConnectionOwnershipRows(left, right) {
+  const scoreDelta = connectionOwnershipScore(right) - connectionOwnershipScore(left);
+  if (scoreDelta !== 0) {
+    return scoreDelta;
+  }
+
+  const connectedAtDelta = compareNullableIsoDesc(left.connected_at, right.connected_at);
+  if (connectedAtDelta !== 0) {
+    return connectedAtDelta;
+  }
+
+  const lastSyncDelta = compareNullableIsoDesc(left.last_sync_at, right.last_sync_at);
+  if (lastSyncDelta !== 0) {
+    return lastSyncDelta;
+  }
+
+  const lastWebhookDelta = compareNullableIsoDesc(left.last_webhook_at, right.last_webhook_at);
+  if (lastWebhookDelta !== 0) {
+    return lastWebhookDelta;
+  }
+
+  return right.rowid - left.rowid;
+}
+
+function connectionOwnershipScore(row) {
+  let score = 0;
+  if (row.status === "connected") {
+    score += 4;
+  } else if (row.status === "auth_required") {
+    score += 2;
+  } else if (row.status === "error") {
+    score += 1;
+  }
+
+  if (row.provider_email && row.provider_email !== row.business_email) {
+    score += 8;
+  } else if (row.provider_email) {
+    score += 2;
+  }
+
+  if (row.connected_at) {
+    score += 4;
+  }
+  if (row.last_sync_at) {
+    score += 1;
+  }
+
+  return score;
+}
+
+function compareNullableIsoDesc(left, right) {
+  if (left === right) {
+    return 0;
+  }
+  if (!left) {
+    return 1;
+  }
+  if (!right) {
+    return -1;
+  }
+  return right.localeCompare(left);
 }
 
 function toDbBool(value) {

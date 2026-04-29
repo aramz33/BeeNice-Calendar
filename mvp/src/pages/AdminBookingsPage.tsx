@@ -774,9 +774,15 @@ export function AdminBookingsPage() {
                                 </p>
                                 <p className="text-sm text-[#001E5B]/56">
                                   {formatRepSeniority(rep.seniority)}
-                                  {rep.providerEmail ? ` · ${rep.providerEmail}` : ""}
+                                  {rep.businessEmail ? ` · ${rep.businessEmail}` : ""}
                                 </p>
                                 <div className="mt-2 space-y-1 text-xs text-[#001E5B]/56">
+                                  {rep.providerEmail ? (
+                                    <p>Calendrier: {rep.providerEmail}</p>
+                                  ) : null}
+                                  {rep.connectedAt ? (
+                                    <p>Connecté: {formatRelativeShort(rep.connectedAt)}</p>
+                                  ) : null}
                                   <p>
                                     Dernière synchro:{" "}
                                     {rep.lastSyncAt

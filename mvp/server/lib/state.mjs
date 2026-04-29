@@ -44,16 +44,28 @@ const PUBLIC_PROVIDER_OPTIONS = [
 const ACTIVE_SCHEDULE_STATES = new Set(["scheduled", "rescheduled"]);
 const BOOKING_WINDOW_WEEKS = 12;
 const WEEK_STARTS_ON = 1;
+const DEFAULT_WORKSPACE_DURATION_MINUTES = 30;
+const DEFAULT_WORKSPACE_INTERVAL_MINUTES = 30;
+const DEFAULT_WORKSPACE_MIN_NOTICE_MINUTES = 60;
+const DEFAULT_COMPANY_SIZE_THRESHOLD = 200;
+const DEFAULT_SENIOR_WEIGHT = 0.8;
+const DEFAULT_JUNIOR_WEIGHT = 0.2;
 
 export function createStore(provider) {
   const database = createDatabase(provider.mode);
   const { db } = database;
+  database.withTransaction(() => {
+    ensureDefaultClientArtifacts(db);
+  });
   const sseClients = new Map();
   const adminSseClients = new Set();
 
   const store = {
     displayStatuses: DISPLAY_STATUSES,
     dbFile: database.filename,
+    close() {
+      database.close();
+    },
 
     getPublicBookingPayload(slug) {
       const bookingLink = this.getBookingLinkBySlug(slug);
@@ -64,7 +76,7 @@ export function createStore(provider) {
       const client = this.getClient(bookingLink.clientId);
       const routingPolicy = this.getRoutingPolicy(bookingLink.id);
       const reps = this.getRepsForLink(bookingLink.id).map((rep) =>
-        decorateRep(rep, this.getConnection(rep.id)),
+        decorateRep(rep, this.getConnection(rep.id), provider.mode),
       );
 
       return {
@@ -470,7 +482,7 @@ export function createStore(provider) {
       });
 
       const allReps = this.listAllReps().map((rep) =>
-        decorateRep(rep, this.getConnection(rep.id)),
+        decorateRep(rep, this.getConnection(rep.id), provider.mode),
       );
       const tasks = this.filterTasks(this.listAllTasks(), filters);
 
@@ -495,10 +507,12 @@ export function createStore(provider) {
             clientId: rep.clientId,
             name: rep.name,
             clientName: this.getClient(rep.clientId)?.name ?? "Client inconnu",
+            businessEmail: rep.businessEmail,
             seniority: rep.seniority,
             connectionStatus: rep.connectionStatus,
             provider: rep.provider,
             providerEmail: rep.providerEmail,
+            connectedAt: rep.connectedAt,
             lastSyncAt: rep.lastSyncAt,
             lastWebhookAt: rep.lastWebhookAt,
             lastError: rep.lastError,
@@ -953,10 +967,12 @@ export function createStore(provider) {
 
     async finalizeRepConnection(searchParams) {
       const result = await provider.finalizeRepConnection(this, searchParams);
+      const affectedClientIds = new Set(result.affectedClientIds ?? []);
       const rep = this.getRep(result.repId);
       if (rep) {
-        this.broadcastClientAvailability(rep.clientId);
+        affectedClientIds.add(rep.clientId);
       }
+      affectedClientIds.forEach((clientId) => this.broadcastClientAvailability(clientId));
       this.broadcastAdmin("connections.updated");
       return result;
     },
@@ -1048,43 +1064,54 @@ export function createStore(provider) {
         throw new Error("Le nom du client est obligatoire.");
       }
 
-      const client = {
-        id: makeId("client"),
-        name: payload.name.trim(),
-        timezone: payload.timezone?.trim() || "Europe/Paris",
-        connectionInviteToken: `invite-${randomUUID()}`,
-        routingMode: ROUTING_MODES.includes(payload.routingMode)
-          ? payload.routingMode
-          : "pool_unique",
-        repConnectionFormConfig: Array.isArray(payload.repConnectionFormConfig)
-          ? payload.repConnectionFormConfig
-          : [],
-        active: payload.active !== false,
-      };
+      const result = database.withTransaction(() => {
+        const client = {
+          id: makeId("client"),
+          name: payload.name.trim(),
+          timezone: payload.timezone?.trim() || "Europe/Paris",
+          connectionInviteToken: `invite-${randomUUID()}`,
+          routingMode: ROUTING_MODES.includes(payload.routingMode)
+            ? payload.routingMode
+            : "pool_unique",
+          repConnectionFormConfig: Array.isArray(payload.repConnectionFormConfig)
+            ? payload.repConnectionFormConfig
+            : [],
+          active: payload.active !== false,
+        };
 
-      db.prepare(`
-        INSERT INTO clients (
-          id,
-          name,
-          timezone,
-          connection_invite_token,
-          routing_mode,
-          rep_connection_form_config_json,
-          active
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        client.id,
-        client.name,
-        client.timezone,
-        client.connectionInviteToken,
-        client.routingMode,
-        JSON.stringify(client.repConnectionFormConfig),
-        toDbBool(client.active),
-      );
+        db.prepare(`
+          INSERT INTO clients (
+            id,
+            name,
+            timezone,
+            connection_invite_token,
+            routing_mode,
+            rep_connection_form_config_json,
+            active
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          client.id,
+          client.name,
+          client.timezone,
+          client.connectionInviteToken,
+          client.routingMode,
+          JSON.stringify(client.repConnectionFormConfig),
+          toDbBool(client.active),
+        );
+
+        const bookingLink = buildDefaultBookingLink(db, client);
+        insertBookingLink(db, bookingLink);
+        insertRoutingPolicy(db, buildDefaultRoutingPolicy(bookingLink.id));
+
+        return {
+          client,
+          workspace: toPublicWorkspace(bookingLink, client),
+        };
+      });
 
       this.broadcastAdmin("settings.updated");
-      return client;
+      return result;
     },
 
     updateClient(clientId, payload = {}) {
@@ -1162,7 +1189,9 @@ export function createStore(provider) {
     },
 
     listReps() {
-      return this.listAllReps().map((rep) => decorateRep(rep, this.getConnection(rep.id)));
+      return this.listAllReps().map((rep) =>
+        decorateRep(rep, this.getConnection(rep.id), provider.mode),
+      );
     },
 
     addSseClient(slug, response) {
@@ -1408,6 +1437,9 @@ export function createStore(provider) {
       if (!rep) {
         throw new Error("Rep introuvable.");
       }
+      if (payload.clientId !== undefined && payload.clientId !== rep.clientId) {
+        throw new Error("Le client d'un rep ne peut pas être modifié.");
+      }
 
       db.prepare(`
         UPDATE reps
@@ -1519,6 +1551,103 @@ export function createStore(provider) {
       return row ? fromConnectionRow(row) : null;
     },
 
+    listConnectionsByIdentity(identity = {}, options = {}) {
+      const grantId = identity.providerGrantId ?? null;
+      const accountId = identity.providerAccountId ?? null;
+      if (!grantId && !accountId) {
+        return [];
+      }
+
+      return db
+        .prepare(`
+          SELECT *
+          FROM rep_calendar_connections
+          WHERE (
+            (? IS NOT NULL AND provider_grant_id = ?)
+            OR (? IS NOT NULL AND provider_account_id = ?)
+          )
+            AND (? IS NULL OR rep_id != ?)
+        `)
+        .all(
+          grantId,
+          grantId,
+          accountId,
+          accountId,
+          options.excludeRepId ?? null,
+          options.excludeRepId ?? null,
+        )
+        .map(fromConnectionRow);
+    },
+
+    disconnectConnection(repId, patch = {}) {
+      const current = this.getConnection(repId);
+      if (!current) {
+        return null;
+      }
+
+      return this.upsertConnection(repId, {
+        provider: patch.provider ?? current.provider ?? provider.mode,
+        providerEmail: null,
+        providerGrantId: null,
+        providerAccountId: null,
+        bookingCalendarId: null,
+        status: patch.status ?? "disconnected",
+        authUrl: null,
+        lastSyncAt: null,
+        connectedAt: null,
+        lastWebhookAt: null,
+        lastError: patch.lastError ?? null,
+      });
+    },
+
+    claimCalendarConnection(repId, patch = {}) {
+      const rep = this.getRep(repId);
+      if (!rep) {
+        throw new Error("Rep introuvable.");
+      }
+
+      const connectedAt = patch.connectedAt ?? new Date().toISOString();
+
+      return database.withTransaction(() => {
+        const conflicts = this.listConnectionsByIdentity(
+          {
+            providerGrantId: patch.providerGrantId ?? null,
+            providerAccountId: patch.providerAccountId ?? null,
+          },
+          { excludeRepId: repId },
+        );
+        const affectedClientIds = new Set([rep.clientId]);
+
+        conflicts.forEach((connection) => {
+          const owner = this.getRep(connection.repId);
+          if (owner) {
+            affectedClientIds.add(owner.clientId);
+          }
+          this.disconnectConnection(connection.repId, { provider: "nylas" });
+        });
+
+        const connection = this.upsertConnection(repId, {
+          provider: "nylas",
+          providerEmail: patch.providerEmail ?? null,
+          providerGrantId: patch.providerGrantId ?? null,
+          providerAccountId: patch.providerAccountId ?? null,
+          bookingCalendarId: patch.bookingCalendarId ?? "primary",
+          status: "connected",
+          authUrl: null,
+          lastSyncAt: patch.lastSyncAt ?? connectedAt,
+          connectedAt,
+          lastWebhookAt: patch.lastWebhookAt ?? null,
+          lastError: patch.lastError ?? null,
+        });
+
+        return {
+          connection,
+          disconnectedRepIds: conflicts.map((item) => item.repId),
+          affectedClientIds: [...affectedClientIds],
+        };
+      });
+    },
+
     upsertConnection(repId, patch) {
       const current =
         db
@@ -1549,6 +1678,10 @@ export function createStore(provider) {
         authUrl: patch.authUrl !== undefined ? patch.authUrl : current?.auth_url ?? null,
         lastSyncAt:
           patch.lastSyncAt !== undefined ? patch.lastSyncAt : current?.last_sync_at ?? null,
+        connectedAt:
+          patch.connectedAt !== undefined
+            ? patch.connectedAt
+            : current?.connected_at ?? null,
         lastWebhookAt:
           patch.lastWebhookAt !== undefined
             ? patch.lastWebhookAt
@@ -1568,6 +1701,7 @@ export function createStore(provider) {
               status = ?,
               auth_url = ?,
               last_sync_at = ?,
+              connected_at = ?,
               last_webhook_at = ?,
               last_error = ?
           WHERE rep_id = ?
@@ -1580,6 +1714,7 @@ export function createStore(provider) {
           next.status,
           next.authUrl,
           next.lastSyncAt,
+          next.connectedAt,
           next.lastWebhookAt,
           next.lastError,
           repId,
@@ -1597,9 +1732,10 @@ export function createStore(provider) {
             status,
             auth_url,
             last_sync_at,
+            connected_at,
             last_webhook_at,
             last_error
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
           next.id,
           next.repId,
@@ -1611,6 +1747,7 @@ export function createStore(provider) {
           next.status,
           next.authUrl,
           next.lastSyncAt,
+          next.connectedAt,
           next.lastWebhookAt,
           next.lastError,
         );
@@ -1637,7 +1774,7 @@ export function createStore(provider) {
         return (
           rep.clientId === bookingLink.clientId &&
           rep.active &&
-          connection?.status === "connected"
+          isConnectionUsable(connection, provider.mode)
         );
       });
     },
@@ -2525,16 +2662,40 @@ function bootstrapTasks(store) {
     });
 }
 
-function decorateRep(rep, connection) {
+function decorateRep(rep, connection, providerMode) {
   return {
     ...rep,
-    connectionStatus: connection?.status ?? "disconnected",
+    businessEmail: rep.email,
+    connectionStatus: getEffectiveConnectionStatus(connection, providerMode),
     provider: connection?.provider ?? "mock",
-    providerEmail: connection?.providerEmail ?? rep.email,
+    providerEmail: connection?.providerEmail ?? null,
+    connectedAt: connection?.connectedAt ?? null,
     lastSyncAt: connection?.lastSyncAt ?? null,
     lastWebhookAt: connection?.lastWebhookAt ?? null,
     lastError: connection?.lastError ?? null,
   };
+}
+
+function getEffectiveConnectionStatus(connection, providerMode) {
+  if (!connection) {
+    return "disconnected";
+  }
+  if (connection.status !== "connected") {
+    return connection.status;
+  }
+  return isConnectionUsable(connection, providerMode) ? "connected" : "disconnected";
+}
+
+function isConnectionUsable(connection, providerMode) {
+  if (!connection || connection.status !== "connected") {
+    return false;
+  }
+
+  if (providerMode === "nylas") {
+    return connection.provider === "nylas" && Boolean(connection.providerGrantId);
+  }
+
+  return connection.provider === "mock";
 }
 
 function isRepAvailableAgainstIntervals(intervals, slotStart, bookingLink) {
@@ -2715,6 +2876,7 @@ function fromConnectionRow(row) {
     status: row.status,
     authUrl: row.auth_url ?? null,
     lastSyncAt: row.last_sync_at ?? null,
+    connectedAt: row.connected_at ?? null,
     lastWebhookAt: row.last_webhook_at ?? null,
     lastError: row.last_error ?? null,
   };
@@ -2837,6 +2999,159 @@ function normalizePublicRepConnectionFields(fields) {
       (field) =>
         !["firstName", "lastName", "provider", "role"].includes(field.id),
     );
+}
+
+function ensureDefaultClientArtifacts(db) {
+  const clientsWithoutWorkspace = db
+    .prepare(`
+      SELECT *
+      FROM clients
+      WHERE NOT EXISTS (
+        SELECT 1
+        FROM booking_links
+        WHERE booking_links.client_id = clients.id
+      )
+      ORDER BY name ASC
+    `)
+    .all()
+    .map(fromClientRow);
+
+  clientsWithoutWorkspace.forEach((client) => {
+    const bookingLink = buildDefaultBookingLink(db, client);
+    insertBookingLink(db, bookingLink);
+    insertRoutingPolicy(db, buildDefaultRoutingPolicy(bookingLink.id));
+  });
+
+  const bookingLinksWithoutPolicy = db
+    .prepare(`
+      SELECT *
+      FROM booking_links
+      WHERE NOT EXISTS (
+        SELECT 1
+        FROM routing_policies
+        WHERE routing_policies.booking_link_id = booking_links.id
+      )
+      ORDER BY title ASC
+    `)
+    .all()
+    .map(fromBookingLinkRow);
+
+  bookingLinksWithoutPolicy.forEach((bookingLink) => {
+    insertRoutingPolicy(db, buildDefaultRoutingPolicy(bookingLink.id));
+  });
+}
+
+function buildDefaultBookingLink(db, client) {
+  const slug = createUniqueWorkspaceSlug(db, client.name);
+
+  return {
+    id: makeId("booking-link"),
+    clientId: client.id,
+    slug,
+    title: `Discovery call ${client.name}`,
+    timezone: client.timezone,
+    durationMinutes: DEFAULT_WORKSPACE_DURATION_MINUTES,
+    intervalMinutes: DEFAULT_WORKSPACE_INTERVAL_MINUTES,
+    bufferBeforeMinutes: 0,
+    bufferAfterMinutes: 0,
+    minNoticeMinutes: DEFAULT_WORKSPACE_MIN_NOTICE_MINUTES,
+    active: true,
+  };
+}
+
+function buildDefaultRoutingPolicy(bookingLinkId) {
+  return {
+    id: makeId("routing"),
+    bookingLinkId,
+    companySizeThreshold: DEFAULT_COMPANY_SIZE_THRESHOLD,
+    seniorWeight: DEFAULT_SENIOR_WEIGHT,
+    juniorWeight: DEFAULT_JUNIOR_WEIGHT,
+  };
+}
+
+function insertBookingLink(db, bookingLink) {
+  db.prepare(`
+    INSERT INTO booking_links (
+      id,
+      client_id,
+      slug,
+      title,
+      timezone,
+      duration_minutes,
+      interval_minutes,
+      buffer_before_minutes,
+      buffer_after_minutes,
+      min_notice_minutes,
+      active
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    bookingLink.id,
+    bookingLink.clientId,
+    bookingLink.slug,
+    bookingLink.title,
+    bookingLink.timezone,
+    bookingLink.durationMinutes,
+    bookingLink.intervalMinutes,
+    bookingLink.bufferBeforeMinutes,
+    bookingLink.bufferAfterMinutes,
+    bookingLink.minNoticeMinutes,
+    toDbBool(bookingLink.active),
+  );
+}
+
+function insertRoutingPolicy(db, policy) {
+  db.prepare(`
+    INSERT INTO routing_policies (
+      id,
+      booking_link_id,
+      company_size_threshold,
+      senior_weight,
+      junior_weight
+    )
+    VALUES (?, ?, ?, ?, ?)
+  `).run(
+    policy.id,
+    policy.bookingLinkId,
+    policy.companySizeThreshold,
+    policy.seniorWeight,
+    policy.juniorWeight,
+  );
+}
+
+function createUniqueWorkspaceSlug(db, clientName) {
+  const baseSlug = `${slugify(clientName)}-discovery`;
+  let slug = baseSlug;
+  let suffix = 2;
+
+  while (db.prepare("SELECT 1 FROM booking_links WHERE slug = ?").get(slug)) {
+    slug = `${baseSlug}-${suffix}`;
+    suffix += 1;
+  }
+
+  return slug;
+}
+
+function slugify(value) {
+  const slug = String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return slug || "client";
+}
+
+function toPublicWorkspace(bookingLink, client) {
+  return {
+    id: bookingLink.id,
+    slug: bookingLink.slug,
+    clientId: bookingLink.clientId,
+    clientName: client.name,
+    title: bookingLink.title,
+    timezone: bookingLink.timezone,
+  };
 }
 
 function toDbBool(value) {

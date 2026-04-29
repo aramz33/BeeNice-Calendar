@@ -37,6 +37,7 @@ export function createCalendarProvider(
       }
 
       if (mode !== "nylas") {
+        const connectedAt = new Date().toISOString();
         store.upsertConnection(repId, {
           provider: "mock",
           providerEmail: rep.email,
@@ -45,7 +46,9 @@ export function createCalendarProvider(
           bookingCalendarId: "primary",
           status: "connected",
           authUrl: null,
-          lastSyncAt: new Date().toISOString(),
+          lastSyncAt: connectedAt,
+          connectedAt,
+          lastWebhookAt: null,
           lastError: null,
         });
 
@@ -84,9 +87,15 @@ export function createCalendarProvider(
       const authUrl = `${nylas.apiUri}/v3/connect/auth?${params.toString()}`;
       store.upsertConnection(repId, {
         provider: "nylas",
-        providerEmail: rep.email,
+        providerEmail: null,
+        providerGrantId: null,
+        providerAccountId: null,
+        bookingCalendarId: null,
         status: "auth_required",
         authUrl,
+        lastSyncAt: null,
+        connectedAt: null,
+        lastWebhookAt: null,
         lastError: null,
       });
 
@@ -153,21 +162,18 @@ export function createCalendarProvider(
       const payload = await response.json();
       const data = payload?.data ?? payload;
 
-      store.upsertConnection(state.repId, {
-        provider: "nylas",
+      const claimed = store.claimCalendarConnection(state.repId, {
         providerEmail: data.email ?? data.grant_email ?? null,
         providerGrantId: data.grant_id ?? payload.grant_id ?? null,
         providerAccountId: data.account_id ?? payload.account_id ?? null,
         bookingCalendarId: "primary",
-        status: "connected",
-        authUrl: null,
         lastSyncAt: new Date().toISOString(),
-        lastError: null,
       });
 
       return {
         repId: state.repId,
         provider: state.provider,
+        affectedClientIds: claimed.affectedClientIds,
         callbackMode:
           state.source === "public_invite" ? "public_terminal" : "admin_redirect",
       };

@@ -176,10 +176,12 @@ export interface AdminBookingsResponse {
       clientId: string;
       name: string;
       clientName: string;
+      businessEmail?: string | null;
       seniority: Seniority;
       connectionStatus: string;
       provider: string;
       providerEmail?: string | null;
+      connectedAt?: string | null;
       lastSyncAt?: string | null;
       lastWebhookAt?: string | null;
       lastError?: string | null;
@@ -247,6 +249,7 @@ export interface StartRepConnectionResponse {
     provider: string;
     providerEmail?: string | null;
     status: string;
+    connectedAt?: string | null;
     lastSyncAt?: string | null;
     lastWebhookAt?: string | null;
     lastError?: string | null;
@@ -264,6 +267,11 @@ export interface SettingsPayload {
     active: boolean;
   }>;
   callers: Array<{ id: string; name: string; active: boolean }>;
+}
+
+export interface ClientCreationResponse {
+  client: SettingsPayload["clients"][number];
+  workspace: PublicWorkspace;
 }
 
 export interface PublicWorkspacesResponse {

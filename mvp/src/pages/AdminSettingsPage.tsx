@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { Button } from "@shared-ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@shared-ui/card";
@@ -13,9 +14,11 @@ import {
 } from "@shared-ui/select";
 import { AppChrome } from "@mvp/components/AppChrome";
 import { apiFetch } from "@mvp/lib/api";
-import type { SettingsPayload } from "@mvp/lib/types";
+import type { ClientCreationResponse, SettingsPayload } from "@mvp/lib/types";
+import { openWorkspaceFromHome } from "@mvp/lib/workspaces";
 
 export function AdminSettingsPage() {
+  const navigate = useNavigate();
   const [payload, setPayload] = useState<SettingsPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [clientName, setClientName] = useState("");
@@ -42,7 +45,7 @@ export function AdminSettingsPage() {
   const createClient = async (event: React.FormEvent) => {
     event.preventDefault();
     try {
-      await apiFetch("/api/admin/settings/clients", {
+      const result = await apiFetch<ClientCreationResponse>("/api/admin/settings/clients", {
         method: "POST",
         body: JSON.stringify({
           name: clientName,
@@ -50,7 +53,13 @@ export function AdminSettingsPage() {
           routingMode: clientRoutingMode,
         }),
       });
-      toast.success("Client ajouté.");
+      toast.success("Client ajouté.", {
+        description: `${result.client.name} est prêt.`,
+        action: {
+          label: "Voir le workspace",
+          onClick: () => openWorkspaceFromHome(navigate, result.workspace.slug),
+        },
+      });
       setClientName("");
       setClientTimezone("Europe/Paris");
       setClientRoutingMode("pool_unique");
