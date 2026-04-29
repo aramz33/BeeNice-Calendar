@@ -8,6 +8,83 @@ const CALLBACK_URL =
 export function createCalendarProvider(
   mode = process.env.MVP_CALENDAR_PROVIDER ?? "mock",
 ) {
+  return mode === "nylas" ? createNylasProvider() : createMockProvider();
+}
+
+// ---------------------------------------------------------------------------
+// Mock provider
+// ---------------------------------------------------------------------------
+
+function createMockProvider() {
+  return {
+    mode: "mock",
+    nylasConfigured: true,
+
+    getOverview() {
+      return {
+        providerMode: "mock",
+        nylasConfigured: true,
+        callbackUrl: CALLBACK_URL,
+        apiUri: DEFAULT_API_URI,
+      };
+    },
+
+    async startRepConnection(store, repId) {
+      const rep = store.getRep(repId);
+      if (!rep) throw new Error("Rep introuvable.");
+
+      const connectedAt = new Date().toISOString();
+      store.upsertConnection(repId, {
+        provider: "mock",
+        providerEmail: rep.email,
+        providerGrantId: `mock-grant-${rep.id}`,
+        providerAccountId: `mock-account-${rep.id}`,
+        bookingCalendarId: "primary",
+        status: "connected",
+        authUrl: null,
+        lastSyncAt: connectedAt,
+        connectedAt,
+        lastWebhookAt: null,
+        lastError: null,
+      });
+
+      return {
+        mode: "mock",
+        connected: true,
+        authUrl: null,
+        connection: store.getConnection(repId),
+      };
+    },
+
+    async finalizeRepConnection() {
+      throw new Error("Le callback Nylas n'est disponible qu'en mode nylas.");
+    },
+
+    async listBusyIntervals() {
+      return [];
+    },
+
+    async createExternalEvent(_store, _rep, booking) {
+      return `mock-${booking.id}`;
+    },
+
+    async fetchExternalEvent(_store, booking) {
+      return {
+        id: booking.externalEventId,
+        startAt: new Date(booking.startAt),
+        endAt: new Date(booking.endAt),
+      };
+    },
+
+    async releaseExternalEvent() {},
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Nylas provider
+// ---------------------------------------------------------------------------
+
+function createNylasProvider() {
   const nylas = {
     apiKey: process.env.MVP_NYLAS_API_KEY ?? "",
     clientId: process.env.MVP_NYLAS_CLIENT_ID ?? "",
@@ -16,15 +93,16 @@ export function createCalendarProvider(
     webhookSecret: process.env.MVP_NYLAS_WEBHOOK_SECRET ?? "",
   };
 
+  const nylasConfigured = Boolean(nylas.apiKey && nylas.clientId && nylas.callbackUrl);
+
   return {
-    mode,
-    nylasConfigured:
-      mode !== "nylas" || Boolean(nylas.apiKey && nylas.clientId && nylas.callbackUrl),
+    mode: "nylas",
+    nylasConfigured,
 
     getOverview() {
       return {
-        providerMode: mode === "nylas" ? "nylas" : "mock",
-        nylasConfigured: this.nylasConfigured,
+        providerMode: "nylas",
+        nylasConfigured,
         callbackUrl: nylas.callbackUrl,
         apiUri: nylas.apiUri,
       };
@@ -32,35 +110,9 @@ export function createCalendarProvider(
 
     async startRepConnection(store, repId, payload = {}) {
       const rep = store.getRep(repId);
-      if (!rep) {
-        throw new Error("Rep introuvable.");
-      }
+      if (!rep) throw new Error("Rep introuvable.");
 
-      if (mode !== "nylas") {
-        const connectedAt = new Date().toISOString();
-        store.upsertConnection(repId, {
-          provider: "mock",
-          providerEmail: rep.email,
-          providerGrantId: `mock-grant-${rep.id}`,
-          providerAccountId: `mock-account-${rep.id}`,
-          bookingCalendarId: "primary",
-          status: "connected",
-          authUrl: null,
-          lastSyncAt: connectedAt,
-          connectedAt,
-          lastWebhookAt: null,
-          lastError: null,
-        });
-
-        return {
-          mode: "mock",
-          connected: true,
-          authUrl: null,
-          connection: store.getConnection(repId),
-        };
-      }
-
-      ensureNylasConfigured(this.nylasConfigured);
+      ensureNylasConfigured(nylasConfigured);
 
       const provider = payload.provider ?? "google";
       const state = encodeState({
@@ -108,11 +160,7 @@ export function createCalendarProvider(
     },
 
     async finalizeRepConnection(store, searchParams) {
-      if (mode !== "nylas") {
-        throw new Error("Le callback Nylas n'est disponible qu'en mode nylas.");
-      }
-
-      ensureNylasConfigured(this.nylasConfigured);
+      ensureNylasConfigured(nylasConfigured);
 
       const error = searchParams.get("error");
       if (error) {
@@ -180,11 +228,11 @@ export function createCalendarProvider(
     },
 
     async listBusyIntervals(store, rep, connection, interval) {
-      if (mode !== "nylas" || connection?.status !== "connected" || !connection?.providerGrantId) {
+      if (connection?.status !== "connected" || !connection?.providerGrantId) {
         return [];
       }
 
-      ensureNylasConfigured(this.nylasConfigured);
+      ensureNylasConfigured(nylasConfigured);
 
       const params = new URLSearchParams({
         calendar_id: connection.bookingCalendarId ?? "primary",
@@ -233,11 +281,7 @@ export function createCalendarProvider(
     },
 
     async createExternalEvent(store, rep, booking) {
-      if (mode !== "nylas") {
-        return `mock-${booking.id}`;
-      }
-
-      ensureNylasConfigured(this.nylasConfigured);
+      ensureNylasConfigured(nylasConfigured);
 
       const connection = store.getConnection(rep.id);
       if (!connection?.providerGrantId) {
@@ -298,7 +342,7 @@ export function createCalendarProvider(
     },
 
     async fetchExternalEvent(store, booking) {
-      if (mode !== "nylas" || !booking.externalEventId) {
+      if (!booking.externalEventId) {
         return {
           id: booking.externalEventId,
           startAt: new Date(booking.startAt),
@@ -306,7 +350,7 @@ export function createCalendarProvider(
         };
       }
 
-      ensureNylasConfigured(this.nylasConfigured);
+      ensureNylasConfigured(nylasConfigured);
 
       const connection = store.getConnection(booking.assignedRepId);
       if (!connection?.providerGrantId) {
@@ -345,9 +389,7 @@ export function createCalendarProvider(
       const payload = await response.json();
       const event = payload?.data ?? payload;
       const interval = extractEventInterval(event);
-      if (!interval) {
-        return null;
-      }
+      if (!interval) return null;
 
       store.upsertConnection(booking.assignedRepId, {
         provider: "nylas",
@@ -364,16 +406,12 @@ export function createCalendarProvider(
     },
 
     async releaseExternalEvent(store, booking) {
-      if (mode !== "nylas" || !booking.externalEventId) {
-        return;
-      }
+      if (!booking.externalEventId) return;
 
-      ensureNylasConfigured(this.nylasConfigured);
+      ensureNylasConfigured(nylasConfigured);
 
       const connection = store.getConnection(booking.assignedRepId);
-      if (!connection?.providerGrantId) {
-        return;
-      }
+      if (!connection?.providerGrantId) return;
 
       const response = await fetch(
         `${nylas.apiUri}/v3/grants/${connection.providerGrantId}/events/${booking.externalEventId}?calendar_id=${
@@ -411,6 +449,10 @@ export function createCalendarProvider(
   };
 }
 
+// ---------------------------------------------------------------------------
+// Shared utilities (Nylas-only)
+// ---------------------------------------------------------------------------
+
 function ensureNylasConfigured(isConfigured) {
   if (!isConfigured) {
     throw new Error(
@@ -424,10 +466,7 @@ function encodeState(payload) {
 }
 
 function decodeState(value) {
-  if (!value) {
-    return null;
-  }
-
+  if (!value) return null;
   try {
     return JSON.parse(Buffer.from(value, "base64url").toString("utf8"));
   } catch {
@@ -436,17 +475,13 @@ function decodeState(value) {
 }
 
 function extractEventInterval(event) {
-  if (event?.busy === false) {
-    return null;
-  }
+  if (event?.busy === false) return null;
 
   const when = event?.when ?? {};
   const startSeconds = when.start_time ?? when.startTime ?? when.start;
   const endSeconds = when.end_time ?? when.endTime ?? when.end;
 
-  if (!startSeconds || !endSeconds) {
-    return null;
-  }
+  if (!startSeconds || !endSeconds) return null;
 
   return {
     startAt: new Date(Number(startSeconds) * 1000),

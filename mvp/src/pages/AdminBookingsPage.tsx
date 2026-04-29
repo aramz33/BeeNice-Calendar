@@ -12,14 +12,10 @@ import {
   ArrowRightLeft,
   Cable,
   CalendarRange,
-  CheckCheck,
   ChevronLeft,
   ChevronRight,
-  Clock3,
   Copy,
   ListTodo,
-  Settings2,
-  XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@shared-ui/button";
@@ -33,28 +29,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@shared-ui/select";
+import { AgendaBoard } from "@mvp/components/AgendaBoard";
 import { AppChrome } from "@mvp/components/AppChrome";
+import { BookingDetailPanel } from "@mvp/components/BookingDetailPanel";
+import { BookingListItem } from "@mvp/components/BookingListItem";
 import { MetricCard } from "@mvp/components/MetricCard";
-import { SlotPicker } from "@mvp/components/SlotPicker";
-import { StatusBadge } from "@mvp/components/StatusBadge";
+import { TaskCard } from "@mvp/components/TaskCard";
 import { apiFetch } from "@mvp/lib/api";
-import {
-  CALENDAR_HOURS,
-  SLOT_HEIGHT_PX,
-  TOTAL_HEIGHT_PX,
-  TOTAL_SLOTS,
-  assignTracks,
-  isEventInRange,
-  parseIsoSafe,
-} from "@mvp/lib/calendar";
 import { formatRepSeniority } from "@mvp/lib/format";
 import {
   formatDateKeyInTimezone,
-  formatDateTime,
-  formatDayShort,
   formatMonthYear,
   formatRelativeShort,
-  formatTimeOnly,
   getBusinessWeekDays,
 } from "@mvp/lib/time";
 import type {
@@ -63,8 +49,6 @@ import type {
   AdminTasksResponse,
   AvailabilityResponse,
   BookingDetailResponse,
-  BookingSummary,
-  FollowUpTask,
   SettingsPayload,
 } from "@mvp/lib/types";
 
@@ -179,9 +163,7 @@ export function AdminBookingsPage() {
       setTasksPayload(tasks);
       setSettingsPayload(settings);
       setSelectedBookingId((current) => {
-        if (current) {
-          return current;
-        }
+        if (current) return current;
         return bookings.bookings[0]?.id ?? null;
       });
     } catch (error) {
@@ -259,9 +241,7 @@ export function AdminBookingsPage() {
   }, [selectedBookingId]);
 
   useEffect(() => {
-    if (!detail) {
-      return;
-    }
+    if (!detail) return;
 
     const bookingWeekStart = startOfWeek(parseISO(detail.booking.startAt), {
       weekStartsOn: 1,
@@ -440,15 +420,9 @@ export function AdminBookingsPage() {
   };
 
   const buildInviteLink = (inviteToken?: string | null) => {
-    if (!inviteToken) {
-      return "";
-    }
-
+    if (!inviteToken) return "";
     const relativePath = `/connect/${inviteToken}`;
-    if (typeof window === "undefined") {
-      return relativePath;
-    }
-
+    if (typeof window === "undefined") return relativePath;
     return `${window.location.origin}${relativePath}`;
   };
 
@@ -458,7 +432,6 @@ export function AdminBookingsPage() {
       toast.error("Lien de connexion indisponible.");
       return;
     }
-
     try {
       await navigator.clipboard.writeText(inviteLink);
       toast.success("Lien de connexion copie.");
@@ -472,7 +445,6 @@ export function AdminBookingsPage() {
     const clients = (settingsPayload?.clients ?? []).filter(
       (client) => client.active,
     );
-
     return clients.map((client) => ({
       client,
       reps: reps.filter((rep) => rep.clientId === client.id),
@@ -718,8 +690,8 @@ export function AdminBookingsPage() {
                   </p>
                   <p className="mt-2 text-sm text-[#001E5B]/64">
                     {integrationMode === "nylas"
-                      ? "Les changements du calendrier client sont remontés dans l’agenda admin via Nylas."
-                      : "Mode démo: connexions simulées pour tester l’agenda live sans provider externe."}
+                      ? "Les changements du calendrier client sont remontés dans l'agenda admin via Nylas."
+                      : "Mode démo: connexions simulées pour tester l'agenda live sans provider externe."}
                   </p>
                 </div>
 
@@ -839,258 +811,43 @@ export function AdminBookingsPage() {
           )}
         </div>
 
-        <Card className="surface-card overflow-y-auto">
-          <CardHeader>
-            <CardTitle>Détail du rendez-vous</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            {loadingDetail ? (
-              <div className="h-96 animate-pulse rounded-[1.5rem] bg-[#001E5B]/5" />
-            ) : detail ? (
-              <>
-                <div className="space-y-3 rounded-[1.25rem] border border-[#001E5B]/8 bg-white px-4 py-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <p className="font-semibold text-[#001E5B]">
-                        {detail.booking.companyName}
-                      </p>
-                      <p className="text-sm text-[#001E5B]/56">
-                        {detail.booking.prospectName} ·{" "}
-                        {detail.booking.clientName}
-                      </p>
-                    </div>
-                    <StatusBadge status={detail.booking.displayStatus} />
-                  </div>
-                  <div className="grid gap-2 text-sm text-[#001E5B]/72">
-                    <p>Client BeNice: {detail.booking.clientName}</p>
-                    <p>Caller BeNice: {detail.booking.callerName}</p>
-                    <p>Rep côté client: {detail.booking.assignedRepName}</p>
-                    <p>Taille société: {detail.booking.companySize} salariés</p>
-                    <p>
-                      Date courante:{" "}
-                      {formatDateTime(
-                        detail.booking.startAt,
-                        detail.booking.timezone,
-                      )}
-                    </p>
-                    <p>
-                      Date originale:{" "}
-                      {formatDateTime(
-                        detail.booking.originalStartAt,
-                        detail.booking.timezone,
-                      )}
-                    </p>
-                    {detail.booking.previousStartAt ? (
-                      <p>
-                        Dernière date avant déplacement:{" "}
-                        {formatDateTime(
-                          detail.booking.previousStartAt,
-                          detail.booking.timezone,
-                        )}
-                      </p>
-                    ) : null}
-                    <p>Sync calendrier: {detail.booking.calendarSyncState}</p>
-                    {detail.booking.linkedTask ? (
-                      <p>
-                        Tâche liée: {detail.booking.linkedTask.status} ·
-                        échéance{" "}
-                        {formatRelativeShort(detail.booking.linkedTask.dueAt)}
-                      </p>
-                    ) : null}
-                  </div>
-                </div>
-
-                <div className="rounded-[1.25rem] border border-[#001E5B]/8 bg-white px-4 py-4">
-                  <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#001E5B]/40">
-                    Raison d’assignation
-                  </p>
-                  <div className="mt-3 grid gap-2 text-sm text-[#001E5B]/72">
-                    <p>
-                      Mode de routing:{" "}
-                      {detail.booking.assignmentReason.routingMode ===
-                      "weighted_seniority"
-                        ? "Routing senior/junior"
-                        : "Pool unique"}
-                    </p>
-                    <p>
-                      Pool retenu:{" "}
-                      {detail.booking.assignmentReason.seniorityPool ===
-                      "senior"
-                        ? "Senior uniquement"
-                        : "Pool complet"}
-                    </p>
-                    <p>
-                      Rôle choisi:{" "}
-                      {detail.booking.assignmentReason.chosenRole === "senior"
-                        ? "Senior"
-                        : detail.booking.assignmentReason.chosenRole ===
-                            "junior"
-                          ? "Junior"
-                          : detail.booking.assignmentReason.chosenRole ===
-                              "non_defini"
-                            ? "Non défini"
-                            : "Pool unique"}
-                    </p>
-                    <p>
-                      Seuil de qualification:{" "}
-                      {detail.booking.assignmentReason.companySizeThreshold}
-                    </p>
-                    <p>
-                      Candidats éligibles:{" "}
-                      {(
-                        detail.booking.assignmentReason.candidateRepNames ??
-                        detail.booking.assignmentReason.candidateRepIds
-                      ).join(", ")}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="status-reason">Note admin</Label>
-                  <Input
-                    id="status-reason"
-                    value={statusReason}
-                    onChange={(event) => setStatusReason(event.target.value)}
-                    placeholder="Ex: prospect absent, à rappeler demain."
-                  />
-                </div>
-
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <Button
-                    className="rounded-full"
-                    disabled={updatingBooking}
-                    onClick={() => void updateOutcome("completed")}
-                  >
-                    <CheckCheck className="h-4 w-4" />
-                    Honoré
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="rounded-full"
-                    disabled={updatingBooking}
-                    onClick={() => void updateOutcome("no_show")}
-                  >
-                    <Clock3 className="h-4 w-4" />
-                    No-show
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="rounded-full"
-                    disabled={updatingBooking}
-                    onClick={() => void updateOutcome("not_qualified")}
-                  >
-                    <Settings2 className="h-4 w-4" />
-                    Non qualifié
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="rounded-full border-rose-200 text-rose-700"
-                    disabled={updatingBooking}
-                    onClick={() => void cancelBooking()}
-                  >
-                    <XCircle className="h-4 w-4" />
-                    Annuler
-                  </Button>
-                </div>
-
-                <div className="space-y-4 rounded-[1.25rem] border border-dashed border-[#001E5B]/12 bg-[#F9F4ED] px-4 py-4">
-                  <div className="space-y-2">
-                    <Label>Déplacer selon les disponibilités</Label>
-                    <p className="text-sm text-[#001E5B]/64">
-                      Le nouveau créneau est choisi sur les disponibilités live
-                      du client. Le routage réassigne automatiquement le
-                      rendez-vous au rep éligible disponible sur ce créneau.
-                    </p>
-                  </div>
-
-                  <SlotPicker
-                    availability={rescheduleAvailability}
-                    selectedSlot={selectedRescheduleSlot}
-                    onSelect={setSelectedRescheduleSlot}
-                    loading={loadingRescheduleAvailability}
-                    onPreviousWeek={() => {
-                      if (!detail || !hasPreviousRescheduleWeek) {
-                        return;
-                      }
-                      const nextWeek = subWeeks(rescheduleWeekStart, 1);
-                      setRescheduleWeekStartIso(nextWeek.toISOString());
-                      void fetchRescheduleAvailability(
-                        detail.booking.id,
-                        nextWeek,
-                        selectedRescheduleSlot,
-                      );
-                    }}
-                    onNextWeek={() => {
-                      if (!detail || !hasNextRescheduleWeek) {
-                        return;
-                      }
-                      const nextWeek = addWeeks(rescheduleWeekStart, 1);
-                      setRescheduleWeekStartIso(nextWeek.toISOString());
-                      void fetchRescheduleAvailability(
-                        detail.booking.id,
-                        nextWeek,
-                        selectedRescheduleSlot,
-                      );
-                    }}
-                    hasPreviousWeek={hasPreviousRescheduleWeek}
-                    hasNextWeek={hasNextRescheduleWeek}
-                  />
-
-                  {rescheduleSelectedSlot ? (
-                    <div className="rounded-[1.25rem] border border-[#001E5B]/8 bg-white px-4 py-4 text-sm text-[#001E5B]/72">
-                      <p className="font-medium text-[#001E5B]">
-                        Créneau sélectionné:{" "}
-                        {formatDateTime(
-                          rescheduleSelectedSlot.startAt,
-                          detail.booking.timezone,
-                        )}
-                      </p>
-                      <p className="mt-2">
-                        Reps disponibles:{" "}
-                        {(rescheduleSelectedSlot.availableRepNames ?? []).join(
-                          ", ",
-                        )}
-                      </p>
-                    </div>
-                  ) : null}
-
-                  <Button
-                    variant="outline"
-                    className="rounded-full"
-                    disabled={!selectedRescheduleSlot || updatingBooking}
-                    onClick={() => void rescheduleBooking()}
-                  >
-                    Déplacer le rendez-vous
-                  </Button>
-                </div>
-
-                <div className="space-y-3">
-                  <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#001E5B]/44">
-                    Timeline
-                  </p>
-                  {detail.timeline.map((event) => (
-                    <div
-                      key={event.id}
-                      className="rounded-[1.25rem] border border-[#001E5B]/8 bg-white px-4 py-4"
-                    >
-                      <p className="font-medium text-[#001E5B]">
-                        {event.actorLabel}
-                      </p>
-                      <p className="mt-1 text-sm text-[#001E5B]/64">
-                        {event.reason || event.type}
-                      </p>
-                      <p className="mt-2 text-xs text-[#001E5B]/48">
-                        {formatRelativeShort(event.createdAt)}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <EmptyState message="Sélectionnez un rendez-vous pour afficher son détail." />
-            )}
-          </CardContent>
-        </Card>
+        <BookingDetailPanel
+          loading={loadingDetail}
+          detail={detail}
+          updatingBooking={updatingBooking}
+          statusReason={statusReason}
+          onStatusReasonChange={setStatusReason}
+          onUpdateOutcome={(state) => void updateOutcome(state)}
+          onCancelBooking={() => void cancelBooking()}
+          rescheduleAvailability={rescheduleAvailability}
+          selectedRescheduleSlot={selectedRescheduleSlot}
+          onSelectRescheduleSlot={setSelectedRescheduleSlot}
+          loadingRescheduleAvailability={loadingRescheduleAvailability}
+          hasPreviousRescheduleWeek={hasPreviousRescheduleWeek}
+          hasNextRescheduleWeek={hasNextRescheduleWeek}
+          onPreviousRescheduleWeek={() => {
+            if (!detail || !hasPreviousRescheduleWeek) return;
+            const nextWeek = subWeeks(rescheduleWeekStart, 1);
+            setRescheduleWeekStartIso(nextWeek.toISOString());
+            void fetchRescheduleAvailability(
+              detail.booking.id,
+              nextWeek,
+              selectedRescheduleSlot,
+            );
+          }}
+          onNextRescheduleWeek={() => {
+            if (!detail || !hasNextRescheduleWeek) return;
+            const nextWeek = addWeeks(rescheduleWeekStart, 1);
+            setRescheduleWeekStartIso(nextWeek.toISOString());
+            void fetchRescheduleAvailability(
+              detail.booking.id,
+              nextWeek,
+              selectedRescheduleSlot,
+            );
+          }}
+          rescheduleSelectedSlot={rescheduleSelectedSlot}
+          onRescheduleBooking={() => void rescheduleBooking()}
+        />
       </div>
     </AppChrome>
   );
@@ -1151,268 +908,6 @@ function ViewButton({
       <Icon className="h-4 w-4" />
       {label}
     </Button>
-  );
-}
-
-function AgendaBoard({
-  loading,
-  entries,
-  weekDays,
-  selectedBookingId,
-  onSelect,
-  timezone,
-  todayDateKey,
-}: {
-  loading: boolean;
-  entries: BookingSummary[];
-  weekDays: Date[];
-  selectedBookingId: string | null;
-  onSelect: (id: string) => void;
-  timezone: string;
-  todayDateKey: string;
-}) {
-  const grouped = useMemo(() => {
-    const map = new Map<string, BookingSummary[]>();
-    weekDays.forEach((day) => {
-      map.set(formatDateKeyInTimezone(day, timezone), []);
-    });
-    entries.forEach((entry) => {
-      const startAt = parseIsoSafe(entry.startAt);
-      if (!startAt) {
-        return;
-      }
-
-      const key = formatDateKeyInTimezone(startAt, timezone);
-      if (!map.has(key)) {
-        map.set(key, []);
-      }
-      map.get(key)?.push(entry);
-    });
-    map.forEach((items) =>
-      items.sort((left, right) => left.startAt.localeCompare(right.startAt)),
-    );
-    return map;
-  }, [entries, timezone, weekDays]);
-
-  return (
-    <Card className="surface-card overflow-x-auto">
-      <CardHeader>
-        <CardTitle>Agenda semaine</CardTitle>
-      </CardHeader>
-      <CardContent>
-        {loading ? (
-          <div
-            className="grid gap-4"
-            style={{
-              gridTemplateColumns: `repeat(${weekDays.length}, minmax(0, 1fr))`,
-            }}
-          >
-            {Array.from({ length: weekDays.length }).map((_, index) => (
-              <div
-                key={index}
-                className="h-72 animate-pulse rounded-[1.5rem] bg-[#001E5B]/5"
-              />
-            ))}
-          </div>
-        ) : (
-          <div style={{ minWidth: "680px" }}>
-            {/* Day header row */}
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: `3.5rem repeat(${weekDays.length}, minmax(0, 1fr))`,
-                gap: "0 0.25rem",
-                marginBottom: "0.5rem",
-              }}
-            >
-              <div />
-              {weekDays.map((day) => {
-                const key = formatDateKeyInTimezone(day, timezone);
-                const items = grouped.get(key) ?? [];
-                const isToday = key === todayDateKey;
-                return (
-                  <div
-                    key={key}
-                    className={`agenda-day-head ${isToday ? "agenda-day-head-today" : ""}`}
-                  >
-                    <p className="text-sm font-semibold capitalize text-[#001E5B]">
-                      {formatDayShort(day.toISOString(), timezone)}
-                    </p>
-                    <p className="text-xs text-[#001E5B]/48">
-                      {items.length} rendez-vous
-                    </p>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Time grid body */}
-            <div
-              className="time-grid-container"
-              style={{
-                gridTemplateColumns: `3.5rem repeat(${weekDays.length}, minmax(0, 1fr))`,
-              }}
-            >
-              {/* Time axis column */}
-              <div className="relative" style={{ height: TOTAL_HEIGHT_PX }}>
-                {CALENDAR_HOURS.map((hour, i) => (
-                  <div
-                    key={hour}
-                    className="absolute right-2 text-right"
-                    style={{ top: i * 2 * SLOT_HEIGHT_PX - 8 }}
-                  >
-                    <span className="text-xs text-[#001E5B]/36">{hour}:00</span>
-                  </div>
-                ))}
-              </div>
-
-              {/* 5 day columns */}
-              {weekDays.map((day) => {
-                const key = formatDateKeyInTimezone(day, timezone);
-                const inRange = (grouped.get(key) ?? []).filter((e) =>
-                  isEventInRange(e, timezone),
-                );
-                const tracked = assignTracks(inRange, timezone);
-                const isToday = key === todayDateKey;
-
-                return (
-                  <div
-                    key={key}
-                    className={`time-grid-day-col ${isToday ? "time-grid-day-col-today" : ""}`}
-                  >
-                    {/* Horizontal slot lines */}
-                    {Array.from({ length: TOTAL_SLOTS }).map((_, i) => (
-                      <div
-                        key={i}
-                        className={`time-grid-slot-line ${i % 2 === 0 ? "time-grid-slot-line-hour" : ""}`}
-                        style={{ top: i * SLOT_HEIGHT_PX }}
-                      />
-                    ))}
-
-                    {/* Event blocks */}
-                    {tracked.map(
-                      ({ entry, track, trackCount, top, height }) => {
-                        const widthPct = 100 / Math.max(trackCount, 1);
-                        const leftPct = track * widthPct;
-                        const rightPct = 100 - leftPct - widthPct;
-                        return (
-                          <button
-                            key={entry.id}
-                            type="button"
-                            className={`time-grid-event ${selectedBookingId === entry.id ? "time-grid-event-selected" : ""}`}
-                            style={{
-                              top,
-                              height,
-                              left: `calc(3px + ${leftPct}%)`,
-                              right: `calc(3px + ${rightPct}%)`,
-                            }}
-                            onClick={() => onSelect(entry.id)}
-                            title={`${entry.clientName} - ${entry.prospectName}`}
-                          >
-                            <p className="time-grid-event-time">
-                              {formatTimeOnly(entry.startAt, timezone)}
-                            </p>
-                            <p className="time-grid-event-context">
-                              {entry.clientName} - {entry.prospectName}
-                            </p>
-                            <StatusBadge
-                              status={entry.displayStatus}
-                              className="time-grid-event-badge"
-                            />
-                          </button>
-                        );
-                      },
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function BookingListItem({
-  booking,
-  selected,
-  onSelect,
-}: {
-  booking: BookingSummary;
-  selected: boolean;
-  onSelect: (id: string) => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={() => onSelect(booking.id)}
-      className={`w-full rounded-[1.25rem] border px-4 py-4 text-left transition ${
-        selected
-          ? "border-[#F7A600] bg-[#FFF7E8]"
-          : "border-[#001E5B]/8 bg-white hover:border-[#001E5B]/16"
-      }`}
-    >
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <p className="font-semibold text-[#001E5B]">
-              {booking.companyName}
-            </p>
-            <StatusBadge status={booking.displayStatus} />
-          </div>
-          <p className="text-sm text-[#001E5B]/64">
-            {booking.prospectName} · {booking.clientName}
-          </p>
-          <p className="text-xs text-[#001E5B]/48">
-            {formatRelativeShort(booking.startAt)} · {booking.callerName} →{" "}
-            {booking.assignedRepName}
-          </p>
-        </div>
-      </div>
-    </button>
-  );
-}
-
-function TaskCard({
-  task,
-  onDismiss,
-}: {
-  task: FollowUpTask;
-  onDismiss: (taskId: string) => void;
-}) {
-  return (
-    <div className="rounded-[1.25rem] border border-[#001E5B]/8 bg-white px-4 py-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="font-semibold text-[#001E5B]">{task.companyName}</p>
-          <p className="text-sm text-[#001E5B]/56">
-            {task.prospectName} · {task.clientName} · {task.callerName}
-          </p>
-        </div>
-        <div className="rounded-full border border-[#001E5B]/10 bg-[#F9F4ED] px-3 py-1 text-xs font-medium text-[#001E5B]">
-          {task.status}
-        </div>
-      </div>
-      <div className="mt-3 space-y-1 text-sm text-[#001E5B]/64">
-        <p>
-          Motif: {task.triggerReason === "cancelled" ? "Annulation" : "No-show"}
-        </p>
-        <p>RDV source: {formatRelativeShort(task.sourceStartAt)}</p>
-        <p>Échéance: {formatRelativeShort(task.dueAt)}</p>
-      </div>
-      {task.status === "open" ? (
-        <div className="mt-4 flex gap-2">
-          <Button
-            variant="outline"
-            className="rounded-full"
-            onClick={() => onDismiss(task.id)}
-          >
-            Dismiss
-          </Button>
-        </div>
-      ) : null}
-    </div>
   );
 }
 
