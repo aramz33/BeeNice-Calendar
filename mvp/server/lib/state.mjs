@@ -6,7 +6,6 @@ import {
   eachDayOfInterval,
   endOfDay,
   endOfWeek,
-  format,
   getDay,
   parseISO,
   startOfWeek,
@@ -54,6 +53,14 @@ import {
   getRepRollingLoad as getRepRollingLoadFn,
   isRepAvailableAgainstIntervals,
 } from "./availability.mjs";
+import {
+  createBooking as createBookingFn,
+  updateBookingOutcome as updateBookingOutcomeFn,
+  updateBookingSchedule as updateBookingScheduleFn,
+  cancelCallerBooking as cancelCallerBookingFn,
+  getDisplayStatus,
+  getLegacyStatus,
+} from "./bookings.mjs";
 
 const DISPLAY_STATUSES = [
   "scheduled",
@@ -64,14 +71,6 @@ const DISPLAY_STATUSES = [
   "not_qualified",
 ];
 
-const OUTCOME_STATES = [
-  "pending",
-  "completed",
-  "no_show",
-  "not_qualified",
-];
-
-const SCHEDULE_STATES = ["scheduled", "rescheduled", "cancelled"];
 const ROUTING_MODES = ["pool_unique", "weighted_seniority"];
 
 const ACTIVE_SCHEDULE_STATES = new Set(["scheduled", "rescheduled"]);
@@ -298,205 +297,7 @@ export function createStore(provider) {
     },
 
     async createBooking(slug, payload) {
-      const bookingLink = this.getBookingLinkBySlug(slug);
-      if (!bookingLink) {
-        throw new Error("Booking link introuvable.");
-      }
-
-      const caller = this.getCaller(payload.callerId);
-      if (!caller || !caller.active) {
-        throw new Error("Caller introuvable.");
-      }
-
-      if (
-        !payload.prospectName ||
-        !payload.prospectEmail ||
-        !payload.companyName ||
-        !payload.slotStart
-      ) {
-        throw new Error("Informations booking incomplètes.");
-      }
-
-      const companySize = Number(payload.companySize);
-      if (Number.isNaN(companySize)) {
-        throw new Error("La taille de société est obligatoire.");
-      }
-
-      const slotStart = parseISO(payload.slotStart);
-      if (Number.isNaN(slotStart.getTime())) {
-        throw new Error("Créneau invalide.");
-      }
-
-      const sourceTask = payload.sourceTaskId
-        ? this.getTask(payload.sourceTaskId)
-        : null;
-      if (sourceTask && sourceTask.callerId !== caller.id) {
-        throw new Error("La tâche ne correspond pas au caller sélectionné.");
-      }
-
-      const createdAt = new Date().toISOString();
-      const bookingId = makeId("booking");
-      let externalEventId = null;
-      let repForCleanup = null;
-
-      try {
-        const result = await database.withTransaction(async () => {
-          const freshLink = this.getBookingLinkBySlug(slug);
-          if (!freshLink) {
-            throw new Error("Booking link introuvable.");
-          }
-
-          const availableEligibleReps = await this.getAvailableEligibleRepsForSlot(
-            freshLink,
-            companySize,
-            slotStart,
-          );
-
-          if (availableEligibleReps.length === 0) {
-            throw new Error("Le créneau sélectionné n'est plus disponible.");
-          }
-
-          const assignment = this.assignRep(
-            freshLink,
-            companySize,
-            slotStart,
-            availableEligibleReps,
-          );
-
-          const booking = {
-            id: bookingId,
-            bookingLinkId: freshLink.id,
-            clientId: freshLink.clientId,
-            callerId: caller.id,
-            assignedRepId: assignment.rep.id,
-            companyName: payload.companyName,
-            companySize,
-            prospectName: payload.prospectName,
-            prospectEmail: payload.prospectEmail,
-            notes: payload.notes ?? "",
-            startAt: slotStart.toISOString(),
-            endAt: addMinutes(slotStart, freshLink.durationMinutes).toISOString(),
-            timezone: freshLink.timezone,
-            status: "booked",
-            scheduleState: "scheduled",
-            outcomeState: "pending",
-            originalStartAt: slotStart.toISOString(),
-            previousStartAt: null,
-            lastCalendarChangeAt: null,
-            calendarSyncState: "synced",
-            externalEventId: null,
-            assignmentReason: assignment.reason,
-            createdAt,
-            syncState: "pending",
-          };
-
-          repForCleanup = assignment.rep;
-          externalEventId = await provider.createExternalEvent(this, assignment.rep, booking);
-
-          db.prepare(`
-            INSERT INTO bookings (
-              id,
-              booking_link_id,
-              client_id,
-              caller_id,
-              assigned_rep_id,
-              company_name,
-              company_size,
-              prospect_name,
-              prospect_email,
-              notes,
-              start_at,
-              end_at,
-              timezone,
-              status,
-              schedule_state,
-              outcome_state,
-              original_start_at,
-              previous_start_at,
-              last_calendar_change_at,
-              calendar_sync_state,
-              external_event_id,
-              assignment_reason_json,
-              sync_state,
-              created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `).run(
-            booking.id,
-            booking.bookingLinkId,
-            booking.clientId,
-            booking.callerId,
-            booking.assignedRepId,
-            booking.companyName,
-            booking.companySize,
-            booking.prospectName,
-            booking.prospectEmail,
-            booking.notes || null,
-            booking.startAt,
-            booking.endAt,
-            booking.timezone,
-            "booked",
-            booking.scheduleState,
-            booking.outcomeState,
-            booking.originalStartAt,
-            null,
-            null,
-            booking.calendarSyncState,
-            externalEventId,
-            JSON.stringify(booking.assignmentReason),
-            "synced",
-            booking.createdAt,
-          );
-
-          this.insertLegacyStatusHistory({
-            bookingId: booking.id,
-            fromStatus: null,
-            toStatus: "booked",
-            actorType: "caller",
-            actorLabel: caller.name,
-            reason: "Booking créé depuis le workspace caller.",
-            createdAt,
-          });
-
-          this.insertTimelineEvent({
-            bookingId: booking.id,
-            type: "booking_created",
-            actorLabel: caller.name,
-            reason: "Booking créé depuis le workspace caller.",
-            createdAt,
-          });
-
-          if (sourceTask) {
-            this.completeTask(sourceTask.id, booking.id, createdAt);
-          }
-
-          return {
-            bookingId: booking.id,
-            assignedRepName: assignment.rep.name,
-            slug: freshLink.slug,
-            clientId: freshLink.clientId,
-          };
-        });
-
-        this.broadcastAvailability(result.slug);
-        this.broadcastAdmin("booking.updated");
-        this.broadcastAdmin("task.updated");
-        return {
-          bookingId: result.bookingId,
-          assignedRepName: result.assignedRepName,
-        };
-      } catch (error) {
-        if (externalEventId && repForCleanup) {
-          try {
-            await provider.releaseExternalEvent(this, {
-              assignedRepId: repForCleanup.id,
-              externalEventId,
-            });
-          } catch {
-            // Best effort cleanup only.
-          }
-        }
-        throw error;
-      }
+      return createBookingFn(database, db, this, provider, slug, payload);
     },
 
     listAdminBookings(filters = {}) {
@@ -655,234 +456,11 @@ export function createStore(provider) {
     },
 
     async updateBookingOutcome(bookingId, outcomeState, reason = "") {
-      if (!OUTCOME_STATES.includes(outcomeState)) {
-        throw new Error("Outcome invalide.");
-      }
-
-      const booking = this.getBooking(bookingId);
-      if (!booking) {
-        throw new Error("Booking introuvable.");
-      }
-
-      if (booking.outcomeState === outcomeState) {
-        throw new Error("Le booking a déjà ce résultat.");
-      }
-
-      const createdAt = new Date().toISOString();
-      const next = {
-        ...booking,
-        outcomeState,
-      };
-
-      database.withTransaction(() => {
-        db.prepare(`
-          UPDATE bookings
-          SET outcome_state = ?,
-              status = ?,
-              completed_at = ?,
-              no_show_at = ?
-          WHERE id = ?
-        `).run(
-          outcomeState,
-          getLegacyStatus(next),
-          outcomeState === "completed" ? createdAt : booking.completedAt,
-          outcomeState === "no_show" ? createdAt : booking.noShowAt,
-          bookingId,
-        );
-
-        this.insertLegacyStatusHistory({
-          bookingId,
-          fromStatus: getLegacyStatus(booking),
-          toStatus: getLegacyStatus(next),
-          actorType: "admin",
-          actorLabel: "Admin BeeNice",
-          reason,
-          createdAt,
-        });
-
-        this.insertTimelineEvent({
-          bookingId,
-          type: "outcome_set",
-          actorLabel: "Admin BeeNice",
-          reason: reason || `Résultat mis à jour: ${outcomeState}.`,
-          createdAt,
-          meta: { outcomeState },
-        });
-
-        if (outcomeState === "no_show") {
-          this.ensureFollowUpTask(bookingId, "no_show", createdAt);
-        }
-      });
-
-      this.broadcastAdmin("booking.updated");
-      this.broadcastAdmin("task.updated");
-      return { ok: true };
+      return updateBookingOutcomeFn(database, db, this, provider, bookingId, outcomeState, reason);
     },
 
     async updateBookingSchedule(bookingId, scheduleState, reason = "", nextStartAt = null) {
-      if (!SCHEDULE_STATES.includes(scheduleState)) {
-        throw new Error("Statut calendrier invalide.");
-      }
-
-      const booking = this.getBooking(bookingId);
-      if (!booking) {
-        throw new Error("Booking introuvable.");
-      }
-
-      const createdAt = new Date().toISOString();
-      const patch = {
-        scheduleState,
-        status: booking.status,
-        previousStartAt: booking.previousStartAt,
-        startAt: booking.startAt,
-        endAt: booking.endAt,
-        cancelledAt: booking.cancelledAt,
-        lastCalendarChangeAt: createdAt,
-      };
-
-      if (scheduleState === "cancelled") {
-        patch.cancelledAt = createdAt;
-      }
-
-      let assignment = null;
-      let externalEventId = booking.externalEventId;
-      if (scheduleState === "rescheduled") {
-        if (!nextStartAt) {
-          throw new Error("Nouvelle date obligatoire.");
-        }
-
-        const bookingLink = this.getBookingLinkById(booking.bookingLinkId);
-        if (!bookingLink) {
-          throw new Error("Booking link introuvable.");
-        }
-
-        const nextStart = parseISO(nextStartAt);
-        if (Number.isNaN(nextStart.getTime())) {
-          throw new Error("Nouvelle date invalide.");
-        }
-
-        const availableEligibleReps = await this.getAvailableEligibleRepsForSlot(
-          bookingLink,
-          booking.companySize,
-          nextStart,
-          {
-            excludedBookingId: booking.id,
-          },
-        );
-
-        if (availableEligibleReps.length === 0) {
-          throw new Error("Le créneau sélectionné n'est plus disponible.");
-        }
-
-        assignment = this.assignRep(
-          bookingLink,
-          booking.companySize,
-          nextStart,
-          availableEligibleReps,
-        );
-
-        patch.previousStartAt = booking.startAt;
-        patch.startAt = nextStart.toISOString();
-        patch.endAt = addMinutes(nextStart, bookingLink.durationMinutes).toISOString();
-      }
-
-      const nextBooking = {
-        ...booking,
-        scheduleState,
-        assignedRepId: assignment?.rep.id ?? booking.assignedRepId,
-        previousStartAt: patch.previousStartAt,
-        startAt: patch.startAt,
-        endAt: patch.endAt,
-        assignmentReason: assignment?.reason ?? booking.assignmentReason,
-      };
-
-      if (scheduleState === "cancelled") {
-        await provider.releaseExternalEvent(this, booking);
-      }
-
-      if (scheduleState === "rescheduled" && assignment) {
-        externalEventId = await this.replaceExternalEventForReschedule(
-          booking,
-          nextBooking,
-          assignment.rep,
-        );
-      }
-
-      database.withTransaction(() => {
-        db.prepare(`
-          UPDATE bookings
-          SET schedule_state = ?,
-              status = ?,
-              assigned_rep_id = ?,
-              previous_start_at = ?,
-              start_at = ?,
-              end_at = ?,
-              cancelled_at = ?,
-              last_calendar_change_at = ?,
-              calendar_sync_state = 'synced',
-              external_event_id = ?,
-              assignment_reason_json = ?
-          WHERE id = ?
-        `).run(
-          scheduleState,
-          getLegacyStatus(nextBooking),
-          nextBooking.assignedRepId,
-          patch.previousStartAt,
-          patch.startAt,
-          patch.endAt,
-          patch.cancelledAt,
-          patch.lastCalendarChangeAt,
-          scheduleState === "cancelled" ? null : externalEventId,
-          JSON.stringify(nextBooking.assignmentReason),
-          bookingId,
-        );
-
-        this.insertLegacyStatusHistory({
-          bookingId,
-          fromStatus: getLegacyStatus(booking),
-          toStatus: getLegacyStatus(nextBooking),
-          actorType: "admin",
-          actorLabel: "Admin BeeNice",
-          reason,
-          createdAt,
-        });
-
-        this.insertTimelineEvent({
-          bookingId,
-          type:
-            scheduleState === "cancelled"
-              ? "calendar_cancelled"
-              : "calendar_rescheduled",
-          actorLabel: "Admin BeeNice",
-          reason:
-            reason ||
-            (scheduleState === "cancelled"
-              ? "Rendez-vous annulé."
-              : "Rendez-vous déplacé manuellement."),
-          createdAt,
-          meta:
-            scheduleState === "rescheduled" && nextStartAt
-              ? {
-                  previousStartAt: booking.startAt,
-                  nextStartAt: patch.startAt,
-                  previousRepId: booking.assignedRepId,
-                  nextRepId: nextBooking.assignedRepId,
-                }
-              : undefined,
-        });
-
-        if (scheduleState === "cancelled") {
-          this.ensureFollowUpTask(bookingId, "cancelled", createdAt);
-        }
-      });
-
-      const link = this.getBookingLinkById(booking.bookingLinkId);
-      if (link) {
-        this.broadcastAvailability(link.slug);
-      }
-      this.broadcastAdmin("booking.updated");
-      this.broadcastAdmin("task.updated");
-      return { ok: true };
+      return updateBookingScheduleFn(database, db, this, provider, bookingId, scheduleState, reason, nextStartAt);
     },
 
     updateTask(taskId, payload = {}) {
@@ -1909,65 +1487,7 @@ export function createStore(provider) {
     },
 
     async cancelCallerBooking(slug, callerId, bookingId) {
-      const bookingLink = this.getBookingLinkBySlug(slug);
-      if (!bookingLink) {
-        throw new Error("Booking link introuvable.");
-      }
-
-      const caller = this.getCaller(callerId);
-      if (!caller || !caller.active) {
-        throw new Error("Caller introuvable.");
-      }
-
-      const booking = this.getBooking(bookingId);
-      if (!booking || booking.bookingLinkId !== bookingLink.id || booking.callerId !== callerId) {
-        throw new Error("Booking introuvable pour ce caller.");
-      }
-
-      const cancelMode = this.getCallerCancelMode(booking);
-      if (cancelMode !== "direct") {
-        throw new Error("Annulation directe indisponible. Utilisez la console admin.");
-      }
-
-      await provider.releaseExternalEvent(this, booking);
-
-      const createdAt = new Date().toISOString();
-      database.withTransaction(() => {
-        db.prepare(`
-          UPDATE bookings
-          SET schedule_state = 'cancelled',
-              status = 'cancelled',
-              cancelled_at = ?,
-              last_calendar_change_at = ?,
-              calendar_sync_state = 'synced'
-          WHERE id = ?
-        `).run(createdAt, createdAt, booking.id);
-
-        this.insertLegacyStatusHistory({
-          bookingId: booking.id,
-          fromStatus: getLegacyStatus(booking),
-          toStatus: "cancelled",
-          actorType: "caller",
-          actorLabel: caller.name,
-          reason: "Annulation depuis le workspace caller.",
-          createdAt,
-        });
-
-        this.insertTimelineEvent({
-          bookingId: booking.id,
-          type: "calendar_cancelled",
-          actorLabel: caller.name,
-          reason: "Annulation depuis le workspace caller.",
-          createdAt,
-        });
-      });
-
-      this.broadcastAvailability(bookingLink.slug);
-      this.broadcastAdmin("booking.updated");
-      return {
-        bookingId: booking.id,
-        releasedSlotStart: booking.startAt,
-      };
+      return cancelCallerBookingFn(database, db, this, provider, slug, callerId, bookingId);
     },
   };
 
@@ -2067,34 +1587,7 @@ function blankStatusCounts() {
   return Object.fromEntries(DISPLAY_STATUSES.map((status) => [status, 0]));
 }
 
-function getDisplayStatus(booking) {
-  if (booking.scheduleState === "cancelled") {
-    return "cancelled";
-  }
-  if (booking.outcomeState === "completed") {
-    return "completed";
-  }
-  if (booking.outcomeState === "no_show") {
-    return "no_show";
-  }
-  if (booking.outcomeState === "not_qualified") {
-    return "not_qualified";
-  }
-  if (booking.scheduleState === "rescheduled") {
-    return "rescheduled";
-  }
-  return "scheduled";
-}
 
-function getLegacyStatus(booking) {
-  const displayStatus = getDisplayStatus(booking);
-  switch (displayStatus) {
-    case "scheduled":
-      return "booked";
-    default:
-      return displayStatus;
-  }
-}
 
 function extractGrantId(payload) {
   return (
