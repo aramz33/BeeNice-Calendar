@@ -16,6 +16,20 @@ import {
   subMinutes,
 } from "date-fns";
 import { createDatabase } from "./database.mjs";
+import {
+  REP_ROLES,
+  isConnectionUsable,
+  getEffectiveConnectionStatus,
+  getConnection,
+  findConflictingConnections,
+  upsertConnection,
+  disconnectConnection,
+  claimCalendarConnection,
+  startRepConnection as startRepConnectionFn,
+  finalizeRepConnection as finalizeRepConnectionFn,
+  getPublicRepConnectionPayload as getPublicRepConnectionPayloadFn,
+  startPublicRepConnection as startPublicRepConnectionFn,
+} from "./connections.mjs";
 
 const DISPLAY_STATUSES = [
   "scheduled",
@@ -35,11 +49,6 @@ const OUTCOME_STATES = [
 
 const SCHEDULE_STATES = ["scheduled", "rescheduled", "cancelled"];
 const ROUTING_MODES = ["pool_unique", "weighted_seniority"];
-const REP_ROLES = ["senior", "junior", "non_defini"];
-const PUBLIC_PROVIDER_OPTIONS = [
-  { id: "google", label: "Google" },
-  { id: "microsoft", label: "Microsoft" },
-];
 
 const ACTIVE_SCHEDULE_STATES = new Set(["scheduled", "rescheduled"]);
 const BOOKING_WINDOW_WEEKS = 12;
@@ -959,25 +968,11 @@ export function createStore(provider) {
     },
 
     async startRepConnection(repId, payload) {
-      const result = await provider.startRepConnection(this, repId, payload);
-      const rep = this.getRep(repId);
-      if (rep && result.connection?.status === "connected") {
-        this.broadcastClientAvailability(rep.clientId);
-      }
-      this.broadcastAdmin("connections.updated");
-      return result;
+      return startRepConnectionFn(provider, this, repId, payload);
     },
 
     async finalizeRepConnection(searchParams) {
-      const result = await provider.finalizeRepConnection(this, searchParams);
-      const affectedClientIds = new Set(result.affectedClientIds ?? []);
-      const rep = this.getRep(result.repId);
-      if (rep) {
-        affectedClientIds.add(rep.clientId);
-      }
-      affectedClientIds.forEach((clientId) => this.broadcastClientAvailability(clientId));
-      this.broadcastAdmin("connections.updated");
-      return result;
+      return finalizeRepConnectionFn(provider, this, searchParams);
     },
 
     async connectRep(repId, payload) {
@@ -1322,80 +1317,11 @@ export function createStore(provider) {
     },
 
     getPublicRepConnectionPayload(inviteToken) {
-      const client = this.getClientByInviteToken(inviteToken);
-      if (!client) {
-        throw new Error("Lien de connexion introuvable.");
-      }
-
-      return {
-        client: {
-          id: client.id,
-          name: client.name,
-          timezone: client.timezone,
-          inviteToken: client.connectionInviteToken,
-          routingMode: client.routingMode,
-        },
-        fields: [
-          {
-            id: "firstName",
-            label: "Prénom",
-            type: "text",
-            required: true,
-          },
-          {
-            id: "lastName",
-            label: "Nom",
-            type: "text",
-            required: true,
-          },
-          {
-            id: "provider",
-            label: "Provider calendrier",
-            type: "select",
-            required: true,
-            options: PUBLIC_PROVIDER_OPTIONS,
-          },
-          {
-            id: "role",
-            label: "Rôle",
-            type: "select",
-            required: true,
-            options: [
-              { id: "junior", label: "Actif junior" },
-              { id: "senior", label: "Actif senior" },
-              { id: "non_defini", label: "Non défini" },
-            ],
-          },
-          ...normalizePublicRepConnectionFields(client.repConnectionFormConfig),
-        ],
-      };
+      return getPublicRepConnectionPayloadFn(this, inviteToken);
     },
 
     async startPublicRepConnection(inviteToken, payload = {}) {
-      const client = this.getClientByInviteToken(inviteToken);
-      if (!client) {
-        throw new Error("Lien de connexion introuvable.");
-      }
-
-      if (!["google", "microsoft"].includes(payload.provider)) {
-        throw new Error("Provider de connexion invalide.");
-      }
-
-      if (!payload.firstName?.trim() || !payload.lastName?.trim()) {
-        throw new Error("Le prénom et le nom sont obligatoires.");
-      }
-
-      if (!REP_ROLES.includes(payload.role)) {
-        throw new Error("Rôle de rep invalide.");
-      }
-
-      const rep = this.findOrCreateRepForPublicConnection(client, payload);
-
-      return this.startRepConnection(rep.id, {
-        provider: payload.provider,
-        source: "public_invite",
-        inviteToken,
-      });
+      return startPublicRepConnectionFn(this, inviteToken, payload);
     },
 
     listAllCallers() {
@@ -1548,198 +1474,23 @@ export function createStore(provider) {
     },
 
     getConnection(repId) {
-      const row = db
-        .prepare("SELECT * FROM rep_calendar_connections WHERE rep_id = ?")
-        .get(repId);
-      return row ? fromConnectionRow(row) : null;
+      return getConnection(db, repId);
     },
 
-    findConflictingConnections(identity = {}, options = {}) {
-      const grantId = identity.providerGrantId ?? null;
-      const accountId = identity.providerAccountId ?? null;
-      if (!grantId && !accountId) {
-        return [];
-      }
-
-      return db
-        .prepare(`
-          SELECT *
-          FROM rep_calendar_connections
-          WHERE (
-            (? IS NOT NULL AND provider_grant_id = ?)
-            OR (? IS NOT NULL AND provider_account_id = ?)
-          )
-            AND (? IS NULL OR rep_id != ?)
-        `)
-        .all(
-          grantId,
-          grantId,
-          accountId,
-          accountId,
-          options.excludeRepId ?? null,
-          options.excludeRepId ?? null,
-        )
-        .map(fromConnectionRow);
+    findConflictingConnections(identity, options) {
+      return findConflictingConnections(db, identity, options);
     },
 
-    disconnectConnection(repId, patch = {}) {
-      const current = this.getConnection(repId);
-      if (!current) {
-        return null;
-      }
-
-      return this.upsertConnection(repId, {
-        provider: patch.provider ?? current.provider ?? provider.mode,
-        providerEmail: null,
-        providerGrantId: null,
-        providerAccountId: null,
-        bookingCalendarId: null,
-        status: patch.status ?? "disconnected",
-        authUrl: null,
-        lastSyncAt: null,
-        connectedAt: null,
-        lastWebhookAt: null,
-        lastError: patch.lastError ?? null,
-      });
+    disconnectConnection(repId, patch) {
+      return disconnectConnection(db, provider, repId, patch);
     },
 
-    claimCalendarConnection(repId, patch = {}) {
-      const rep = this.getRep(repId);
-      if (!rep) {
-        throw new Error("Rep introuvable.");
-      }
-
-      const connectedAt = patch.connectedAt ?? new Date().toISOString();
-
-      return database.withTransaction(() => {
-        const conflicts = this.findConflictingConnections(
-          {
-            providerGrantId: patch.providerGrantId ?? null,
-            providerAccountId: patch.providerAccountId ?? null,
-          },
-          { excludeRepId: repId },
-        );
-        const affectedClientIds = new Set([rep.clientId]);
-
-        conflicts.forEach((connection) => {
-          const owner = this.getRep(connection.repId);
-          if (owner) {
-            affectedClientIds.add(owner.clientId);
-          }
-          this.disconnectConnection(connection.repId, { provider: "nylas" });
-        });
-
-        const connection = this.upsertConnection(repId, {
-          provider: "nylas",
-          providerEmail: patch.providerEmail ?? null,
-          providerGrantId: patch.providerGrantId ?? null,
-          providerAccountId: patch.providerAccountId ?? null,
-          bookingCalendarId: patch.bookingCalendarId ?? "primary",
-          status: "connected",
-          authUrl: null,
-          lastSyncAt: patch.lastSyncAt ?? connectedAt,
-          connectedAt,
-          lastWebhookAt: patch.lastWebhookAt ?? null,
-          lastError: patch.lastError ?? null,
-        });
-
-        return {
-          connection,
-          disconnectedRepIds: conflicts.map((item) => item.repId),
-          affectedClientIds: [...affectedClientIds],
-        };
-      });
+    claimCalendarConnection(repId, patch) {
+      return claimCalendarConnection(database, db, provider, this, repId, patch);
     },
 
     upsertConnection(repId, patch) {
-      const current =
-        db
-          .prepare("SELECT * FROM rep_calendar_connections WHERE rep_id = ?")
-          .get(repId) ?? null;
-
-      const pick = (patchVal, currentVal) =>
-        patchVal !== undefined ? patchVal : currentVal ?? null;
-
-      const next = {
-        id: current?.id ?? `connection-${repId}`,
-        repId,
-        provider: patch.provider ?? current?.provider ?? provider.mode,
-        providerEmail: pick(patch.providerEmail, current?.provider_email),
-        providerGrantId: pick(patch.providerGrantId, current?.provider_grant_id),
-        providerAccountId: pick(patch.providerAccountId, current?.provider_account_id),
-        bookingCalendarId: pick(patch.bookingCalendarId, current?.booking_calendar_id),
-        status: patch.status ?? current?.status ?? "disconnected",
-        authUrl: pick(patch.authUrl, current?.auth_url),
-        lastSyncAt: pick(patch.lastSyncAt, current?.last_sync_at),
-        connectedAt: pick(patch.connectedAt, current?.connected_at),
-        lastWebhookAt: pick(patch.lastWebhookAt, current?.last_webhook_at),
-        lastError: pick(patch.lastError, current?.last_error),
-      };
-
-      if (current) {
-        db.prepare(`
-          UPDATE rep_calendar_connections
-          SET provider = ?,
-              provider_email = ?,
-              provider_grant_id = ?,
-              provider_account_id = ?,
-              booking_calendar_id = ?,
-              status = ?,
-              auth_url = ?,
-              last_sync_at = ?,
-              connected_at = ?,
-              last_webhook_at = ?,
-              last_error = ?
-          WHERE rep_id = ?
-        `).run(
-          next.provider,
-          next.providerEmail,
-          next.providerGrantId,
-          next.providerAccountId,
-          next.bookingCalendarId,
-          next.status,
-          next.authUrl,
-          next.lastSyncAt,
-          next.connectedAt,
-          next.lastWebhookAt,
-          next.lastError,
-          repId,
-        );
-      } else {
-        db.prepare(`
-          INSERT INTO rep_calendar_connections (
-            id,
-            rep_id,
-            provider,
-            provider_email,
-            provider_grant_id,
-            provider_account_id,
-            booking_calendar_id,
-            status,
-            auth_url,
-            last_sync_at,
-            connected_at,
-            last_webhook_at,
-            last_error
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(
-          next.id,
-          next.repId,
-          next.provider,
-          next.providerEmail,
-          next.providerGrantId,
-          next.providerAccountId,
-          next.bookingCalendarId,
-          next.status,
-          next.authUrl,
-          next.lastSyncAt,
-          next.connectedAt,
-          next.lastWebhookAt,
-          next.lastError,
-        );
-      }
-
-      return this.getConnection(repId);
+      return upsertConnection(db, provider, repId, patch);
     },
 
     getRoutingPolicy(bookingLinkId) {
@@ -2612,28 +2363,6 @@ function decorateRep(rep, connection, providerMode) {
   };
 }
 
-function getEffectiveConnectionStatus(connection, providerMode) {
-  if (!connection) {
-    return "disconnected";
-  }
-  if (connection.status !== "connected") {
-    return connection.status;
-  }
-  return isConnectionUsable(connection, providerMode) ? "connected" : "disconnected";
-}
-
-function isConnectionUsable(connection, providerMode) {
-  if (!connection || connection.status !== "connected") {
-    return false;
-  }
-
-  if (providerMode === "nylas") {
-    return connection.provider === "nylas" && Boolean(connection.providerGrantId);
-  }
-
-  return connection.provider === "mock";
-}
-
 function isRepAvailableAgainstIntervals(intervals, slotStart, bookingLink) {
   const slotEnd = addMinutes(slotStart, bookingLink.durationMinutes);
   const busyStart = subMinutes(slotStart, bookingLink.bufferBeforeMinutes);
@@ -2806,24 +2535,6 @@ function fromRepRow(row) {
   };
 }
 
-function fromConnectionRow(row) {
-  return {
-    id: row.id,
-    repId: row.rep_id,
-    provider: row.provider,
-    providerEmail: row.provider_email ?? null,
-    providerGrantId: row.provider_grant_id ?? null,
-    providerAccountId: row.provider_account_id ?? null,
-    bookingCalendarId: row.booking_calendar_id ?? null,
-    status: row.status,
-    authUrl: row.auth_url ?? null,
-    lastSyncAt: row.last_sync_at ?? null,
-    connectedAt: row.connected_at ?? null,
-    lastWebhookAt: row.last_webhook_at ?? null,
-    lastError: row.last_error ?? null,
-  };
-}
-
 function fromRoutingPolicyRow(row) {
   return {
     id: row.id,
@@ -2908,39 +2619,6 @@ function normalizePersonName(value) {
     .trim()
     .replace(/\s+/g, " ")
     .toLowerCase();
-}
-
-function normalizePublicRepConnectionFields(fields) {
-  if (!Array.isArray(fields)) {
-    return [];
-  }
-
-  return fields
-    .filter((field) => field && typeof field.id === "string" && typeof field.label === "string")
-    .map((field) => ({
-      id: field.id,
-      label: field.label,
-      type: field.type === "select" ? "select" : "text",
-      required: field.required !== false,
-      options:
-        field.type === "select" && Array.isArray(field.options)
-          ? field.options
-              .filter(
-                (option) =>
-                  option &&
-                  typeof option.id === "string" &&
-                  typeof option.label === "string",
-              )
-              .map((option) => ({
-                id: option.id,
-                label: option.label,
-              }))
-          : undefined,
-    }))
-    .filter(
-      (field) =>
-        !["firstName", "lastName", "provider", "role"].includes(field.id),
-    );
 }
 
 function ensureDefaultClientArtifacts(db) {
