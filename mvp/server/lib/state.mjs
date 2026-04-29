@@ -17,6 +17,25 @@ import {
 } from "date-fns";
 import { createDatabase } from "./database.mjs";
 import {
+  makeId,
+  nextBusinessMorning,
+  differenceInMinutesSafe,
+  parseOptionalIso,
+  clampDate,
+  maxDate,
+  parseJson,
+} from "./utils.mjs";
+import {
+  listAllTasks as listAllTasksFn,
+  getTask as getTaskFn,
+  getOpenTaskByBookingId as getOpenTaskByBookingIdFn,
+  getTaskByReplacement as getTaskByReplacementFn,
+  listCallerTasks as listCallerTasksFn,
+  ensureFollowUpTask as ensureFollowUpTaskFn,
+  completeTask as completeTaskFn,
+  updateTask as updateTaskFn,
+} from "./tasks.mjs";
+import {
   REP_ROLES,
   isConnectionUsable,
   getEffectiveConnectionStatus,
@@ -163,18 +182,7 @@ export function createStore(provider) {
     },
 
     listCallerTasks(callerId, clientId = null) {
-      let tasks = this.listAllTasks();
-      tasks = tasks.filter(
-        (task) =>
-          task.callerId === callerId &&
-          task.status === "open" &&
-          (!clientId || task.clientId === clientId),
-      );
-
-      return {
-        timezone: "Europe/Paris",
-        tasks: tasks.sort((left, right) => left.dueAt.localeCompare(right.dueAt)),
-      };
+      return listCallerTasksFn(db, callerId, clientId);
     },
 
     async buildAvailability(bookingLink, companySizeValue, filters = {}, options = {}) {
@@ -873,53 +881,7 @@ export function createStore(provider) {
     },
 
     updateTask(taskId, payload = {}) {
-      const task = this.getTask(taskId);
-      if (!task) {
-        throw new Error("Tâche introuvable.");
-      }
-
-      const createdAt = new Date().toISOString();
-      const nextStatus = payload.status ?? task.status;
-      const dueAt = payload.dueAt ?? task.dueAt;
-      if (!["open", "done", "dismissed"].includes(nextStatus)) {
-        throw new Error("Statut de tâche invalide.");
-      }
-
-      database.withTransaction(() => {
-        db.prepare(`
-          UPDATE follow_up_tasks
-          SET status = ?,
-              due_at = ?,
-              notes = ?,
-              completed_at = ?,
-              dismissed_at = ?
-          WHERE id = ?
-        `).run(
-          nextStatus,
-          dueAt,
-          payload.notes ?? task.notes ?? null,
-          nextStatus === "done" ? createdAt : task.completedAt,
-          nextStatus === "dismissed" ? createdAt : task.dismissedAt,
-          taskId,
-        );
-
-        if (nextStatus !== task.status) {
-          this.insertTimelineEvent({
-            bookingId: task.sourceBookingId,
-            type: "task_completed",
-            actorLabel: "Admin BeeNice",
-            reason:
-              nextStatus === "dismissed"
-                ? "Tâche classée."
-                : "Tâche marquée comme traitée.",
-            createdAt,
-            meta: { taskStatus: nextStatus },
-          });
-        }
-      });
-
-      this.broadcastAdmin("task.updated");
-      return { ok: true };
+      return updateTaskFn(database, db, this, taskId, payload);
     },
 
     async refreshCalendarBookings() {
@@ -1745,36 +1707,20 @@ export function createStore(provider) {
       return row ? fromBookingRow(row) : null;
     },
 
-    _taskBaseQuery(whereClause = "") {
-      return db.prepare(`
-        SELECT t.*, b.company_name, b.prospect_name, b.start_at, c.name AS client_name, u.name AS caller_name
-        FROM follow_up_tasks t
-        JOIN bookings b ON b.id = t.source_booking_id
-        JOIN clients c ON c.id = t.client_id
-        JOIN callers u ON u.id = t.caller_id
-        ${whereClause}
-      `);
-    },
-
     listAllTasks() {
-      return this._taskBaseQuery("ORDER BY t.due_at ASC, t.created_at DESC")
-        .all()
-        .map(fromTaskRow);
+      return listAllTasksFn(db);
     },
 
     getTask(taskId) {
-      const row = this._taskBaseQuery("WHERE t.id = ?").get(taskId);
-      return row ? fromTaskRow(row) : null;
+      return getTaskFn(db, taskId);
     },
 
     getOpenTaskByBookingId(bookingId) {
-      const row = this._taskBaseQuery("WHERE t.source_booking_id = ? AND t.status = 'open'").get(bookingId);
-      return row ? fromTaskRow(row) : null;
+      return getOpenTaskByBookingIdFn(db, bookingId);
     },
 
     getTaskByReplacement(bookingId) {
-      const row = this._taskBaseQuery("WHERE t.replacement_booking_id = ?").get(bookingId);
-      return row ? fromTaskRow(row) : null;
+      return getTaskByReplacementFn(db, bookingId);
     },
 
     async replaceExternalEventForReschedule(currentBooking, nextBooking, nextRep) {
@@ -2053,88 +1999,11 @@ export function createStore(provider) {
     },
 
     ensureFollowUpTask(bookingId, triggerReason, createdAt = new Date().toISOString()) {
-      const current = this.getOpenTaskByBookingId(bookingId);
-      if (current) {
-        return current;
-      }
-
-      const booking = this.getBooking(bookingId);
-      if (!booking) {
-        return null;
-      }
-
-      const taskId = makeId("task");
-      db.prepare(`
-        INSERT INTO follow_up_tasks (
-          id,
-          source_booking_id,
-          client_id,
-          caller_id,
-          type,
-          trigger_reason,
-          status,
-          due_at,
-          replacement_booking_id,
-          notes,
-          created_at,
-          completed_at,
-          dismissed_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        taskId,
-        booking.id,
-        booking.clientId,
-        booking.callerId,
-        "reposition_booking",
-        triggerReason,
-        "open",
-        nextBusinessMorning(createdAt),
-        null,
-        booking.notes || null,
-        createdAt,
-        null,
-        null,
-      );
-
-      this.insertTimelineEvent({
-        bookingId,
-        type: "task_created",
-        actorLabel: "BeeNice",
-        reason:
-          triggerReason === "cancelled"
-            ? "Tâche de repositionnement créée après annulation."
-            : "Tâche de repositionnement créée après no-show.",
-        createdAt,
-        meta: { triggerReason, taskId },
-      });
-
-      return this.getTask(taskId);
+      return ensureFollowUpTaskFn(db, this, bookingId, triggerReason, createdAt);
     },
 
     completeTask(taskId, replacementBookingId, createdAt = new Date().toISOString()) {
-      const task = this.getTask(taskId);
-      if (!task) {
-        return null;
-      }
-
-      db.prepare(`
-        UPDATE follow_up_tasks
-        SET status = 'done',
-            replacement_booking_id = ?,
-            completed_at = ?
-        WHERE id = ?
-      `).run(replacementBookingId, createdAt, taskId);
-
-      this.insertTimelineEvent({
-        bookingId: task.sourceBookingId,
-        type: "task_completed",
-        actorLabel: this.getCaller(task.callerId)?.name ?? "BeeNice",
-        reason: "Tâche de repositionnement clôturée après rebooking.",
-        createdAt,
-        meta: { taskId, replacementBookingId },
-      });
-
-      return this.getTask(taskId);
+      return completeTaskFn(db, this, taskId, replacementBookingId, createdAt);
     },
 
     _applyProviderBookingChange(booking, { updateStmt, historyStatus, timelineType, timelineMeta, reason, createdAt }) {
@@ -2443,48 +2312,6 @@ function isUpdateEvent(eventType) {
   return typeof eventType === "string" && /updated/i.test(eventType);
 }
 
-function nextBusinessMorning(referenceIso) {
-  let cursor = parseISO(referenceIso);
-  cursor = addDays(cursor, 1);
-  while (isWeekend(cursor)) {
-    cursor = addDays(cursor, 1);
-  }
-  return set(cursor, { hours: 9, minutes: 0, seconds: 0, milliseconds: 0 }).toISOString();
-}
-
-function differenceInMinutesSafe(startIso, endIso) {
-  const start = parseISO(startIso);
-  const end = parseISO(endIso);
-  return Math.max(15, Math.round((end.getTime() - start.getTime()) / 60000));
-}
-
-function parseOptionalIso(value) {
-  if (typeof value !== "string" || !value) {
-    return null;
-  }
-
-  const parsed = parseISO(value);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-}
-
-function clampDate(value, min, max) {
-  if (value < min) {
-    return min;
-  }
-  if (value > max) {
-    return max;
-  }
-  return value;
-}
-
-function maxDate(left, right) {
-  return left > right ? left : right;
-}
-
-function makeId(prefix) {
-  return `${prefix}-${randomUUID()}`;
-}
-
 function fromClientRow(row) {
   return {
     id: row.id,
@@ -2575,41 +2402,6 @@ function fromBookingRow(row) {
     syncState: row.sync_state,
     createdAt: row.created_at,
   };
-}
-
-function fromTaskRow(row) {
-  return {
-    id: row.id,
-    sourceBookingId: row.source_booking_id,
-    clientId: row.client_id,
-    clientName: row.client_name,
-    callerId: row.caller_id,
-    callerName: row.caller_name,
-    type: row.type,
-    triggerReason: row.trigger_reason,
-    status: row.status,
-    dueAt: row.due_at,
-    createdAt: row.created_at,
-    completedAt: row.completed_at ?? null,
-    dismissedAt: row.dismissed_at ?? null,
-    replacementBookingId: row.replacement_booking_id ?? null,
-    companyName: row.company_name,
-    prospectName: row.prospect_name,
-    notes: row.notes ?? null,
-    sourceStartAt: row.start_at,
-  };
-}
-
-function parseJson(value, fallback = {}) {
-  if (!value) {
-    return fallback;
-  }
-
-  try {
-    return JSON.parse(value);
-  } catch {
-    return fallback;
-  }
 }
 
 function normalizePersonName(value) {
