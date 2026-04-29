@@ -1554,7 +1554,7 @@ export function createStore(provider) {
       return row ? fromConnectionRow(row) : null;
     },
 
-    listConnectionsByIdentity(identity = {}, options = {}) {
+    findConflictingConnections(identity = {}, options = {}) {
       const grantId = identity.providerGrantId ?? null;
       const accountId = identity.providerAccountId ?? null;
       if (!grantId && !accountId) {
@@ -1612,7 +1612,7 @@ export function createStore(provider) {
       const connectedAt = patch.connectedAt ?? new Date().toISOString();
 
       return database.withTransaction(() => {
-        const conflicts = this.listConnectionsByIdentity(
+        const conflicts = this.findConflictingConnections(
           {
             providerGrantId: patch.providerGrantId ?? null,
             providerAccountId: patch.providerAccountId ?? null,
@@ -2528,13 +2528,13 @@ export function createStore(provider) {
     },
   };
 
-  bootstrapTimeline(store, db);
-  bootstrapTasks(store, db);
+  initializeTimeline(store, db);
+  initializeFollowUpTasks(store, db);
 
   return store;
 }
 
-function bootstrapTimeline(store, db) {
+function initializeTimeline(store, db) {
   const rows = db.prepare("SELECT COUNT(*) AS count FROM booking_timeline_events").get();
   if (rows?.count > 0) {
     return;
@@ -2582,7 +2582,7 @@ function bootstrapTimeline(store, db) {
   });
 }
 
-function bootstrapTasks(store) {
+function initializeFollowUpTasks(store) {
   store
     .listAllBookings()
     .filter((booking) => {

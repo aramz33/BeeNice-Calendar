@@ -31,7 +31,7 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (request.method === "GET" && match(pathname, /^\/api\/book\/([^/]+)$/)) {
-      const slug = pathname.split("/").at(-1);
+      const slug = segment(pathname, 3);
       return json(response, 200, store.getPublicBookingPayload(slug));
     }
 
@@ -39,7 +39,7 @@ const server = http.createServer(async (request, response) => {
       request.method === "GET" &&
       match(pathname, /^\/api\/book\/([^/]+)\/availability$/)
     ) {
-      const slug = pathname.split("/")[3];
+      const slug = segment(pathname, 3);
       return json(
         response,
         200,
@@ -54,7 +54,8 @@ const server = http.createServer(async (request, response) => {
       request.method === "GET" &&
       match(pathname, /^\/api\/book\/([^/]+)\/callers\/([^/]+)\/bookings$/)
     ) {
-      const [, , , slug, , callerId] = pathname.split("/");
+      const slug = segment(pathname, 3);
+      const callerId = segment(pathname, 5);
       return json(response, 200, store.listCallerBookings(slug, callerId));
     }
 
@@ -62,7 +63,8 @@ const server = http.createServer(async (request, response) => {
       request.method === "GET" &&
       match(pathname, /^\/api\/book\/([^/]+)\/callers\/([^/]+)\/tasks$/)
     ) {
-      const [, , , slug, , callerId] = pathname.split("/");
+      const slug = segment(pathname, 3);
+      const callerId = segment(pathname, 5);
       const bookingLink = store.getBookingLinkBySlug(slug);
       return json(
         response,
@@ -75,7 +77,7 @@ const server = http.createServer(async (request, response) => {
       request.method === "POST" &&
       match(pathname, /^\/api\/book\/([^/]+)\/bookings$/)
     ) {
-      const slug = pathname.split("/")[3];
+      const slug = segment(pathname, 3);
       const body = await parseBody(request);
       return json(response, 201, await store.createBooking(slug, body));
     }
@@ -84,7 +86,9 @@ const server = http.createServer(async (request, response) => {
       request.method === "POST" &&
       match(pathname, /^\/api\/book\/([^/]+)\/callers\/([^/]+)\/bookings\/([^/]+)\/cancel$/)
     ) {
-      const [, , , slug, , callerId, , bookingId] = pathname.split("/");
+      const slug = segment(pathname, 3);
+      const callerId = segment(pathname, 5);
+      const bookingId = segment(pathname, 7);
       return json(
         response,
         200,
@@ -96,7 +100,7 @@ const server = http.createServer(async (request, response) => {
       request.method === "GET" &&
       match(pathname, /^\/api\/connect\/([^/]+)$/)
     ) {
-      const inviteToken = pathname.split("/")[3];
+      const inviteToken = segment(pathname, 3);
       return json(response, 200, store.getPublicRepConnectionPayload(inviteToken));
     }
 
@@ -104,7 +108,7 @@ const server = http.createServer(async (request, response) => {
       request.method === "POST" &&
       match(pathname, /^\/api\/connect\/([^/]+)\/start$/)
     ) {
-      const inviteToken = pathname.split("/")[3];
+      const inviteToken = segment(pathname, 3);
       const body = await parseBody(request);
       return json(response, 200, await store.startPublicRepConnection(inviteToken, body));
     }
@@ -166,14 +170,14 @@ const server = http.createServer(async (request, response) => {
       request.method === "GET" &&
       match(pathname, /^\/api\/admin\/bookings\/([^/]+)$/)
     ) {
-      return json(response, 200, store.getBookingDetail(pathname.split("/").at(-1)));
+      return json(response, 200, store.getBookingDetail(segment(pathname, 4)));
     }
 
     if (
       request.method === "GET" &&
       match(pathname, /^\/api\/admin\/bookings\/([^/]+)\/availability$/)
     ) {
-      const bookingId = pathname.split("/")[4];
+      const bookingId = segment(pathname, 4);
       return json(
         response,
         200,
@@ -188,7 +192,7 @@ const server = http.createServer(async (request, response) => {
       request.method === "PATCH" &&
       match(pathname, /^\/api\/admin\/bookings\/([^/]+)\/outcome$/)
     ) {
-      const bookingId = pathname.split("/")[4];
+      const bookingId = segment(pathname, 4);
       const body = await parseBody(request);
       await store.updateBookingOutcome(bookingId, body.outcomeState, body.reason);
       return json(response, 200, { ok: true });
@@ -198,7 +202,7 @@ const server = http.createServer(async (request, response) => {
       request.method === "PATCH" &&
       match(pathname, /^\/api\/admin\/bookings\/([^/]+)\/schedule$/)
     ) {
-      const bookingId = pathname.split("/")[4];
+      const bookingId = segment(pathname, 4);
       const body = await parseBody(request);
       await store.updateBookingSchedule(
         bookingId,
@@ -213,7 +217,7 @@ const server = http.createServer(async (request, response) => {
       request.method === "PATCH" &&
       match(pathname, /^\/api\/admin\/tasks\/([^/]+)$/)
     ) {
-      const taskId = pathname.split("/")[4];
+      const taskId = segment(pathname, 4);
       const body = await parseBody(request);
       await store.updateTask(taskId, body);
       return json(response, 200, { ok: true });
@@ -228,7 +232,7 @@ const server = http.createServer(async (request, response) => {
       request.method === "PATCH" &&
       match(pathname, /^\/api\/admin\/settings\/clients\/([^/]+)$/)
     ) {
-      const clientId = pathname.split("/")[5];
+      const clientId = segment(pathname, 5);
       const body = await parseBody(request);
       return json(response, 200, store.updateClient(clientId, body));
     }
@@ -242,7 +246,7 @@ const server = http.createServer(async (request, response) => {
       request.method === "PATCH" &&
       match(pathname, /^\/api\/admin\/settings\/callers\/([^/]+)$/)
     ) {
-      const callerId = pathname.split("/")[5];
+      const callerId = segment(pathname, 5);
       const body = await parseBody(request);
       return json(response, 200, store.updateCaller(callerId, body));
     }
@@ -251,7 +255,7 @@ const server = http.createServer(async (request, response) => {
       request.method === "POST" &&
       match(pathname, /^\/api\/admin\/reps\/([^/]+)\/connect-nylas\/start$/)
     ) {
-      const repId = pathname.split("/")[4];
+      const repId = segment(pathname, 4);
       const body = await parseBody(request);
       return json(response, 200, await store.startRepConnection(repId, body));
     }
@@ -260,7 +264,7 @@ const server = http.createServer(async (request, response) => {
       request.method === "POST" &&
       match(pathname, /^\/api\/admin\/reps\/([^/]+)\/connect-nylas$/)
     ) {
-      const repId = pathname.split("/")[4];
+      const repId = segment(pathname, 4);
       const body = await parseBody(request);
       return json(response, 200, await store.connectRep(repId, body));
     }
@@ -358,7 +362,7 @@ setInterval(() => {
 }, 60_000);
 
 function handleStream(pathname, request, response) {
-  const slug = pathname.split("/")[3];
+  const slug = segment(pathname, 3);
   response.writeHead(200, {
     "Content-Type": "text/event-stream",
     "Cache-Control": "no-cache, no-transform",
@@ -571,6 +575,10 @@ function renderCallbackPage({ title, description, target = null, ctaLabel = "Ret
     </main>
   </body>
 </html>`;
+}
+
+function segment(pathname, index) {
+  return pathname.split("/")[index] ?? null;
 }
 
 function decodeCallbackState(value) {
