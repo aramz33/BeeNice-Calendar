@@ -1,6 +1,7 @@
-# Be Nice MVP
+# BeeNice MVP
 
-Standalone MVP built under `mvp/` so the original prototype stays untouched.
+Standalone MVP rooted under `mvp/`, with all frontend source, shared UI
+primitives, theme files, and the local API grouped in the same app directory.
 
 ## What it includes
 

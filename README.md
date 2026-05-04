@@ -2,7 +2,8 @@
 
 Repo dédié au MVP du hub calendrier Be Nice.
 
-Le code principal de la démo est isolé dans [`mvp/`](./mvp) et couvre :
+L'application vit dans [`mvp/`](./mvp), avec le frontend, la couche UI partagée
+et l'API locale regroupés au même endroit. Elle couvre :
 
 - un workspace caller avec disponibilités live consolidées
 - une navigation hebdomadaire sur 12 semaines pour la prise de rendez-vous

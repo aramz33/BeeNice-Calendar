@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { Link, NavLink } from "react-router";
 import { LayoutDashboard, Settings2 } from "lucide-react";
-import { Button } from "@shared-ui/button";
+import { Button } from "@mvp/components/ui/button";
 import { BeeNiceLogo } from "@mvp/components/BeeNiceLogo";
 
 interface AppChromeProps {

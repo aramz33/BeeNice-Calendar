@@ -1,8 +1,7 @@
 @import "tailwindcss" source(none);
-@source "../../src/app/components/ui/**/*.{js,ts,jsx,tsx}";
 @source "../src/**/*.{js,ts,jsx,tsx}";
 @import "tw-animate-css";
-@import "../../src/styles/theme.css";
+@import "./styles/theme.css";
 
 :root {
   color-scheme: light;

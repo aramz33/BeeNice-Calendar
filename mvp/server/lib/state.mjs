@@ -1,22 +1,7 @@
 import { randomUUID } from "node:crypto";
-import {
-  addDays,
-  addMinutes,
-  addWeeks,
-  eachDayOfInterval,
-  endOfDay,
-  endOfWeek,
-  getDay,
-  parseISO,
-  startOfWeek,
-  startOfToday,
-} from "date-fns";
 import { createDatabase } from "./database.mjs";
 import {
   makeId,
-  parseOptionalIso,
-  clampDate,
-  maxDate,
   parseJson,
 } from "./utils.mjs";
 import {
@@ -61,6 +46,24 @@ import {
   getDisplayStatus,
   getLegacyStatus,
 } from "./bookings.mjs";
+import {
+  buildAvailability as buildAvailabilityView,
+  getPublicBookingPayload as getPublicBookingPayloadView,
+  listCallerBookings as listCallerBookingsView,
+} from "./store/public-booking.mjs";
+import {
+  filterBookings as filterAdminBookings,
+  filterTasks as filterAdminTasks,
+  getBookingDetail as getAdminBookingDetail,
+  getCallerCancelMode as getCallerCancelModeView,
+  getClientStats as getAdminClientStats,
+  getTimelineForBooking as getBookingTimeline,
+  listAdminBookings as listAdminBookingsView,
+  listAdminCalendar as listAdminCalendarView,
+  listAdminTasks as listAdminTasksView,
+  listBookingRescheduleAvailability as listBookingRescheduleAvailabilityView,
+  toBookingSummary as toBookingSummaryView,
+} from "./store/admin-bookings.mjs";
 
 const DISPLAY_STATUSES = [
   "scheduled",
@@ -95,47 +98,13 @@ export function createStore(provider) {
   const store = {
     displayStatuses: DISPLAY_STATUSES,
     dbFile: database.filename,
+    getDisplayStatus,
     close() {
       database.close();
     },
 
     getPublicBookingPayload(slug) {
-      const bookingLink = this.getBookingLinkBySlug(slug);
-      if (!bookingLink) {
-        throw new Error("Booking link introuvable.");
-      }
-
-      const client = this.getClient(bookingLink.clientId);
-      const routingPolicy = this.getRoutingPolicy(bookingLink.id);
-      const reps = this.getRepsForLink(bookingLink.id).map((rep) =>
-        decorateRep(rep, this.getConnection(rep.id), provider.mode),
-      );
-
-      return {
-        bookingLink: {
-          id: bookingLink.id,
-          slug: bookingLink.slug,
-          clientId: bookingLink.clientId,
-          title: bookingLink.title,
-          clientName: client?.name ?? "Client inconnu",
-          timezone: bookingLink.timezone,
-          durationMinutes: bookingLink.durationMinutes,
-          intervalMinutes: bookingLink.intervalMinutes,
-          bufferBeforeMinutes: bookingLink.bufferBeforeMinutes,
-          bufferAfterMinutes: bookingLink.bufferAfterMinutes,
-          routingMode: client?.routingMode ?? "pool_unique",
-          companySizeThreshold: routingPolicy?.companySizeThreshold ?? 200,
-          providerMode: provider.mode === "nylas" ? "nylas" : "mock",
-          reps: reps.map((rep) => ({
-            id: rep.id,
-            name: rep.name,
-            seniority: rep.seniority,
-            connectionStatus: rep.connectionStatus,
-          })),
-        },
-        callers: this.listActiveCallers(),
-        workspaces: this.listPublicBookingLinks(),
-      };
+      return getPublicBookingPayloadView(this, provider.mode, slug);
     },
 
     async listAvailability(slug, companySizeValue, filters = {}) {
@@ -148,41 +117,14 @@ export function createStore(provider) {
     },
 
     listCallerBookings(slug, callerId) {
-      const bookingLink = this.getBookingLinkBySlug(slug);
-      if (!bookingLink) {
-        throw new Error("Booking link introuvable.");
-      }
-
-      const bookings = db
-        .prepare(`
-          SELECT *
-          FROM bookings
-          WHERE booking_link_id = ? AND caller_id = ?
-          ORDER BY start_at DESC
-        `)
-        .all(bookingLink.id, callerId)
-        .map(fromBookingRow)
-        .map((booking) => this.toBookingSummary(booking));
-
-      const upcomingBookings = bookings
-        .filter(
-          (booking) =>
-            ACTIVE_SCHEDULE_STATES.has(booking.scheduleState) &&
-            booking.outcomeState === "pending" &&
-            parseISO(booking.startAt) >= new Date(),
-        )
-        .sort((left, right) => left.startAt.localeCompare(right.startAt));
-
-      const historicalBookings = bookings
-        .filter((booking) => !upcomingBookings.some((candidate) => candidate.id === booking.id))
-        .sort((left, right) => right.startAt.localeCompare(left.startAt))
-        .slice(0, 6);
-
-      return {
-        timezone: bookingLink.timezone,
-        bookings: [...upcomingBookings, ...historicalBookings],
-        tasks: this.listCallerTasks(callerId, bookingLink.clientId).tasks,
-      };
+      return listCallerBookingsView(
+        db,
+        this,
+        slug,
+        callerId,
+        ACTIVE_SCHEDULE_STATES,
+        fromBookingRow,
+      );
     },
 
     listCallerTasks(callerId, clientId = null) {
@@ -190,110 +132,10 @@ export function createStore(provider) {
     },
 
     async buildAvailability(bookingLink, companySizeValue, filters = {}, options = {}) {
-      const companySize = Number(companySizeValue);
-      if (Number.isNaN(companySize)) {
-        throw new Error("Taille d'entreprise invalide.");
-      }
-      const minimumStart = addMinutes(new Date(), bookingLink.minNoticeMinutes);
-      const firstWeekStart = startOfWeek(minimumStart, {
+      return buildAvailabilityView(this, bookingLink, companySizeValue, filters, options, {
+        bookingWindowWeeks: BOOKING_WINDOW_WEEKS,
         weekStartsOn: WEEK_STARTS_ON,
       });
-      const maximumWindowEnd = endOfWeek(
-        addWeeks(firstWeekStart, BOOKING_WINDOW_WEEKS - 1),
-        { weekStartsOn: WEEK_STARTS_ON },
-      );
-      const requestedStart = parseOptionalIso(filters.from);
-      const requestedEnd = parseOptionalIso(filters.to);
-      const windowStart = clampDate(
-        requestedStart ?? firstWeekStart,
-        firstWeekStart,
-        maximumWindowEnd,
-      );
-      const windowEnd = clampDate(
-        requestedEnd ??
-          endOfWeek(windowStart, {
-            weekStartsOn: WEEK_STARTS_ON,
-          }),
-        windowStart,
-        maximumWindowEnd,
-      );
-
-      if (windowEnd < windowStart) {
-        throw new Error("Fenêtre de disponibilité invalide.");
-      }
-
-      const interval = {
-        start: maxDate(minimumStart, windowStart),
-        end: windowEnd,
-      };
-
-      const eligibleReps = this.getEligibleReps(bookingLink.id, companySize);
-      const busyByRep = await this.getBusyIntervalsForReps(eligibleReps, interval, {
-        excludedBookingId: options.excludedBookingId ?? null,
-      });
-      const slots = [];
-      const client = this.getClient(bookingLink.clientId);
-      const policy = this.getRoutingPolicy(bookingLink.id);
-      const seniorityPool =
-        client?.routingMode === "weighted_seniority" &&
-        companySize >= (policy?.companySizeThreshold ?? 200)
-          ? "senior"
-          : "all";
-
-      for (const day of eachDayOfInterval({ start: windowStart, end: windowEnd })) {
-        const weekday = getDay(day);
-        if (weekday === 0 || weekday === 6) {
-          continue;
-        }
-
-        for (let hour = 9; hour < 18; hour += 1) {
-          for (
-            let minute = 0;
-            minute < 60;
-            minute += Math.max(bookingLink.intervalMinutes, 1)
-          ) {
-            const slot = new Date(day);
-            slot.setHours(hour, minute, 0, 0);
-
-            if (slot < interval.start) {
-              continue;
-            }
-
-            const availableReps = eligibleReps.filter((rep) =>
-              isRepAvailableAgainstIntervals(
-                busyByRep.get(rep.id) ?? [],
-                slot,
-                bookingLink,
-              ),
-            );
-
-            if (availableReps.length === 0) {
-              continue;
-            }
-
-            slots.push({
-              startAt: slot.toISOString(),
-              endAt: addMinutes(slot, bookingLink.durationMinutes).toISOString(),
-              availableRepCount: availableReps.length,
-              seniorityPool,
-              availableRepIds: options.includeRepDetails
-                ? availableReps.map((rep) => rep.id)
-                : undefined,
-              availableRepNames: options.includeRepDetails
-                ? availableReps.map((rep) => rep.name)
-                : undefined,
-            });
-          }
-        }
-      }
-
-      return {
-        timezone: bookingLink.timezone,
-        windowStart: windowStart.toISOString(),
-        windowEnd: windowEnd.toISOString(),
-        maxWindowEnd: maximumWindowEnd.toISOString(),
-        slots,
-      };
     },
 
     async createBooking(slug, payload) {
@@ -301,158 +143,25 @@ export function createStore(provider) {
     },
 
     listAdminBookings(filters = {}) {
-      const bookings = this.filterBookings(this.listAllBookings(), filters);
-      const counts = blankStatusCounts();
-      bookings.forEach((booking) => {
-        counts[getDisplayStatus(booking)] += 1;
-      });
-
-      const allReps = this.listAllReps().map((rep) =>
-        decorateRep(rep, this.getConnection(rep.id), provider.mode),
-      );
-      const tasks = this.filterTasks(this.listAllTasks(), filters);
-
-      return {
-        timezone: "Europe/Paris",
-        counts,
-        openTaskCount: tasks.filter((task) => task.status === "open").length,
-        clientStats: this.getClientStats(bookings, tasks),
-        bookings: bookings.map((booking) => this.toBookingSummary(booking)),
-        filters: {
-          clients: this.listAllClients().map((client) => ({
-            id: client.id,
-            name: client.name,
-            connectionInviteToken: client.connectionInviteToken,
-          })),
-          callers: this.listAllCallers().map((caller) => ({
-            id: caller.id,
-            name: caller.name,
-          })),
-          reps: allReps.map((rep) => ({
-            id: rep.id,
-            clientId: rep.clientId,
-            name: rep.name,
-            clientName: this.getClient(rep.clientId)?.name ?? "Client inconnu",
-            businessEmail: rep.businessEmail,
-            seniority: rep.seniority,
-            connectionStatus: rep.connectionStatus,
-            provider: rep.provider,
-            providerEmail: rep.providerEmail,
-            connectedAt: rep.connectedAt,
-            lastSyncAt: rep.lastSyncAt,
-            lastWebhookAt: rep.lastWebhookAt,
-            lastError: rep.lastError,
-          })),
-          statuses: DISPLAY_STATUSES,
-        },
-        integrations: provider.getOverview(),
-      };
+      return listAdminBookingsView(this, provider, filters);
     },
 
     listAdminCalendar(filters = {}) {
-      const from = filters.from ?? startOfToday().toISOString();
-      const to = filters.to ?? endOfDay(addDays(startOfToday(), 6)).toISOString();
-      const entries = this.filterBookings(this.listAllBookings(), {
-        ...filters,
-        from,
-        to,
-      }).map((booking) => this.toBookingSummary(booking));
-
-      return {
-        timezone: "Europe/Paris",
-        from,
-        to,
-        entries,
-      };
+      return listAdminCalendarView(this, filters);
     },
 
     listAdminTasks(filters = {}) {
-      const tasks = this.filterTasks(this.listAllTasks(), filters);
-      return {
-        timezone: "Europe/Paris",
-        tasks,
-      };
+      return listAdminTasksView(this, filters);
     },
 
     getBookingDetail(bookingId) {
-      const booking = this.getBooking(bookingId);
-      if (!booking) {
-        throw new Error("Booking introuvable.");
-      }
-
-      const caller = this.getCaller(booking.callerId);
-      const rep = this.getRep(booking.assignedRepId);
-      const client = this.getClient(booking.clientId);
-      const linkedTask = this.getOpenTaskByBookingId(booking.id) ?? this.getTaskByReplacement(booking.id);
-
-      return {
-        booking: {
-          id: booking.id,
-          displayStatus: getDisplayStatus(booking),
-          scheduleState: booking.scheduleState,
-          outcomeState: booking.outcomeState,
-          clientId: booking.clientId,
-          clientName: client?.name ?? "Client inconnu",
-          companyName: booking.companyName,
-          companySize: booking.companySize,
-          prospectName: booking.prospectName,
-          prospectEmail: booking.prospectEmail,
-          callerName: caller?.name ?? "Caller inconnu",
-          callerId: booking.callerId,
-          assignedRepName: rep?.name ?? "Rep inconnu",
-          assignedRepId: booking.assignedRepId,
-          notes: booking.notes,
-          startAt: booking.startAt,
-          endAt: booking.endAt,
-          originalStartAt: booking.originalStartAt,
-          previousStartAt: booking.previousStartAt,
-          lastCalendarChangeAt: booking.lastCalendarChangeAt,
-          calendarSyncState: booking.calendarSyncState,
-          timezone: booking.timezone,
-          assignmentReason: {
-            ...booking.assignmentReason,
-            candidateRepNames: (booking.assignmentReason?.candidateRepIds ?? []).map(
-              (repId) => this.getRep(repId)?.name ?? repId,
-            ),
-          },
-          externalEventId: booking.externalEventId ?? "",
-          linkedTask,
-        },
-        timeline: this.getTimelineForBooking(bookingId),
-      };
+      return getAdminBookingDetail(this, bookingId);
     },
 
     async listBookingRescheduleAvailability(bookingId, filters = {}) {
-      const booking = this.getBooking(bookingId);
-      if (!booking) {
-        throw new Error("Booking introuvable.");
-      }
-
-      const bookingLink = this.getBookingLinkById(booking.bookingLinkId);
-      if (!bookingLink) {
-        throw new Error("Booking link introuvable.");
-      }
-
-      const fallbackWeekStart = startOfWeek(parseISO(booking.startAt), {
+      return listBookingRescheduleAvailabilityView(this, bookingId, filters, {
         weekStartsOn: WEEK_STARTS_ON,
       });
-
-      return this.buildAvailability(
-        bookingLink,
-        booking.companySize,
-        {
-          from: filters.from ?? fallbackWeekStart.toISOString(),
-          to:
-            filters.to ??
-            endOfWeek(fallbackWeekStart, {
-              weekStartsOn: WEEK_STARTS_ON,
-            }).toISOString(),
-        },
-        {
-          excludedBookingId: booking.id,
-          includeRepDetails: true,
-        },
-      );
     },
 
     async updateBookingOutcome(bookingId, outcomeState, reason = "") {
@@ -518,10 +227,6 @@ export function createStore(provider) {
 
     async finalizeRepConnection(searchParams) {
       return finalizeRepConnectionFn(provider, this, searchParams);
-    },
-
-    async connectRep(repId, payload) {
-      return this.startRepConnection(repId, payload);
     },
 
     async handleWebhook(payload = {}) {
@@ -735,6 +440,10 @@ export function createStore(provider) {
       return this.listAllReps().map((rep) =>
         decorateRep(rep, this.getConnection(rep.id), provider.mode),
       );
+    },
+
+    decorateRep(rep) {
+      return decorateRep(rep, this.getConnection(rep.id), provider.mode);
     },
 
     addSseClient(slug, response) {
@@ -1065,6 +774,10 @@ export function createStore(provider) {
       return getEligibleRepsFn(this, bookingLinkId, companySize);
     },
 
+    isRepAvailableAgainstIntervals(intervals, slotStart, bookingLink) {
+      return isRepAvailableAgainstIntervals(intervals, slotStart, bookingLink);
+    },
+
     async getBusyIntervalsForReps(reps, interval, options = {}) {
       return getBusyIntervalsForRepsFn(db, this, provider, reps, interval, options);
     },
@@ -1151,191 +864,27 @@ export function createStore(provider) {
     },
 
     getTimelineForBooking(bookingId) {
-      return db
-        .prepare(`
-          SELECT *
-          FROM booking_timeline_events
-          WHERE booking_id = ?
-          ORDER BY created_at DESC
-        `)
-        .all(bookingId)
-        .map((entry) => ({
-          id: entry.id,
-          type: entry.event_type,
-          actorLabel: entry.actor_label,
-          reason: entry.reason ?? "",
-          createdAt: entry.created_at,
-          meta: parseJson(entry.meta_json),
-        }));
+      return getBookingTimeline(db, bookingId);
     },
 
     toBookingSummary(booking) {
-      return {
-        id: booking.id,
-        displayStatus: getDisplayStatus(booking),
-        scheduleState: booking.scheduleState,
-        outcomeState: booking.outcomeState,
-        clientId: booking.clientId,
-        clientName: this.getClient(booking.clientId)?.name ?? "Client inconnu",
-        companyName: booking.companyName,
-        companySize: booking.companySize,
-        prospectName: booking.prospectName,
-        prospectEmail: booking.prospectEmail,
-        callerId: booking.callerId,
-        callerName: this.getCaller(booking.callerId)?.name ?? "Caller inconnu",
-        assignedRepId: booking.assignedRepId,
-        assignedRepName: this.getRep(booking.assignedRepId)?.name ?? "Rep inconnu",
-        startAt: booking.startAt,
-        endAt: booking.endAt,
-        originalStartAt: booking.originalStartAt,
-        previousStartAt: booking.previousStartAt,
-        timezone: booking.timezone,
-        notes: booking.notes,
-        taskId: this.getOpenTaskByBookingId(booking.id)?.id ?? null,
-        canCancel: this.getCallerCancelMode(booking) === "direct",
-        cancelMode: this.getCallerCancelMode(booking),
-      };
+      return toBookingSummaryView(this, booking, ACTIVE_SCHEDULE_STATES, provider.mode);
     },
 
     getCallerCancelMode(booking) {
-      if (
-        !ACTIVE_SCHEDULE_STATES.has(booking.scheduleState) ||
-        booking.outcomeState !== "pending"
-      ) {
-        return null;
-      }
-
-      if (parseISO(booking.startAt) <= new Date()) {
-        return null;
-      }
-
-      if (provider.mode !== "nylas") {
-        return "direct";
-      }
-
-      const connection = this.getConnection(booking.assignedRepId);
-      if (!connection || connection.status !== "connected") {
-        return "admin_only";
-      }
-
-      return "direct";
+      return getCallerCancelModeView(this, booking, ACTIVE_SCHEDULE_STATES, provider.mode);
     },
 
     getClientStats(bookings, tasks) {
-      const byClient = new Map();
-      bookings.forEach((booking) => {
-        if (!byClient.has(booking.clientId)) {
-          const client = this.getClient(booking.clientId);
-          byClient.set(booking.clientId, {
-            clientId: booking.clientId,
-            clientName: client?.name ?? "Client inconnu",
-            total: 0,
-            byStatus: blankStatusCounts(),
-            openTaskCount: 0,
-          });
-        }
-        const entry = byClient.get(booking.clientId);
-        entry.total += 1;
-        entry.byStatus[getDisplayStatus(booking)] += 1;
-      });
-
-      tasks.forEach((task) => {
-        if (!byClient.has(task.clientId)) {
-          const client = this.getClient(task.clientId);
-          byClient.set(task.clientId, {
-            clientId: task.clientId,
-            clientName: client?.name ?? "Client inconnu",
-            total: 0,
-            byStatus: blankStatusCounts(),
-            openTaskCount: 0,
-          });
-        }
-        if (task.status === "open") {
-          byClient.get(task.clientId).openTaskCount += 1;
-        }
-      });
-
-      return Array.from(byClient.values()).map((entry) => ({
-        clientId: entry.clientId,
-        clientName: entry.clientName,
-        total: entry.total,
-        byStatus: entry.byStatus,
-        completedPct:
-          entry.total > 0
-            ? Math.round((entry.byStatus.completed / entry.total) * 100)
-            : 0,
-        noShowPct:
-          entry.total > 0
-            ? Math.round((entry.byStatus.no_show / entry.total) * 100)
-            : 0,
-        toReplacePct:
-          entry.total > 0
-            ? Math.round(
-                ((entry.byStatus.no_show + entry.byStatus.cancelled) /
-                  entry.total) *
-                  100,
-              )
-            : 0,
-        pendingCount: entry.byStatus.scheduled + entry.byStatus.rescheduled,
-        openTaskCount: entry.openTaskCount,
-      }));
+      return getAdminClientStats(this, bookings, tasks);
     },
 
     filterBookings(bookings, filters = {}) {
-      return bookings.filter((booking) => {
-        if (filters.status && filters.status !== "all") {
-          if (getDisplayStatus(booking) !== filters.status) {
-            return false;
-          }
-        }
-        if (filters.callerId && filters.callerId !== "all") {
-          if (booking.callerId !== filters.callerId) {
-            return false;
-          }
-        }
-        if (filters.repId && filters.repId !== "all") {
-          if (booking.assignedRepId !== filters.repId) {
-            return false;
-          }
-        }
-        if (filters.clientId && filters.clientId !== "all") {
-          if (booking.clientId !== filters.clientId) {
-            return false;
-          }
-        }
-        if (filters.from && booking.startAt < filters.from) {
-          return false;
-        }
-        if (filters.to && booking.startAt > filters.to) {
-          return false;
-        }
-        if (filters.query) {
-          const clientName = this.getClient(booking.clientId)?.name ?? "";
-          const callerName = this.getCaller(booking.callerId)?.name ?? "";
-          const repName = this.getRep(booking.assignedRepId)?.name ?? "";
-          if (!matchesQuery(filters.query, [booking.companyName, booking.prospectName, clientName, callerName, repName])) {
-            return false;
-          }
-        }
-        return true;
-      });
+      return filterAdminBookings(this, bookings, filters);
     },
 
     filterTasks(tasks, filters = {}) {
-      return tasks.filter((task) => {
-        if (filters.callerId && filters.callerId !== "all" && task.callerId !== filters.callerId) {
-          return false;
-        }
-        if (filters.clientId && filters.clientId !== "all" && task.clientId !== filters.clientId) {
-          return false;
-        }
-        if (filters.query) {
-          if (!matchesQuery(filters.query, [task.clientName, task.callerName, task.companyName, task.prospectName])) {
-            return false;
-          }
-        }
-        return true;
-      });
+      return filterAdminTasks(tasks, filters);
     },
 
     insertLegacyStatusHistory({

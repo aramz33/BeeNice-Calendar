@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@shared-ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@mvp/components/ui/card";
 import { StatusBadge } from "@mvp/components/StatusBadge";
 import {
   CALENDAR_HOURS,

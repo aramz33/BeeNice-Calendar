@@ -1,4 +1,4 @@
-import { Button } from "@shared-ui/button";
+import { Button } from "@mvp/components/ui/button";
 import { formatRelativeShort } from "@mvp/lib/time";
 import type { FollowUpTask } from "@mvp/lib/types";
 

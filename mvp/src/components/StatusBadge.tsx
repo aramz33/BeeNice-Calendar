@@ -1,5 +1,5 @@
-import { Badge } from "@shared-ui/badge";
-import { cn } from "@shared-ui/utils";
+import { Badge } from "@mvp/components/ui/badge";
+import { cn } from "@mvp/components/ui/utils";
 import type { BookingStatus } from "@mvp/lib/types";
 
 const badgeMap: Record<

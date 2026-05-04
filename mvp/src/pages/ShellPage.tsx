@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
-import { Button } from "@shared-ui/button";
+import { Button } from "@mvp/components/ui/button";
 import { AppChrome } from "@mvp/components/AppChrome";
 import { apiFetch } from "@mvp/lib/api";
 import type { PublicWorkspace, PublicWorkspacesResponse } from "@mvp/lib/types";

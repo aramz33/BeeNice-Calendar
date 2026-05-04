@@ -1,17 +1,17 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
-import { Button } from "@shared-ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@shared-ui/card";
-import { Input } from "@shared-ui/input";
-import { Label } from "@shared-ui/label";
+import { Button } from "@mvp/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@mvp/components/ui/card";
+import { Input } from "@mvp/components/ui/input";
+import { Label } from "@mvp/components/ui/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@shared-ui/select";
+} from "@mvp/components/ui/select";
 import { AppChrome } from "@mvp/components/AppChrome";
 import { apiFetch } from "@mvp/lib/api";
 import type { ClientCreationResponse, SettingsPayload } from "@mvp/lib/types";

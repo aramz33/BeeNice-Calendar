@@ -4,8 +4,8 @@ import { format } from "date-fns";
 import { fr } from "date-fns/locale/fr";
 import { formatInTimeZone } from "date-fns-tz";
 import { ChevronLeft, ChevronRight, Clock3, Sparkles } from "lucide-react";
-import { Button } from "@shared-ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@shared-ui/card";
+import { Button } from "@mvp/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@mvp/components/ui/card";
 import type { AvailabilityResponse } from "@mvp/lib/types";
 import {
   formatDateShortInTimezone,

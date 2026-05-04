@@ -4,10 +4,10 @@ import {
   Settings2,
   XCircle,
 } from "lucide-react";
-import { Button } from "@shared-ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@shared-ui/card";
-import { Input } from "@shared-ui/input";
-import { Label } from "@shared-ui/label";
+import { Button } from "@mvp/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@mvp/components/ui/card";
+import { Input } from "@mvp/components/ui/input";
+import { Label } from "@mvp/components/ui/label";
 import { SlotPicker } from "@mvp/components/SlotPicker";
 import { StatusBadge } from "@mvp/components/StatusBadge";
 import { formatDateTime, formatRelativeShort } from "@mvp/lib/time";

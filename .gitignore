@@ -3,7 +3,7 @@ node_modules/
 .idea/
 *.iml
 mvp/dist/
-mvp/server/data/
+mvp/**/server/data/
 
 
 .claude/

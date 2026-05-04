@@ -12,8 +12,6 @@ export default defineConfig({
   resolve: {
     alias: {
       "@mvp": path.resolve(__dirname, "src"),
-      "@shared-ui": path.resolve(__dirname, "../src/app/components/ui"),
-      "@shared-hooks": path.resolve(__dirname, "../src/app/hooks"),
     },
   },
   server: {

@@ -78,6 +78,7 @@ export interface TimelineEvent {
   id: string;
   type:
     | "booking_created"
+    | "schedule_set"
     | "calendar_rescheduled"
     | "calendar_cancelled"
     | "outcome_set"

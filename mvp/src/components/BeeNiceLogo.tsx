@@ -1,4 +1,4 @@
-import { cn } from "@shared-ui/utils";
+import { cn } from "@mvp/components/ui/utils";
 
 interface BeeNiceLogoProps {
   compact?: boolean;
