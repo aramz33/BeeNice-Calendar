@@ -1,13 +1,190 @@
-import { addDays, addMinutes, parseISO, subMinutes } from "date-fns";
-import { getConnection } from "./connections.mjs";
+import {
+    addDays,
+    addMinutes,
+    addWeeks,
+    eachDayOfInterval,
+    endOfWeek,
+    getDay,
+    parseISO,
+    startOfWeek,
+    subMinutes,
+} from "date-fns";
+import {getConnection} from "./connections.mjs";
+import {clampDate, maxDate, parseOptionalIso} from "./utils.mjs";
 
-// --- Pure helpers ---
+const DEFAULT_BOOKING_WINDOW_WEEKS = 12;
+const DEFAULT_WEEK_STARTS_ON = 1;
+
+export function createAvailabilityModule({
+                                             db,
+                                             store,
+                                             provider,
+                                             config = {},
+                                         }) {
+    const bookingWindowWeeks =
+        config.bookingWindowWeeks ?? DEFAULT_BOOKING_WINDOW_WEEKS;
+    const weekStartsOn = config.weekStartsOn ?? DEFAULT_WEEK_STARTS_ON;
+
+    return {
+        async buildSlots(bookingLink, companySizeValue, filters = {}, options = {}) {
+            const companySize = parseCompanySize(companySizeValue);
+            const minimumStart = addMinutes(new Date(), bookingLink.minNoticeMinutes);
+            const firstWeekStart = startOfWeek(minimumStart, {
+                weekStartsOn,
+            });
+            const maximumWindowEnd = endOfWeek(
+                addWeeks(firstWeekStart, bookingWindowWeeks - 1),
+                {weekStartsOn},
+            );
+            const requestedStart = parseOptionalIso(filters.from);
+            const requestedEnd = parseOptionalIso(filters.to);
+            const windowStart = clampDate(
+                requestedStart ?? firstWeekStart,
+                firstWeekStart,
+                maximumWindowEnd,
+            );
+            const windowEnd = clampDate(
+                requestedEnd ??
+                endOfWeek(windowStart, {
+                    weekStartsOn,
+                }),
+                windowStart,
+                maximumWindowEnd,
+            );
+
+            if (windowEnd < windowStart) {
+                throw new Error("Fenêtre de disponibilité invalide.");
+            }
+
+            const interval = {
+                start: maxDate(minimumStart, windowStart),
+                end: windowEnd,
+            };
+
+            const eligibleReps = getEligibleReps(store, bookingLink.id, companySize);
+            const busyByRep = await getBusyIntervalsForReps(
+                db,
+                store,
+                provider,
+                eligibleReps,
+                interval,
+                {
+                    excludedBookingId: options.excludedBookingId ?? null,
+                },
+            );
+            const slots = [];
+            const seniorityPool = getSeniorityPool(store, bookingLink, companySize);
+
+            for (const day of eachDayOfInterval({start: windowStart, end: windowEnd})) {
+                const weekday = getDay(day);
+                if (weekday === 0 || weekday === 6) {
+                    continue;
+                }
+
+                for (let hour = 9; hour < 18; hour += 1) {
+                    for (
+                        let minute = 0;
+                        minute < 60;
+                        minute += Math.max(bookingLink.intervalMinutes, 1)
+                    ) {
+                        const slot = new Date(day);
+                        slot.setHours(hour, minute, 0, 0);
+
+                        if (slot < interval.start) {
+                            continue;
+                        }
+
+                        const availableReps = eligibleReps.filter((rep) =>
+                            isRepAvailableAgainstIntervals(
+                                busyByRep.get(rep.id) ?? [],
+                                slot,
+                                bookingLink,
+                            ),
+                        );
+
+                        if (availableReps.length === 0) {
+                            continue;
+                        }
+
+                        slots.push({
+                            startAt: slot.toISOString(),
+                            endAt: addMinutes(slot, bookingLink.durationMinutes).toISOString(),
+                            availableRepCount: availableReps.length,
+                            seniorityPool,
+                            availableRepIds: options.includeRepDetails
+                                ? availableReps.map((rep) => rep.id)
+                                : undefined,
+                            availableRepNames: options.includeRepDetails
+                                ? availableReps.map((rep) => rep.name)
+                                : undefined,
+                        });
+                    }
+                }
+            }
+
+            return {
+                timezone: bookingLink.timezone,
+                windowStart: windowStart.toISOString(),
+                windowEnd: windowEnd.toISOString(),
+                maxWindowEnd: maximumWindowEnd.toISOString(),
+                slots,
+            };
+        },
+
+        async assignRepForSlot(bookingLink, companySizeValue, slotStartValue, options = {}) {
+            const companySize = parseCompanySize(companySizeValue);
+            const slotStart = parseSlotStart(slotStartValue);
+            const availableEligibleReps = await getAvailableEligibleRepsForSlot(
+                db,
+                store,
+                provider,
+                bookingLink,
+                companySize,
+                slotStart,
+                {
+                    excludedBookingId: options.excludedBookingId ?? null,
+                },
+            );
+
+            if (availableEligibleReps.length === 0) {
+                throw new Error("Le créneau sélectionné n'est plus disponible.");
+            }
+
+            return assignRep(db, store, bookingLink, companySize, availableEligibleReps);
+        },
+    };
+}
+
+function parseCompanySize(value) {
+    const companySize = Number(value);
+    if (Number.isNaN(companySize)) {
+        throw new Error("Taille d'entreprise invalide.");
+    }
+    return companySize;
+}
+
+function parseSlotStart(value) {
+    const slotStart = value instanceof Date ? value : parseISO(String(value));
+    if (Number.isNaN(slotStart.getTime())) {
+        throw new Error("Créneau invalide.");
+    }
+    return slotStart;
+}
+
+function getSeniorityPool(store, bookingLink, companySize) {
+    const client = store.getClient(bookingLink.clientId);
+    const policy = store.getRoutingPolicy(bookingLink.id);
+    return client?.routingMode === "weighted_seniority" &&
+    companySize >= (policy?.companySizeThreshold ?? 200)
+        ? "senior"
+        : "all";
+}
 
 function rangesOverlap(startA, endA, startB, endB) {
   return startA < endB && startB < endA;
 }
 
-export function isRepAvailableAgainstIntervals(intervals, slotStart, bookingLink) {
+function isRepAvailableAgainstIntervals(intervals, slotStart, bookingLink) {
   const slotEnd = addMinutes(slotStart, bookingLink.durationMinutes);
   const busyStart = subMinutes(slotStart, bookingLink.bufferBeforeMinutes);
   const busyEnd = addMinutes(slotEnd, bookingLink.bufferAfterMinutes);
@@ -17,9 +194,7 @@ export function isRepAvailableAgainstIntervals(intervals, slotStart, bookingLink
   );
 }
 
-// --- DB query helpers ---
-
-export function getRepRollingLoad(db, repId, bookingLinkId) {
+function getRepRollingLoad(db, repId, bookingLinkId) {
   const lowerBound = addDays(new Date(), -30).toISOString();
   const row = db
     .prepare(`
@@ -33,7 +208,7 @@ export function getRepRollingLoad(db, repId, bookingLinkId) {
   return row?.count ?? 0;
 }
 
-export function getRollingCounts(db, store, bookingLinkId) {
+function getRollingCounts(db, store, bookingLinkId) {
   const lowerBound = addDays(new Date(), -30).toISOString();
   const rows = db
     .prepare(`
@@ -54,9 +229,7 @@ export function getRollingCounts(db, store, bookingLinkId) {
   return counts;
 }
 
-// --- Core availability logic ---
-
-export function getEligibleReps(store, bookingLinkId, companySize) {
+function getEligibleReps(store, bookingLinkId, companySize) {
   const reps = store.getRepsForLink(bookingLinkId);
   const bookingLink = store.getBookingLinkById(bookingLinkId);
   const client = bookingLink ? store.getClient(bookingLink.clientId) : null;
@@ -70,7 +243,7 @@ export function getEligibleReps(store, bookingLinkId, companySize) {
   return reps;
 }
 
-export async function getBusyIntervals(db, store, provider, repId, interval, options = {}) {
+async function getBusyIntervals(db, store, provider, repId, interval, options = {}) {
   const localCalendarBusy = db
     .prepare(`
       SELECT start_at, end_at
@@ -117,7 +290,7 @@ export async function getBusyIntervals(db, store, provider, repId, interval, opt
   return [...localCalendarBusy, ...bookingBusy, ...providerBusy];
 }
 
-export async function getBusyIntervalsForReps(db, store, provider, reps, interval, options = {}) {
+async function getBusyIntervalsForReps(db, store, provider, reps, interval, options = {}) {
   const entries = await Promise.all(
     reps.map(async (rep) => [
       rep.id,
@@ -127,7 +300,7 @@ export async function getBusyIntervalsForReps(db, store, provider, reps, interva
   return new Map(entries);
 }
 
-export async function getAvailableEligibleRepsForSlot(db, store, provider, bookingLink, companySize, slotStart, options = {}) {
+async function getAvailableEligibleRepsForSlot(db, store, provider, bookingLink, companySize, slotStart, options = {}) {
   const eligibleReps = getEligibleReps(store, bookingLink.id, companySize);
   const interval = {
     start: subMinutes(slotStart, bookingLink.bufferBeforeMinutes),
@@ -148,7 +321,7 @@ export async function getAvailableEligibleRepsForSlot(db, store, provider, booki
   );
 }
 
-export function assignRep(db, store, bookingLink, companySize, _slotStart, eligibleReps) {
+function assignRep(db, store, bookingLink, companySize, eligibleReps) {
   if (eligibleReps.length === 0) {
     throw new Error("Aucun rep disponible pour ce créneau.");
   }

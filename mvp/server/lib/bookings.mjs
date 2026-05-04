@@ -1,5 +1,5 @@
-import { addMinutes, parseISO } from "date-fns";
-import { makeId } from "./utils.mjs";
+import {addMinutes, parseISO} from "date-fns";
+import {makeId} from "./utils.mjs";
 
 export const OUTCOME_STATES = [
   "pending",
@@ -88,21 +88,10 @@ export async function createBooking(database, db, store, provider, slug, payload
         throw new Error("Booking link introuvable.");
       }
 
-      const availableEligibleReps = await store.getAvailableEligibleRepsForSlot(
+        const assignment = await store.assignRepForSlot(
         freshLink,
         companySize,
         slotStart,
-      );
-
-      if (availableEligibleReps.length === 0) {
-        throw new Error("Le créneau sélectionné n'est plus disponible.");
-      }
-
-      const assignment = store.assignRep(
-        freshLink,
-        companySize,
-        slotStart,
-        availableEligibleReps,
       );
 
       const booking = {
@@ -348,24 +337,13 @@ export async function updateBookingSchedule(database, db, store, provider, booki
       throw new Error("Nouvelle date invalide.");
     }
 
-    const availableEligibleReps = await store.getAvailableEligibleRepsForSlot(
+      assignment = await store.assignRepForSlot(
       bookingLink,
       booking.companySize,
       nextStart,
       {
         excludedBookingId: booking.id,
       },
-    );
-
-    if (availableEligibleReps.length === 0) {
-      throw new Error("Le créneau sélectionné n'est plus disponible.");
-    }
-
-    assignment = store.assignRep(
-      bookingLink,
-      booking.companySize,
-      nextStart,
-      availableEligibleReps,
     );
 
     patch.previousStartAt = booking.startAt;

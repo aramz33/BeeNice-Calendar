@@ -1,0 +1,211 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import {randomUUID} from "node:crypto";
+import {DatabaseSync} from "node:sqlite";
+import {endOfWeek, parseISO, startOfWeek} from "date-fns";
+import {createStore} from "./state.mjs";
+
+function withTempStore(t, provider = createProviderStub()) {
+    const previousDbPath = process.env.MVP_DB_PATH;
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "benice-calendar-"));
+    process.env.MVP_DB_PATH = path.join(tempDir, "mvp.sqlite");
+    const store = createStore(provider);
+
+    t.after(() => {
+        store.close();
+        if (previousDbPath === undefined) {
+            delete process.env.MVP_DB_PATH;
+        } else {
+            process.env.MVP_DB_PATH = previousDbPath;
+        }
+        fs.rmSync(tempDir, {recursive: true, force: true});
+    });
+
+    return store;
+}
+
+function createProviderStub(mode = "mock") {
+    return {
+        mode,
+        getOverview() {
+            return {
+                providerMode: mode,
+                nylasConfigured: mode !== "nylas",
+            };
+        },
+        async startRepConnection() {
+            throw new Error("Not implemented in test stub.");
+        },
+        async finalizeRepConnection() {
+            throw new Error("Not implemented in test stub.");
+        },
+        async listBusyIntervals() {
+            return [];
+        },
+        async createExternalEvent(_store, _rep, booking) {
+            return `test-${booking.id}`;
+        },
+        async fetchExternalEvent(_store, booking) {
+            return {
+                id: booking.externalEventId,
+                startAt: new Date(booking.startAt),
+                endAt: new Date(booking.endAt),
+            };
+        },
+        async releaseExternalEvent() {
+        },
+    };
+}
+
+function withDb(store, task) {
+    const db = new DatabaseSync(store.dbFile);
+    try {
+        return task(db);
+    } finally {
+        db.close();
+    }
+}
+
+function blockReps(store, reps, startAt, endAt) {
+    withDb(store, (db) => {
+        const insert = db.prepare(`
+      INSERT INTO calendar_events (id, title, rep_id, start_at, end_at, source)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+
+        reps.forEach((rep) => {
+            insert.run(
+                `calendar-event-${randomUUID()}`,
+                "Busy in availability test",
+                rep.id,
+                startAt,
+                endAt,
+                "test",
+            );
+        });
+    });
+}
+
+async function bookFirstAvailableSlot(store, overrides = {}) {
+    const availability = await store.listAvailability("teamstarter-discovery", "80");
+    const slot = availability.slots[0];
+    assert.ok(slot, "expected at least one seeded slot");
+
+    return store.createBooking("teamstarter-discovery", {
+        callerId: "caller-clotilde",
+        companySize: 80,
+        companyName: "ACME",
+        prospectName: "Jane Doe",
+        prospectEmail: "jane@example.com",
+        notes: "Booking created in availability test.",
+        slotStart: slot.startAt,
+        ...overrides,
+    });
+}
+
+test("assignRepForSlot uses the same senior-only routing as displayed availability", async (t) => {
+    const store = withTempStore(t);
+    const bookingLink = store.getBookingLinkBySlug("teamstarter-discovery");
+    const availability = await store.listAvailability("teamstarter-discovery", "320");
+    const slot = availability.slots[0];
+
+    assert.ok(bookingLink);
+    assert.ok(slot, "expected at least one senior-only slot");
+    assert.equal(slot.seniorityPool, "senior");
+
+    const assignment = await store.assignRepForSlot(
+        bookingLink,
+        320,
+        parseISO(slot.startAt),
+    );
+
+    assert.equal(assignment.reason.seniorityPool, "senior");
+    assert.equal(store.getRep(assignment.rep.id).seniority, "senior");
+    assert.ok(assignment.reason.candidateRepIds.includes(assignment.rep.id));
+});
+
+test("assignRepForSlot rejects a displayed slot after every eligible rep becomes busy", async (t) => {
+    const store = withTempStore(t);
+    const bookingLink = store.getBookingLinkBySlug("teamstarter-discovery");
+    const availability = await store.listAvailability("teamstarter-discovery", "80");
+    const slot = availability.slots[0];
+
+    assert.ok(bookingLink);
+    assert.ok(slot, "expected a slot to become stale");
+
+    blockReps(
+        store,
+        store.getRepsForLink(bookingLink.id),
+        slot.startAt,
+        slot.endAt,
+    );
+
+    await assert.rejects(
+        () => store.assignRepForSlot(bookingLink, 80, parseISO(slot.startAt)),
+        /Le créneau sélectionné n'est plus disponible/,
+    );
+});
+
+test("reschedule availability excludes the booking being moved", async (t) => {
+    const store = withTempStore(t);
+    const result = await bookFirstAvailableSlot(store);
+    const booking = store.getBooking(result.bookingId);
+    const bookingLink = store.getBookingLinkById(booking.bookingLinkId);
+    const otherReps = store
+        .getRepsForLink(bookingLink.id)
+        .filter((rep) => rep.id !== booking.assignedRepId);
+
+    blockReps(store, otherReps, booking.startAt, booking.endAt);
+
+    const weekStart = startOfWeek(parseISO(booking.startAt), {weekStartsOn: 1});
+    const availability = await store.buildAvailability(
+        bookingLink,
+        booking.companySize,
+        {
+            from: weekStart.toISOString(),
+            to: endOfWeek(weekStart, {weekStartsOn: 1}).toISOString(),
+        },
+        {
+            excludedBookingId: booking.id,
+            includeRepDetails: true,
+        },
+    );
+    const currentSlot = availability.slots.find((slot) => slot.startAt === booking.startAt);
+
+    assert.ok(currentSlot, "expected the current booking slot to remain available");
+    assert.deepEqual(currentSlot.availableRepIds, [booking.assignedRepId]);
+});
+
+test("booking creation reports the current unavailable-slot error when assignment cannot be made", async (t) => {
+    const store = withTempStore(t);
+    const bookingLink = store.getBookingLinkBySlug("teamstarter-discovery");
+    const availability = await store.listAvailability("teamstarter-discovery", "80");
+    const slot = availability.slots[0];
+
+    assert.ok(bookingLink);
+    assert.ok(slot, "expected a slot to block");
+
+    blockReps(
+        store,
+        store.getRepsForLink(bookingLink.id),
+        slot.startAt,
+        slot.endAt,
+    );
+
+    await assert.rejects(
+        () =>
+            store.createBooking("teamstarter-discovery", {
+                callerId: "caller-clotilde",
+                companySize: 80,
+                companyName: "ACME",
+                prospectName: "Jane Doe",
+                prospectEmail: "jane@example.com",
+                notes: "Unavailable slot test.",
+                slotStart: slot.startAt,
+            }),
+        /Le créneau sélectionné n'est plus disponible/,
+    );
+});

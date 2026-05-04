@@ -1,53 +1,40 @@
-import { randomUUID } from "node:crypto";
-import { createDatabase } from "./database.mjs";
+import {randomUUID} from "node:crypto";
+import {createDatabase} from "./database.mjs";
+import {makeId, parseJson,} from "./utils.mjs";
 import {
-  makeId,
-  parseJson,
-} from "./utils.mjs";
-import {
-  listAllTasks as listAllTasksFn,
-  getTask as getTaskFn,
-  getOpenTaskByBookingId as getOpenTaskByBookingIdFn,
-  getTaskByReplacement as getTaskByReplacementFn,
-  listCallerTasks as listCallerTasksFn,
-  ensureFollowUpTask as ensureFollowUpTaskFn,
   completeTask as completeTaskFn,
+  ensureFollowUpTask as ensureFollowUpTaskFn,
+  getOpenTaskByBookingId as getOpenTaskByBookingIdFn,
+  getTask as getTaskFn,
+  getTaskByReplacement as getTaskByReplacementFn,
+  listAllTasks as listAllTasksFn,
+  listCallerTasks as listCallerTasksFn,
   updateTask as updateTaskFn,
 } from "./tasks.mjs";
 import {
-  REP_ROLES,
-  isConnectionUsable,
-  getEffectiveConnectionStatus,
-  getConnection,
-  findConflictingConnections,
-  upsertConnection,
-  disconnectConnection,
   claimCalendarConnection,
-  startRepConnection as startRepConnectionFn,
+  disconnectConnection,
   finalizeRepConnection as finalizeRepConnectionFn,
+  findConflictingConnections,
+  getConnection,
+  getEffectiveConnectionStatus,
   getPublicRepConnectionPayload as getPublicRepConnectionPayloadFn,
+  isConnectionUsable,
+  REP_ROLES,
   startPublicRepConnection as startPublicRepConnectionFn,
+  startRepConnection as startRepConnectionFn,
+  upsertConnection,
 } from "./connections.mjs";
+import {createAvailabilityModule,} from "./availability.mjs";
 import {
-  getEligibleReps as getEligibleRepsFn,
-  getBusyIntervals as getBusyIntervalsFn,
-  getBusyIntervalsForReps as getBusyIntervalsForRepsFn,
-  getAvailableEligibleRepsForSlot as getAvailableEligibleRepsForSlotFn,
-  assignRep as assignRepFn,
-  getRollingCounts as getRollingCountsFn,
-  getRepRollingLoad as getRepRollingLoadFn,
-  isRepAvailableAgainstIntervals,
-} from "./availability.mjs";
-import {
-  createBooking as createBookingFn,
-  updateBookingOutcome as updateBookingOutcomeFn,
-  updateBookingSchedule as updateBookingScheduleFn,
   cancelCallerBooking as cancelCallerBookingFn,
+  createBooking as createBookingFn,
   getDisplayStatus,
   getLegacyStatus,
+  updateBookingOutcome as updateBookingOutcomeFn,
+  updateBookingSchedule as updateBookingScheduleFn,
 } from "./bookings.mjs";
 import {
-  buildAvailability as buildAvailabilityView,
   getPublicBookingPayload as getPublicBookingPayloadView,
   listCallerBookings as listCallerBookingsView,
 } from "./store/public-booking.mjs";
@@ -94,6 +81,7 @@ export function createStore(provider) {
   });
   const sseClients = new Map();
   const adminSseClients = new Set();
+    let availability;
 
   const store = {
     displayStatuses: DISPLAY_STATUSES,
@@ -132,10 +120,11 @@ export function createStore(provider) {
     },
 
     async buildAvailability(bookingLink, companySizeValue, filters = {}, options = {}) {
-      return buildAvailabilityView(this, bookingLink, companySizeValue, filters, options, {
-        bookingWindowWeeks: BOOKING_WINDOW_WEEKS,
-        weekStartsOn: WEEK_STARTS_ON,
-      });
+        return availability.buildSlots(bookingLink, companySizeValue, filters, options);
+    },
+
+      async assignRepForSlot(bookingLink, companySize, slotStart, options = {}) {
+          return availability.assignRepForSlot(bookingLink, companySize, slotStart, options);
     },
 
     async createBooking(slug, payload) {
@@ -770,38 +759,6 @@ export function createStore(provider) {
       });
     },
 
-    getEligibleReps(bookingLinkId, companySize) {
-      return getEligibleRepsFn(this, bookingLinkId, companySize);
-    },
-
-    isRepAvailableAgainstIntervals(intervals, slotStart, bookingLink) {
-      return isRepAvailableAgainstIntervals(intervals, slotStart, bookingLink);
-    },
-
-    async getBusyIntervalsForReps(reps, interval, options = {}) {
-      return getBusyIntervalsForRepsFn(db, this, provider, reps, interval, options);
-    },
-
-    async getBusyIntervals(repId, interval, options = {}) {
-      return getBusyIntervalsFn(db, this, provider, repId, interval, options);
-    },
-
-    async getAvailableEligibleRepsForSlot(bookingLink, companySize, slotStart, options = {}) {
-      return getAvailableEligibleRepsForSlotFn(db, this, provider, bookingLink, companySize, slotStart, options);
-    },
-
-    assignRep(bookingLink, companySize, slotStart, eligibleReps) {
-      return assignRepFn(db, this, bookingLink, companySize, slotStart, eligibleReps);
-    },
-
-    getRollingCounts(bookingLinkId) {
-      return getRollingCountsFn(db, this, bookingLinkId);
-    },
-
-    getRepRollingLoad(repId, bookingLinkId) {
-      return getRepRollingLoadFn(db, repId, bookingLinkId);
-    },
-
     listAllBookings() {
       return db
         .prepare("SELECT * FROM bookings ORDER BY start_at DESC")
@@ -1039,6 +996,16 @@ export function createStore(provider) {
       return cancelCallerBookingFn(database, db, this, provider, slug, callerId, bookingId);
     },
   };
+
+    availability = createAvailabilityModule({
+        db,
+        store,
+        provider,
+        config: {
+            bookingWindowWeeks: BOOKING_WINDOW_WEEKS,
+            weekStartsOn: WEEK_STARTS_ON,
+        },
+    });
 
   initializeTimeline(store, db);
   initializeFollowUpTasks(store, db);
