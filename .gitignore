@@ -10,7 +10,8 @@ mvp/**/server/data/
 Beenice - Charte graphique-2025 (1).pdf
 
 *.srt
+transcript_*/
 
 CLAUDE.md
+AGENTS.md
 
-docs/
