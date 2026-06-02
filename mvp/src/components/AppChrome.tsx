@@ -25,7 +25,7 @@ function NavButton({
           className={
             isActive
               ? "rounded-full border-transparent bg-[#F7A600] text-[#001E5B] hover:bg-[#FFC755]"
-              : "rounded-full border-white/30 bg-transparent text-white hover:bg-white/10 hover:text-white"
+              : "rounded-full border-[#001E5B]/15 bg-transparent text-[#001E5B]/64 hover:bg-[#001E5B]/06 hover:text-[#001E5B]"
           }
         >
           {children}
@@ -47,7 +47,7 @@ export function AppChrome({ title, children }: AppChromeProps) {
             >
               <BeeNiceLogo compact theme="amber" />
             </Link>
-            <h1 className="min-w-0 font-display text-2xl tracking-[-0.08em] text-white md:text-4xl">
+            <h1 className="min-w-0 font-display text-2xl tracking-[-0.08em] text-[#001E5B] md:text-4xl">
               {title}
             </h1>
           </div>
@@ -113,7 +113,7 @@ function SettingsMenu(): ReactNode {
         className={
           active
             ? "rounded-full border-transparent bg-[#F7A600] text-[#001E5B] hover:bg-[#FFC755]"
-            : "rounded-full border-white/30 bg-transparent text-white hover:bg-white/10 hover:text-white"
+            : "rounded-full border-[#001E5B]/15 bg-transparent text-[#001E5B]/64 hover:bg-[#001E5B]/06 hover:text-[#001E5B]"
         }
         aria-expanded={open}
         aria-haspopup="menu"

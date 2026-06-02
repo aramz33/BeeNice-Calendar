@@ -4,12 +4,16 @@ import type { BookingStatus } from "@mvp/lib/types";
 
 const badgeMap: Record<
   BookingStatus,
-  { label: string; className: string; variant: "default" | "secondary" | "destructive" | "outline" }
+  {
+    label: string;
+    className: string;
+    variant: "default" | "secondary" | "destructive" | "outline";
+  }
 > = {
   scheduled: {
     label: "Planifié",
-    className: "border-[#001E5B]/10 bg-[#001E5B] text-white",
-    variant: "default",
+    className: "border-[#F7A600]/30 bg-[#FFC755]/20 text-[#92600A]",
+    variant: "outline",
   },
   completed: {
     label: "Honoré",
@@ -18,7 +22,7 @@ const badgeMap: Record<
   },
   no_show: {
     label: "No-show",
-    className: "border-[#F7A600]/20 bg-[#FFF3DA] text-[#9C6400]",
+    className: "border-[#7C3AED]/20 bg-[#7C3AED]/[0.08] text-[#5B21B6]",
     variant: "outline",
   },
   cancelled: {
@@ -57,7 +61,9 @@ function normalizeStatus(status: string | undefined): BookingStatus | null {
   return null;
 }
 
-export function getStatusBadgeConfig(status: BookingStatus | string | undefined) {
+export function getStatusBadgeConfig(
+  status: BookingStatus | string | undefined,
+) {
   const normalizedStatus = normalizeStatus(status);
   return normalizedStatus ? badgeMap[normalizedStatus] : fallbackBadge;
 }
@@ -71,10 +77,7 @@ export function StatusBadge({
 }) {
   const config = getStatusBadgeConfig(status);
   return (
-    <Badge
-      variant={config.variant}
-      className={cn(config.className, className)}
-    >
+    <Badge variant={config.variant} className={cn(config.className, className)}>
       <span className="status-dot">{config.label}</span>
     </Badge>
   );

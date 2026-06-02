@@ -17,16 +17,14 @@ body {
 }
 
 .surface-card {
-  background: rgba(255, 253, 249, 0.96);
-  border: 1px solid rgba(0, 30, 91, 0.08);
-  border-radius: 1.5rem;
-  box-shadow: 0 18px 48px rgba(0, 30, 91, 0.08);
+  background: #fffdf9;
+  border-radius: 1rem;
+  box-shadow: 0 1px 3px rgba(0, 30, 91, 0.08), 0 4px 16px rgba(0, 30, 91, 0.06);
 }
 
 .app-shell {
-  background: #001e5b;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 8px 32px rgba(0, 30, 91, 0.18);
+  background: #fffdf9;
+  border-bottom: 1px solid rgba(0, 30, 91, 0.08);
 }
 
 .slot-grid {
@@ -45,7 +43,7 @@ body {
   justify-content: flex-start;
   border-radius: 1rem;
   border-width: 2px;
-  border-color: #000000;
+  border-color: rgba(0, 30, 91, 0.20);
   background: #fffdf9;
   color: #001e5b;
   box-shadow: 0 1px 0 rgba(0, 0, 0, 0.08);
@@ -142,7 +140,6 @@ body {
 .time-grid-day-col {
   position: relative;
   border-left: 1px solid rgba(0, 30, 91, 0.06);
-  height: 792px;
 }
 
 .time-grid-day-col-today {
@@ -221,4 +218,24 @@ body {
 .time-grid-event-selected {
   border-color: #f7a600;
   background: #fff7e8;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes slideInRight {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes slideOutRight {
+  from { transform: translateX(0); }
+  to { transform: translateX(100%); }
 }

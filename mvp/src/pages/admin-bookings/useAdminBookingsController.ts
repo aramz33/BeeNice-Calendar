@@ -28,9 +28,14 @@ export type ViewMode = "agenda" | "list" | "tasks" | "connections";
 export function useAdminBookingsController() {
   const [payload, setPayload] = useState<AdminBookingsResponse | null>(null);
   const [calendar, setCalendar] = useState<AdminCalendarResponse | null>(null);
-  const [tasksPayload, setTasksPayload] = useState<AdminTasksResponse | null>(null);
-  const [settingsPayload, setSettingsPayload] = useState<SettingsPayload | null>(null);
-  const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
+  const [tasksPayload, setTasksPayload] = useState<AdminTasksResponse | null>(
+    null,
+  );
+  const [settingsPayload, setSettingsPayload] =
+    useState<SettingsPayload | null>(null);
+  const [selectedBookingId, setSelectedBookingId] = useState<string | null>(
+    null,
+  );
   const [detail, setDetail] = useState<BookingDetailResponse | null>(null);
   const [loadingDashboard, setLoadingDashboard] = useState(true);
   const [loadingDetail, setLoadingDetail] = useState(false);
@@ -43,9 +48,9 @@ export function useAdminBookingsController() {
   );
   const [loadingRescheduleAvailability, setLoadingRescheduleAvailability] =
     useState(false);
-  const [selectedRescheduleSlot, setSelectedRescheduleSlot] = useState<string | null>(
-    null,
-  );
+  const [selectedRescheduleSlot, setSelectedRescheduleSlot] = useState<
+    string | null
+  >(null);
   const [activeView, setActiveView] = useState<ViewMode>("agenda");
   const [weekStartIso, setWeekStartIso] = useState(() =>
     startOfWeek(new Date(), { weekStartsOn: 1 }).toISOString(),
@@ -59,11 +64,18 @@ export function useAdminBookingsController() {
     callerId: "all",
     repId: "all",
     query: "",
+    weekScope: "all" as "all" | "current",
   });
 
   const weekStart = useMemo(() => parseISO(weekStartIso), [weekStartIso]);
-  const visibleWeekEnd = useMemo(() => endOfDay(addDays(weekStart, 4)), [weekStart]);
-  const weekDays = useMemo(() => getBusinessWeekDays(weekStartIso), [weekStartIso]);
+  const visibleWeekEnd = useMemo(
+    () => endOfDay(addDays(weekStart, 4)),
+    [weekStart],
+  );
+  const weekDays = useMemo(
+    () => getBusinessWeekDays(weekStartIso),
+    [weekStartIso],
+  );
   const agendaTimezone = payload?.timezone ?? "Europe/Paris";
   const weekLabel = useMemo(() => {
     const referenceDay = weekDays[0] ?? weekStart;
@@ -81,12 +93,14 @@ export function useAdminBookingsController() {
     () => addWeeks(firstRescheduleWeekStart, 11),
     [firstRescheduleWeekStart],
   );
-  const hasPreviousRescheduleWeek = rescheduleWeekStart > firstRescheduleWeekStart;
+  const hasPreviousRescheduleWeek =
+    rescheduleWeekStart > firstRescheduleWeekStart;
   const hasNextRescheduleWeek = rescheduleWeekStart < lastRescheduleWeekStart;
   const rescheduleSelectedSlot = useMemo(
     () =>
-      rescheduleAvailability?.slots.find((slot) => slot.startAt === selectedRescheduleSlot) ??
-      null,
+      rescheduleAvailability?.slots.find(
+        (slot) => slot.startAt === selectedRescheduleSlot,
+      ) ?? null,
     [rescheduleAvailability, selectedRescheduleSlot],
   );
 
@@ -99,14 +113,22 @@ export function useAdminBookingsController() {
       if (filters.callerId !== "all") params.set("callerId", filters.callerId);
       if (filters.repId !== "all") params.set("repId", filters.repId);
       if (filters.query) params.set("query", filters.query);
+      if (filters.weekScope === "current") {
+        params.set("from", weekStart.toISOString());
+        params.set("to", visibleWeekEnd.toISOString());
+      }
 
       const calendarParams = new URLSearchParams(params);
       calendarParams.set("from", weekStart.toISOString());
       calendarParams.set("to", visibleWeekEnd.toISOString());
 
       const [bookings, agenda, tasks, settings] = await Promise.all([
-        apiFetch<AdminBookingsResponse>(`/api/admin/bookings?${params.toString()}`),
-        apiFetch<AdminCalendarResponse>(`/api/admin/calendar?${calendarParams.toString()}`),
+        apiFetch<AdminBookingsResponse>(
+          `/api/admin/bookings?${params.toString()}`,
+        ),
+        apiFetch<AdminCalendarResponse>(
+          `/api/admin/calendar?${calendarParams.toString()}`,
+        ),
         apiFetch<AdminTasksResponse>(`/api/admin/tasks?${params.toString()}`),
         apiFetch<SettingsPayload>("/api/admin/settings"),
       ]);
@@ -115,7 +137,6 @@ export function useAdminBookingsController() {
       setCalendar(agenda);
       setTasksPayload(tasks);
       setSettingsPayload(settings);
-      setSelectedBookingId((current) => current ?? bookings.bookings[0]?.id ?? null);
     } catch (error) {
       toast.error((error as Error).message);
     } finally {
@@ -126,7 +147,9 @@ export function useAdminBookingsController() {
   const fetchDetail = async (bookingId: string) => {
     setLoadingDetail(true);
     try {
-      const data = await apiFetch<BookingDetailResponse>(`/api/admin/bookings/${bookingId}`);
+      const data = await apiFetch<BookingDetailResponse>(
+        `/api/admin/bookings/${bookingId}`,
+      );
       setDetail(data);
     } catch (error) {
       setDetail(null);
@@ -155,7 +178,8 @@ export function useAdminBookingsController() {
       );
       setRescheduleAvailability(data);
       setSelectedRescheduleSlot(
-        preferredSlot && data.slots.some((slot) => slot.startAt === preferredSlot)
+        preferredSlot &&
+          data.slots.some((slot) => slot.startAt === preferredSlot)
           ? preferredSlot
           : null,
       );
@@ -174,6 +198,7 @@ export function useAdminBookingsController() {
     filters.callerId,
     filters.repId,
     filters.query,
+    filters.weekScope,
     weekStartIso,
   ]);
 
@@ -234,13 +259,21 @@ export function useAdminBookingsController() {
       toast.success("Connexion calendrier terminée.");
       params.delete("connected");
       const next = params.toString();
-      window.history.replaceState({}, "", next ? `/admin/bookings?${next}` : "/admin/bookings");
+      window.history.replaceState(
+        {},
+        "",
+        next ? `/admin/bookings?${next}` : "/admin/bookings",
+      );
     }
     if (connectionError) {
       toast.error(connectionError);
       params.delete("connectionError");
       const next = params.toString();
-      window.history.replaceState({}, "", next ? `/admin/bookings?${next}` : "/admin/bookings");
+      window.history.replaceState(
+        {},
+        "",
+        next ? `/admin/bookings?${next}` : "/admin/bookings",
+      );
     }
   }, []);
 
@@ -266,11 +299,31 @@ export function useAdminBookingsController() {
 
   const integrationMode = payload?.integrations.providerMode ?? "mock";
   const liveConnectedCount =
-    payload?.filters.reps.filter((rep) => rep.connectionStatus === "connected").length ?? 0;
+    payload?.filters.reps.filter((rep) => rep.connectionStatus === "connected")
+      .length ?? 0;
   const selectedTaskCount =
     tasksPayload?.tasks.filter((task) => task.status === "open").length ?? 0;
 
-  const updateOutcome = async (outcomeState: "completed" | "no_show" | "not_qualified") => {
+  const bookingList = payload?.bookings ?? [];
+  const selectedBookingIndex = bookingList.findIndex(
+    (b) => b.id === selectedBookingId,
+  );
+  const hasPreviousBooking = selectedBookingIndex > 0;
+  const hasNextBooking = selectedBookingIndex < bookingList.length - 1;
+
+  const goToPreviousBooking = () => {
+    if (!hasPreviousBooking) return;
+    setSelectedBookingId(bookingList[selectedBookingIndex - 1]!.id);
+  };
+
+  const goToNextBooking = () => {
+    if (!hasNextBooking) return;
+    setSelectedBookingId(bookingList[selectedBookingIndex + 1]!.id);
+  };
+
+  const updateOutcome = async (
+    outcomeState: "completed" | "no_show" | "not_qualified",
+  ) => {
     if (!detail) return;
     setUpdatingBooking(true);
     try {
@@ -328,7 +381,11 @@ export function useAdminBookingsController() {
       setSelectedRescheduleSlot(null);
       await fetchDashboard();
       await fetchDetail(detail.booking.id);
-      await fetchRescheduleAvailability(detail.booking.id, rescheduleWeekStart, null);
+      await fetchRescheduleAvailability(
+        detail.booking.id,
+        rescheduleWeekStart,
+        null,
+      );
     } catch (error) {
       toast.error((error as Error).message);
     } finally {
@@ -374,7 +431,9 @@ export function useAdminBookingsController() {
 
   const connectionGroups = useMemo(() => {
     const reps = payload?.filters.reps ?? [];
-    const clients = (settingsPayload?.clients ?? []).filter((client) => client.active);
+    const clients = (settingsPayload?.clients ?? []).filter(
+      (client) => client.active,
+    );
     return clients.map((client) => ({
       client,
       reps: reps.filter((rep) => rep.clientId === client.id),
@@ -412,21 +471,37 @@ export function useAdminBookingsController() {
     liveConnectedCount,
     selectedTaskCount,
     connectionGroups,
-    goToPreviousWeek: () => setWeekStartIso(subWeeks(weekStart, 1).toISOString()),
+    selectedBookingIndex,
+    hasPreviousBooking,
+    hasNextBooking,
+    goToPreviousBooking,
+    goToNextBooking,
+    goToPreviousWeek: () =>
+      setWeekStartIso(subWeeks(weekStart, 1).toISOString()),
     goToCurrentWeek: () =>
-      setWeekStartIso(startOfWeek(new Date(), { weekStartsOn: 1 }).toISOString()),
+      setWeekStartIso(
+        startOfWeek(new Date(), { weekStartsOn: 1 }).toISOString(),
+      ),
     goToNextWeek: () => setWeekStartIso(addWeeks(weekStart, 1).toISOString()),
     goToPreviousRescheduleWeek: () => {
       if (!detail || !hasPreviousRescheduleWeek) return;
       const nextWeek = subWeeks(rescheduleWeekStart, 1);
       setRescheduleWeekStartIso(nextWeek.toISOString());
-      void fetchRescheduleAvailability(detail.booking.id, nextWeek, selectedRescheduleSlot);
+      void fetchRescheduleAvailability(
+        detail.booking.id,
+        nextWeek,
+        selectedRescheduleSlot,
+      );
     },
     goToNextRescheduleWeek: () => {
       if (!detail || !hasNextRescheduleWeek) return;
       const nextWeek = addWeeks(rescheduleWeekStart, 1);
       setRescheduleWeekStartIso(nextWeek.toISOString());
-      void fetchRescheduleAvailability(detail.booking.id, nextWeek, selectedRescheduleSlot);
+      void fetchRescheduleAvailability(
+        detail.booking.id,
+        nextWeek,
+        selectedRescheduleSlot,
+      );
     },
     updateOutcome,
     cancelBooking,

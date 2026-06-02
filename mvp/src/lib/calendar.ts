@@ -5,7 +5,7 @@ import type { BookingSummary } from "@mvp/lib/types";
 export const CALENDAR_START_HOUR = 9;
 export const CALENDAR_END_HOUR = 18;
 export const SLOT_MINUTES = 30;
-export const SLOT_HEIGHT_PX = 44;
+export const SLOT_HEIGHT_PX = 30;
 export const TOTAL_SLOTS =
   (CALENDAR_END_HOUR - CALENDAR_START_HOUR) * (60 / SLOT_MINUTES);
 export const TOTAL_HEIGHT_PX = TOTAL_SLOTS * SLOT_HEIGHT_PX;
@@ -122,7 +122,14 @@ export function assignTracks(
     });
 
   const trackEnds: number[] = [];
-  const result: Array<EventTiming & { track: number; trackCount: number; top: number; height: number }> = [];
+  const result: Array<
+    EventTiming & {
+      track: number;
+      trackCount: number;
+      top: number;
+      height: number;
+    }
+  > = [];
 
   sorted.forEach((timing) => {
     const { entry, startMin, endMin, visibleStartMin, visibleEndMin } = timing;
@@ -148,5 +155,13 @@ export function assignTracks(
     ).length;
   });
 
-  return result.map(({ startMin: _s, endMin: _e, visibleStartMin: _vs, visibleEndMin: _ve, ...item }) => item);
+  return result.map(
+    ({
+      startMin: _s,
+      endMin: _e,
+      visibleStartMin: _vs,
+      visibleEndMin: _ve,
+      ...item
+    }) => item,
+  );
 }
