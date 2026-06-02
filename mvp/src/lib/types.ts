@@ -197,6 +197,11 @@ export interface AdminBookingsResponse {
   };
 }
 
+export interface AdminRepsResponse {
+  reps: AdminBookingsResponse["filters"]["reps"];
+  integrations: AdminBookingsResponse["integrations"];
+}
+
 export interface AdminCalendarResponse {
   timezone: string;
   from: string;
