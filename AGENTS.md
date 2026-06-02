@@ -1,6 +1,6 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Codex and other AI agents when working with code in this repository.
 
 ## Session start (obligatoire)
 
@@ -58,6 +58,8 @@ Use the default five-state triage vocabulary. See `docs/agents/triage-labels.md`
 ### Domain docs
 
 Single-context repo: read root `CONTEXT.md` and `docs/adr/` when present. See `docs/agents/domain.md`.
+
+If those files do not exist, proceed silently. They are created lazily when project language or architecture decisions are clarified.
 
 ### Delivery scoping (mandatory before major decisions)
 

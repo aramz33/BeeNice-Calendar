@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import "./load-env.mjs";
 
 const DEFAULT_API_URI = process.env.MVP_NYLAS_API_URI ?? "https://api.us.nylas.com";
 const CALLBACK_URL =

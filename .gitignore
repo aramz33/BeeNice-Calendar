@@ -1,4 +1,7 @@
 node_modules/
+.env
+.env.*
+!.env.example
 .venv/
 .idea/
 *.iml
@@ -12,6 +15,4 @@ Beenice - Charte graphique-2025 (1).pdf
 *.srt
 transcript_*/
 
-CLAUDE.md
-AGENTS.md
-
+enlè

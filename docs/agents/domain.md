@@ -6,10 +6,13 @@ How the engineering skills should consume this repo's domain documentation when 
 
 This is a single-context repo.
 
-## Before exploring, read these
+## Before exploring, read these (in order)
 
-- **`CONTEXT.md`** at the repo root.
-- **`docs/adr/`** for ADRs that touch the area you're about to work in.
+1. **Obsidian project note** — `6 - Main Notes/Projets/BeeNice-Calendar.md` via `/obsidian-context`.
+   This is the most up-to-date source of truth for backlog, decisions, and project status.
+   If Obsidian is unavailable, skip to step 2.
+2. **`CONTEXT.md`** at the repo root — domain glossary, key decisions, architecture notes.
+3. **`docs/adr/`** for ADRs that touch the area you're about to work in.
 
 If any of these files don't exist, **proceed silently**. Don't flag their absence; don't suggest creating them upfront.
 The producer skill (`/grill-with-docs`) creates them lazily when terms or decisions actually get resolved.

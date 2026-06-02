@@ -55,9 +55,7 @@ MVP_CALENDAR_PROVIDER=mock npm run dev
 Mode Nylas :
 
 ```bash
-MVP_CALENDAR_PROVIDER=nylas
-MVP_NYLAS_API_KEY=...
-MVP_NYLAS_CLIENT_ID=...
-MVP_NYLAS_CALLBACK_URL=http://localhost:8787/api/admin/integrations/nylas/callback
+cp .env.example .env
+# Remplir .env avec les cles Nylas BeeNiceCal Production.
 npm run dev
 ```

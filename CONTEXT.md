@@ -19,6 +19,24 @@ BeeNice Calendar is an MVP for booking discovery meetings between Be Nice caller
 - **Status history**: Immutable booking status records and timeline events that explain booking creation, schedule
   changes, outcome changes, and follow-up task events.
 
+## Business Context
+
+- **First client**: BeeNice — a B2B sales-call outsourcing company (Julien BOUIC, Camille, Florian Caillet).
+- **Distribution model**: Self-hosted. Each client deploys their own instance on their own VPS. BeeNice hosts on Hostinger (Germany).
+- **Scale**: BeeNice has 5–6 active clients, 1–5 calendar connections each (~25 Nylas connections currently). Long-term vision: ~50 clients × 5 connections.
+- **Future model**: SaaS mutualisé is a long-term option, not current scope.
+- **Calendar provider**: Nylas (Google + Microsoft). Microsoft enterprise auth requires an Azure app registration.
+
+## Key Product Decisions
+
+| Decision | Choice | Reason |
+|---|---|------|
+| Routing v1 | Percentage-based round-robin per rep (e.g. 10/10/40/40) | BeeNice explicit requirement — replaces senior/junior fixed weights |
+| Company size field | Hidden from default template | Only one BeeNice client needs it; keeps UI stable for all others |
+| Custom fields routing | Not in V1 | Stability over flexibility; one client needs it, not the default |
+| Client mirror view | Deferred | Explicitly put on standby by Julien BOUIC (2026-04-27 meeting) |
+| Buffer | 15 min before + 15 min after every booking | Prevents back-to-back exhaustion; blocks adjacent slots visibly |
+
 ## Current Architecture Notes
 
 - The runnable product lives under `mvp/`.
@@ -26,3 +44,8 @@ BeeNice Calendar is an MVP for booking discovery meetings between Be Nice caller
 - The frontend speaks only to `/api/*` routes and uses the backend response shapes in `mvp/src/lib/types.ts`.
 - Availability and routing behavior should stay consistent between displayed slots, booking creation, and admin
   rescheduling.
+- Routing logic lives in `mvp/server/lib/availability.mjs`. Routing policies are stored in the `routing_policies`
+  table with `company_size_threshold`, `senior_weight`, and `junior_weight` columns — to be extended with per-rep
+  weights for percentage-based round-robin.
+- Buffer times are stored as `buffer_before_minutes` and `buffer_after_minutes` on `booking_links`. Default should
+  be 15 min each.
