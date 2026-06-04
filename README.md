@@ -59,3 +59,6 @@ cp .env.example .env
 # Remplir .env avec les cles Nylas BeeNiceCal Production.
 npm run dev
 ```
+
+Si Google affiche `Erreur 403 : access_denied` pendant une connexion Nylas,
+voir [`docs/google-oauth-403.md`](./docs/google-oauth-403.md).

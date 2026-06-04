@@ -20,10 +20,9 @@ import type {
   AdminTasksResponse,
   AvailabilityResponse,
   BookingDetailResponse,
-  SettingsPayload,
 } from "@mvp/lib/types";
 
-export type ViewMode = "agenda" | "list" | "tasks" | "connections";
+export type ViewMode = "agenda" | "list" | "tasks";
 
 export function useAdminBookingsController() {
   const [payload, setPayload] = useState<AdminBookingsResponse | null>(null);
@@ -31,8 +30,6 @@ export function useAdminBookingsController() {
   const [tasksPayload, setTasksPayload] = useState<AdminTasksResponse | null>(
     null,
   );
-  const [settingsPayload, setSettingsPayload] =
-    useState<SettingsPayload | null>(null);
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(
     null,
   );
@@ -122,7 +119,7 @@ export function useAdminBookingsController() {
       calendarParams.set("from", weekStart.toISOString());
       calendarParams.set("to", visibleWeekEnd.toISOString());
 
-      const [bookings, agenda, tasks, settings] = await Promise.all([
+      const [bookings, agenda, tasks] = await Promise.all([
         apiFetch<AdminBookingsResponse>(
           `/api/admin/bookings?${params.toString()}`,
         ),
@@ -130,13 +127,11 @@ export function useAdminBookingsController() {
           `/api/admin/calendar?${calendarParams.toString()}`,
         ),
         apiFetch<AdminTasksResponse>(`/api/admin/tasks?${params.toString()}`),
-        apiFetch<SettingsPayload>("/api/admin/settings"),
       ]);
 
       setPayload(bookings);
       setCalendar(agenda);
       setTasksPayload(tasks);
-      setSettingsPayload(settings);
     } catch (error) {
       toast.error((error as Error).message);
     } finally {
@@ -251,33 +246,6 @@ export function useAdminBookingsController() {
   }, [agendaTimezone]);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const connected = params.get("connected");
-    const connectionError = params.get("connectionError");
-
-    if (connected) {
-      toast.success("Connexion calendrier terminée.");
-      params.delete("connected");
-      const next = params.toString();
-      window.history.replaceState(
-        {},
-        "",
-        next ? `/admin/bookings?${next}` : "/admin/bookings",
-      );
-    }
-    if (connectionError) {
-      toast.error(connectionError);
-      params.delete("connectionError");
-      const next = params.toString();
-      window.history.replaceState(
-        {},
-        "",
-        next ? `/admin/bookings?${next}` : "/admin/bookings",
-      );
-    }
-  }, []);
-
-  useEffect(() => {
     const source = new EventSource("/api/admin/stream");
     const refresh = () => {
       void fetchDashboard();
@@ -297,7 +265,6 @@ export function useAdminBookingsController() {
     return () => source.close();
   }, [selectedBookingId, weekStartIso, filters]);
 
-  const integrationMode = payload?.integrations.providerMode ?? "mock";
   const liveConnectedCount =
     payload?.filters.reps.filter((rep) => rep.connectionStatus === "connected")
       .length ?? 0;
@@ -408,38 +375,6 @@ export function useAdminBookingsController() {
     }
   };
 
-  const buildInviteLink = (inviteToken?: string | null) => {
-    if (!inviteToken) return "";
-    const relativePath = `/connect/${inviteToken}`;
-    if (typeof window === "undefined") return relativePath;
-    return `${window.location.origin}${relativePath}`;
-  };
-
-  const copyInviteLink = async (inviteToken?: string | null) => {
-    const inviteLink = buildInviteLink(inviteToken);
-    if (!inviteLink) {
-      toast.error("Lien de connexion indisponible.");
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(inviteLink);
-      toast.success("Lien de connexion copie.");
-    } catch {
-      toast.error("Copie du lien impossible.");
-    }
-  };
-
-  const connectionGroups = useMemo(() => {
-    const reps = payload?.filters.reps ?? [];
-    const clients = (settingsPayload?.clients ?? []).filter(
-      (client) => client.active,
-    );
-    return clients.map((client) => ({
-      client,
-      reps: reps.filter((rep) => rep.clientId === client.id),
-    }));
-  }, [payload?.filters.reps, settingsPayload?.clients]);
-
   return {
     payload,
     calendar,
@@ -467,10 +402,8 @@ export function useAdminBookingsController() {
     hasPreviousRescheduleWeek,
     hasNextRescheduleWeek,
     rescheduleSelectedSlot,
-    integrationMode,
     liveConnectedCount,
     selectedTaskCount,
-    connectionGroups,
     selectedBookingIndex,
     hasPreviousBooking,
     hasNextBooking,
@@ -507,7 +440,5 @@ export function useAdminBookingsController() {
     cancelBooking,
     rescheduleBooking,
     dismissTask,
-    buildInviteLink,
-    copyInviteLink,
   };
 }

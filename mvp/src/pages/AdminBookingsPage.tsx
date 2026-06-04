@@ -1,10 +1,8 @@
 import {
   ArrowRightLeft,
-  Cable,
   CalendarRange,
   ChevronLeft,
   ChevronRight,
-  Copy,
   ListTodo,
 } from "lucide-react";
 import { Button } from "@mvp/components/ui/button";
@@ -25,8 +23,6 @@ import { BookingSheet } from "@mvp/components/BookingSheet";
 import { BookingsChart } from "@mvp/components/BookingsChart";
 import { MetricCard } from "@mvp/components/MetricCard";
 import { TaskCard } from "@mvp/components/TaskCard";
-import { formatRepSeniority } from "@mvp/lib/format";
-import { formatRelativeShort } from "@mvp/lib/time";
 import { useAdminBookingsController } from "./admin-bookings/useAdminBookingsController";
 
 export function AdminBookingsPage() {
@@ -57,10 +53,8 @@ export function AdminBookingsPage() {
     hasPreviousRescheduleWeek,
     hasNextRescheduleWeek,
     rescheduleSelectedSlot,
-    integrationMode,
     liveConnectedCount,
     selectedTaskCount,
-    connectionGroups,
     selectedBookingIndex,
     hasPreviousBooking,
     hasNextBooking,
@@ -75,8 +69,6 @@ export function AdminBookingsPage() {
     cancelBooking,
     rescheduleBooking,
     dismissTask,
-    buildInviteLink,
-    copyInviteLink,
   } = useAdminBookingsController();
 
   const selectedBooking =
@@ -233,12 +225,6 @@ export function AdminBookingsPage() {
               icon={ListTodo}
               label="Tâches"
             />
-            <ViewButton
-              active={activeView === "connections"}
-              onClick={() => setActiveView("connections")}
-              icon={Cable}
-              label="Connexions"
-            />
           </div>
 
           {activeView === "agenda" && (
@@ -330,122 +316,6 @@ export function AdminBookingsPage() {
           </Card>
         )}
 
-        {activeView === "connections" && (
-          <Card className="surface-card">
-            <CardHeader>
-              <CardTitle>Connexions calendrier</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="rounded-2xl border border-[#001E5B]/8 bg-white px-4 py-4">
-                <p className="font-semibold text-[#001E5B]">
-                  Mode {integrationMode === "nylas" ? "Nylas" : "mock"}
-                </p>
-                <p className="mt-2 text-sm text-[#001E5B]/64">
-                  {integrationMode === "nylas"
-                    ? "Les changements du calendrier client sont remontés dans l'agenda admin via Nylas."
-                    : "Mode démo : connexions simulées pour tester l'agenda live sans provider externe."}
-                </p>
-              </div>
-
-              {connectionGroups.map((group) => (
-                <div
-                  key={group.client.id}
-                  className="rounded-2xl border border-[#001E5B]/8 bg-white px-4 py-4"
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div>
-                      <p className="font-semibold text-[#001E5B]">{group.client.name}</p>
-                      <p className="mt-2 text-sm text-[#001E5B]/64">
-                        Lien générique à envoyer aux reps du client pour qu'ils connectent
-                        eux-mêmes leur agenda.
-                      </p>
-                      <p className="mt-1 text-xs text-[#001E5B]/48">
-                        {group.client.routingMode === "weighted_seniority"
-                          ? "Routing senior/junior"
-                          : "Pool unique"}
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        variant="outline"
-                        className="rounded-full"
-                        onClick={() =>
-                          void copyInviteLink(group.client.connectionInviteToken)
-                        }
-                      >
-                        <Copy className="h-4 w-4" />
-                        Copier le lien
-                      </Button>
-                      <a
-                        href={buildInviteLink(group.client.connectionInviteToken)}
-                        className="inline-flex items-center rounded-full border border-[#001E5B]/10 bg-[#F9F4ED] px-3 py-2 text-sm font-medium text-[#001E5B]"
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        Ouvrir le lien
-                      </a>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 rounded-2xl border border-dashed border-[#001E5B]/12 bg-[#F9F4ED] px-4 py-3 text-xs text-[#001E5B]/64">
-                    {buildInviteLink(group.client.connectionInviteToken)}
-                  </div>
-
-                  <div className="mt-4 space-y-3">
-                    {group.reps.length ? (
-                      group.reps.map((rep) => (
-                        <div
-                          key={rep.id}
-                          className="rounded-2xl border border-[#001E5B]/8 bg-white px-4 py-4"
-                        >
-                          <div className="flex flex-wrap items-start justify-between gap-4">
-                            <div>
-                              <p className="font-semibold text-[#001E5B]">{rep.name}</p>
-                              <p className="text-sm text-[#001E5B]/56">
-                                {formatRepSeniority(rep.seniority)}
-                                {rep.businessEmail ? ` · ${rep.businessEmail}` : ""}
-                              </p>
-                              <div className="mt-2 space-y-1 text-xs text-[#001E5B]/56">
-                                {rep.providerEmail ? (
-                                  <p>Calendrier : {rep.providerEmail}</p>
-                                ) : null}
-                                {rep.connectedAt ? (
-                                  <p>Connecté : {formatRelativeShort(rep.connectedAt)}</p>
-                                ) : null}
-                                <p>
-                                  Dernière synchro :{" "}
-                                  {rep.lastSyncAt
-                                    ? formatRelativeShort(rep.lastSyncAt)
-                                    : "jamais"}
-                                </p>
-                                <p>
-                                  Dernier webhook :{" "}
-                                  {rep.lastWebhookAt
-                                    ? formatRelativeShort(rep.lastWebhookAt)
-                                    : "jamais"}
-                                </p>
-                                {rep.lastError ? (
-                                  <p className="text-rose-600">{rep.lastError}</p>
-                                ) : null}
-                              </div>
-                            </div>
-                            <div className="rounded-full border border-[#001E5B]/10 bg-[#F9F4ED] px-3 py-1 text-xs font-medium text-[#001E5B]">
-                              {rep.connectionStatus}
-                            </div>
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="rounded-2xl border border-dashed border-[#001E5B]/12 px-4 py-8 text-sm text-[#001E5B]/44">
-                        Aucun rep n'est encore connecté pour ce client.
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        )}
       </div>
 
       {/* Sheet détail — overlay portal */}

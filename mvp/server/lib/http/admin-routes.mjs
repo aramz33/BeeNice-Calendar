@@ -206,7 +206,7 @@ export async function handleAdminRoutes({
           target:
             result.callbackMode === "public_terminal"
               ? null
-              : `/admin/bookings?connected=${encodeURIComponent(result.repId)}`,
+              : `/admin/settings/connections?connected=${encodeURIComponent(result.repId)}`,
           ctaLabel: "Retourner à la console admin",
         }),
       );
@@ -226,7 +226,7 @@ export async function handleAdminRoutes({
           target:
             state?.source === "public_invite"
               ? null
-              : `/admin/bookings?connectionError=${encodeURIComponent(message)}`,
+              : `/admin/settings/connections?connectionError=${encodeURIComponent(message)}`,
           ctaLabel: "Retourner à la console admin",
         }),
       );
