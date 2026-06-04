@@ -59,10 +59,7 @@ export async function createBooking(database, db, store, provider, slug, payload
     throw new Error("Informations booking incomplètes.");
   }
 
-  const companySize = Number(payload.companySize);
-  if (Number.isNaN(companySize)) {
-    throw new Error("La taille de société est obligatoire.");
-  }
+  const companySize = Number(payload.companySize ?? 0);
 
   const slotStart = parseISO(payload.slotStart);
   if (Number.isNaN(slotStart.getTime())) {

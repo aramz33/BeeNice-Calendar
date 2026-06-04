@@ -31,13 +31,6 @@ import { formatRepSeniority } from "@mvp/lib/format";
 import { formatRelativeShort } from "@mvp/lib/time";
 import { useBookingWorkspaceController } from "./booking-workspace/useBookingWorkspaceController";
 
-const COMPANY_SIZE_OPTIONS = [
-  { label: "1 à 49 salariés", value: "49" },
-  { label: "50 à 199 salariés", value: "150" },
-  { label: "200 à 499 salariés", value: "250" },
-  { label: "500+ salariés", value: "500" },
-];
-
 export function BookingWorkspacePage() {
   const [submitted, setSubmitted] = useState(false);
   const [confirmingCancelId, setConfirmingCancelId] = useState<string | null>(
@@ -53,8 +46,6 @@ export function BookingWorkspacePage() {
     cancellingBookingId,
     callerId,
     setCallerId,
-    companySize,
-    setCompanySize,
     selectedSlot,
     setSelectedSlot,
     prospectName,
@@ -113,8 +104,8 @@ export function BookingWorkspacePage() {
               <CardTitle>Prise de rendez-vous</CardTitle>
             </CardHeader>
             <CardContent className="space-y-5">
-              {/* Sélection client / caller / taille */}
-              <div className="grid gap-4 md:grid-cols-3">
+              {/* Sélection client / caller */}
+              <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="client">Client</Label>
                   <Select
@@ -143,21 +134,6 @@ export function BookingWorkspacePage() {
                       {payload.callers.map((caller) => (
                         <SelectItem key={caller.id} value={caller.id}>
                           {caller.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="company-size">Taille de société</Label>
-                  <Select value={companySize} onValueChange={setCompanySize}>
-                    <SelectTrigger id="company-size">
-                      <SelectValue placeholder="Choisir" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {COMPANY_SIZE_OPTIONS.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
                         </SelectItem>
                       ))}
                     </SelectContent>

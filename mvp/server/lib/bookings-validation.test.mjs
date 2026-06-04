@@ -135,24 +135,6 @@ test("createBooking throws when required fields are missing", async (t) => {
     );
 });
 
-test("createBooking throws when companySize is not a number", async (t) => {
-    const store = withTempStore(t);
-    const availability = await store.listAvailability("teamstarter-discovery", "80");
-    const slot = availability.slots[0];
-
-    await assert.rejects(
-        () => store.createBooking("teamstarter-discovery", {
-            callerId: "caller-clotilde",
-            companySize: "not-a-number",
-            companyName: "TestCo",
-            prospectName: "Jane",
-            prospectEmail: "jane@example.com",
-            slotStart: slot.startAt,
-        }),
-        /taille de société est obligatoire/,
-    );
-});
-
 test("createBooking throws for invalid slotStart date string", async (t) => {
     const store = withTempStore(t);
     await assert.rejects(

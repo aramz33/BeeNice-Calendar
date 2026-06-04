@@ -21,15 +21,18 @@ export function useBookingWorkspaceController() {
   const { slug = "teamstarter-discovery" } = useParams();
   const navigate = useNavigate();
   const [payload, setPayload] = useState<BookingLinkResponse | null>(null);
-  const [availability, setAvailability] = useState<AvailabilityResponse | null>(null);
+  const [availability, setAvailability] = useState<AvailabilityResponse | null>(
+    null,
+  );
   const [callerBookings, setCallerBookings] =
     useState<CallerBookingsResponse | null>(null);
   const [loadingMeta, setLoadingMeta] = useState(true);
   const [loadingAvailability, setLoadingAvailability] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [cancellingBookingId, setCancellingBookingId] = useState<string | null>(null);
+  const [cancellingBookingId, setCancellingBookingId] = useState<string | null>(
+    null,
+  );
   const [callerId, setCallerId] = useState("");
-  const [companySize, setCompanySize] = useState("");
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [prospectName, setProspectName] = useState("");
   const [prospectEmail, setProspectEmail] = useState("");
@@ -118,19 +121,11 @@ export function useBookingWorkspaceController() {
   const fetchAvailability = async (
     preferredSlot: string | null = selectedSlot,
     weekStart: Date = currentWeekStart,
-    companySizeValue: string = companySize,
   ) => {
-    if (!companySizeValue || Number.isNaN(Number(companySizeValue))) {
-      setAvailability(null);
-      setSelectedSlot(null);
-      return;
-    }
-
     setLoadingAvailability(true);
     try {
       const weekEnd = endOfWeek(weekStart, { weekStartsOn: WEEK_STARTS_ON });
       const params = new URLSearchParams({
-        companySize: companySizeValue,
         from: weekStart.toISOString(),
         to: weekEnd.toISOString(),
       });
@@ -139,7 +134,8 @@ export function useBookingWorkspaceController() {
       );
       setAvailability(data);
       setSelectedSlot(
-        preferredSlot && data.slots.some((slot) => slot.startAt === preferredSlot)
+        preferredSlot &&
+          data.slots.some((slot) => slot.startAt === preferredSlot)
           ? preferredSlot
           : null,
       );
@@ -162,7 +158,9 @@ export function useBookingWorkspaceController() {
       );
       setCallerBookings(data);
       setSourceTask((current) =>
-        current ? (data.tasks.find((task) => task.id === current.id) ?? null) : null,
+        current
+          ? (data.tasks.find((task) => task.id === current.id) ?? null)
+          : null,
       );
     } catch (error) {
       toast.error((error as Error).message);
@@ -171,7 +169,7 @@ export function useBookingWorkspaceController() {
 
   useEffect(() => {
     void fetchAvailability();
-  }, [slug, companySize, availabilityWeekStartIso]);
+  }, [slug, availabilityWeekStartIso]);
 
   useEffect(() => {
     void fetchCallerData();
@@ -185,16 +183,7 @@ export function useBookingWorkspaceController() {
     });
     source.onerror = () => source.close();
     return () => source.close();
-  }, [slug, callerId, companySize, availabilityWeekStartIso]);
-
-  const eligiblePoolLabel = useMemo(() => {
-    if (!companySize || !payload) {
-      return "Choisissez une tranche";
-    }
-    return Number(companySize) >= payload.bookingLink.companySizeThreshold
-      ? "Pool senior uniquement"
-      : "Pool complet";
-  }, [companySize, payload]);
+  }, [slug, callerId, availabilityWeekStartIso]);
 
   const handleTaskSelect = (task: FollowUpTask) => {
     setSourceTask(task);
@@ -257,14 +246,13 @@ export function useBookingWorkspaceController() {
       );
 
       setSourceTask(null);
-      setCompanySize(String(booking.companySize));
       setCompanyName(booking.companyName);
       setProspectName(booking.prospectName);
       setProspectEmail(booking.prospectEmail);
       setNotes(booking.notes ?? "");
       setAvailabilityWeekStartIso(bookingWeekStart.toISOString());
       await Promise.all([
-        fetchAvailability(booking.startAt, bookingWeekStart, String(booking.companySize)),
+        fetchAvailability(booking.startAt, bookingWeekStart),
         fetchCallerData(),
       ]);
       toast.success(
@@ -283,7 +271,7 @@ export function useBookingWorkspaceController() {
       toast.error("Choisissez un créneau avant de réserver.");
       return;
     }
-    if (!callerId || !companySize || !prospectName || !prospectEmail || !companyName) {
+    if (!callerId || !prospectName || !prospectEmail || !companyName) {
       toast.error("Complétez les informations prospect obligatoires.");
       return;
     }
@@ -297,7 +285,7 @@ export function useBookingWorkspaceController() {
         method: "POST",
         body: JSON.stringify({
           callerId,
-          companySize: Number(companySize),
+          companySize: 0,
           companyName,
           prospectName,
           prospectEmail,
@@ -332,8 +320,6 @@ export function useBookingWorkspaceController() {
     cancellingBookingId,
     callerId,
     setCallerId,
-    companySize,
-    setCompanySize,
     selectedSlot,
     setSelectedSlot,
     prospectName,
@@ -350,7 +336,6 @@ export function useBookingWorkspaceController() {
     clientName,
     workspaceOptions,
     selectedSlotLabel,
-    eligiblePoolLabel,
     hasPreviousAvailabilityWeek,
     hasNextAvailabilityWeek,
     handleTaskSelect,
