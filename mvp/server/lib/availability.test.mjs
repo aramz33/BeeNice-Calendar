@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import {randomUUID} from "node:crypto";
 import {DatabaseSync} from "node:sqlite";
-import {endOfWeek, parseISO, startOfWeek} from "date-fns";
+import {addMinutes, endOfWeek, parseISO, startOfWeek} from "date-fns";
 import {createStore} from "./state.mjs";
 
 function withTempStore(t, provider = createProviderStub()) {
@@ -177,6 +177,64 @@ test("reschedule availability excludes the booking being moved", async (t) => {
 
     assert.ok(currentSlot, "expected the current booking slot to remain available");
     assert.deepEqual(currentSlot.availableRepIds, [booking.assignedRepId]);
+});
+
+test("existing bookings block slots without 15 minutes free before and after", async (t) => {
+    const store = withTempStore(t);
+    const {client, workspace} = store.createClient({name: "Buffer Client"});
+    const rep = store.createRep({
+        clientId: client.id,
+        name: "Solo Rep",
+        seniority: "non_defini",
+    });
+    store.upsertConnection(rep.id, {
+        provider: "mock",
+        providerEmail: "solo@example.com",
+        status: "connected",
+    });
+
+    let bookingLink = store.getBookingLinkBySlug(workspace.slug);
+    withDb(store, (db) => {
+        db.prepare("UPDATE booking_links SET interval_minutes = 15 WHERE id = ?")
+            .run(bookingLink.id);
+    });
+    bookingLink = store.getBookingLinkBySlug(workspace.slug);
+
+    const availability = await store.listAvailability(workspace.slug, "80");
+    const bookingSlot = availability.slots.find((slot) => {
+        const start = parseISO(slot.startAt);
+        return start.getHours() === 10 && start.getMinutes() === 0;
+    });
+    assert.ok(bookingSlot, "expected a 10:00 slot");
+
+    await store.createBooking(workspace.slug, {
+        callerId: "caller-clotilde",
+        companySize: 80,
+        companyName: "ACME",
+        prospectName: "Jane Doe",
+        prospectEmail: "jane@example.com",
+        notes: "Buffered booking.",
+        slotStart: bookingSlot.startAt,
+    });
+
+    const bookingStart = parseISO(bookingSlot.startAt);
+    const weekStart = startOfWeek(bookingStart, {weekStartsOn: 1});
+    const updatedAvailability = await store.buildAvailability(
+        bookingLink,
+        80,
+        {
+            from: weekStart.toISOString(),
+            to: endOfWeek(weekStart, {weekStartsOn: 1}).toISOString(),
+        },
+    );
+    const availableStarts = new Set(
+        updatedAvailability.slots.map((slot) => slot.startAt),
+    );
+
+    assert.equal(availableStarts.has(addMinutes(bookingStart, -30).toISOString()), false);
+    assert.equal(availableStarts.has(addMinutes(bookingStart, 30).toISOString()), false);
+    assert.equal(availableStarts.has(addMinutes(bookingStart, 45).toISOString()), false);
+    assert.equal(availableStarts.has(addMinutes(bookingStart, 60).toISOString()), true);
 });
 
 test("booking creation reports the current unavailable-slot error when assignment cannot be made", async (t) => {

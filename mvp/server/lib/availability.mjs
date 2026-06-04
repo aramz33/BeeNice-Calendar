@@ -66,6 +66,7 @@ export function createAvailabilityModule({
                 db,
                 store,
                 provider,
+                bookingLink,
                 eligibleReps,
                 interval,
                 {
@@ -243,7 +244,38 @@ function getEligibleReps(store, bookingLinkId, companySize) {
   return reps;
 }
 
-async function getBusyIntervals(db, store, provider, repId, interval, options = {}) {
+function getMaxBookingBuffers(db, bookingLink) {
+  const row = db
+    .prepare(`
+      SELECT
+        COALESCE(MAX(buffer_before_minutes), 0) AS max_before,
+        COALESCE(MAX(buffer_after_minutes), 0) AS max_after
+      FROM booking_links
+    `)
+    .get();
+
+  return {
+    before: Math.max(bookingLink.bufferBeforeMinutes, row?.max_before ?? 0),
+    after: Math.max(bookingLink.bufferAfterMinutes, row?.max_after ?? 0),
+  };
+}
+
+async function getBusyIntervals(db, store, provider, bookingLink, repId, interval, options = {}) {
+  const busyLookupInterval = {
+    start: subMinutes(interval.start, bookingLink.bufferBeforeMinutes),
+    end: addMinutes(interval.end, bookingLink.bufferAfterMinutes),
+  };
+  const bookingLookupInterval = {
+    start: subMinutes(
+      interval.start,
+      options.maxBookingBufferAfterMinutes ?? bookingLink.bufferAfterMinutes,
+    ),
+    end: addMinutes(
+      interval.end,
+      options.maxBookingBufferBeforeMinutes ?? bookingLink.bufferBeforeMinutes,
+    ),
+  };
+
   const localCalendarBusy = db
     .prepare(`
       SELECT start_at, end_at
@@ -252,7 +284,7 @@ async function getBusyIntervals(db, store, provider, repId, interval, options = 
         AND end_at > ?
         AND start_at < ?
     `)
-    .all(repId, interval.start.toISOString(), interval.end.toISOString())
+    .all(repId, busyLookupInterval.start.toISOString(), busyLookupInterval.end.toISOString())
     .map((event) => ({
       startAt: parseISO(event.start_at),
       endAt: parseISO(event.end_at),
@@ -260,41 +292,51 @@ async function getBusyIntervals(db, store, provider, repId, interval, options = 
 
   const bookingBusy = db
     .prepare(`
-      SELECT start_at, end_at
+      SELECT
+        bookings.start_at,
+        bookings.end_at,
+        booking_links.buffer_before_minutes,
+        booking_links.buffer_after_minutes
       FROM bookings
+      JOIN booking_links ON booking_links.id = bookings.booking_link_id
       WHERE assigned_rep_id = ?
-        AND end_at > ?
-        AND start_at < ?
-        AND schedule_state != 'cancelled'
-        AND (? IS NULL OR id != ?)
+        AND bookings.end_at > ?
+        AND bookings.start_at < ?
+        AND bookings.schedule_state != 'cancelled'
+        AND (? IS NULL OR bookings.id != ?)
     `)
     .all(
       repId,
-      interval.start.toISOString(),
-      interval.end.toISOString(),
+      bookingLookupInterval.start.toISOString(),
+      bookingLookupInterval.end.toISOString(),
       options.excludedBookingId ?? null,
       options.excludedBookingId ?? null,
     )
     .map((booking) => ({
-      startAt: parseISO(booking.start_at),
-      endAt: parseISO(booking.end_at),
+      startAt: subMinutes(parseISO(booking.start_at), booking.buffer_before_minutes),
+      endAt: addMinutes(parseISO(booking.end_at), booking.buffer_after_minutes),
     }));
 
   const rep = store.getRep(repId);
   const connection = getConnection(db, repId);
   const providerBusy =
     rep && connection
-      ? await provider.listBusyIntervals(store, rep, connection, interval)
+      ? await provider.listBusyIntervals(store, rep, connection, busyLookupInterval)
       : [];
 
   return [...localCalendarBusy, ...bookingBusy, ...providerBusy];
 }
 
-async function getBusyIntervalsForReps(db, store, provider, reps, interval, options = {}) {
+async function getBusyIntervalsForReps(db, store, provider, bookingLink, reps, interval, options = {}) {
+  const maxBookingBuffers = getMaxBookingBuffers(db, bookingLink);
   const entries = await Promise.all(
     reps.map(async (rep) => [
       rep.id,
-      await getBusyIntervals(db, store, provider, rep.id, interval, options),
+      await getBusyIntervals(db, store, provider, bookingLink, rep.id, interval, {
+        ...options,
+        maxBookingBufferBeforeMinutes: maxBookingBuffers.before,
+        maxBookingBufferAfterMinutes: maxBookingBuffers.after,
+      }),
     ]),
   );
   return new Map(entries);
@@ -309,7 +351,7 @@ async function getAvailableEligibleRepsForSlot(db, store, provider, bookingLink,
       bookingLink.bufferAfterMinutes,
     ),
   };
-  const busyByRep = await getBusyIntervalsForReps(db, store, provider, eligibleReps, interval, {
+  const busyByRep = await getBusyIntervalsForReps(db, store, provider, bookingLink, eligibleReps, interval, {
     excludedBookingId: options.excludedBookingId ?? null,
   });
   return eligibleReps.filter((rep) =>

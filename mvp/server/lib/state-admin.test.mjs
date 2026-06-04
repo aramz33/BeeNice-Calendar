@@ -3,10 +3,11 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import {DatabaseSync} from "node:sqlite";
 import {createStore} from "./state.mjs";
 
-function withTempStore(t, providerMode = "mock") {
-    const provider = {
+function createProviderStub(providerMode = "mock") {
+    return {
         mode: providerMode,
         getOverview() {
             return {providerMode, nylasConfigured: false};
@@ -29,7 +30,10 @@ function withTempStore(t, providerMode = "mock") {
         async releaseExternalEvent() {
         },
     };
+}
 
+function withTempStore(t, providerMode = "mock") {
+    const provider = createProviderStub(providerMode);
     const previousDbPath = process.env.MVP_DB_PATH;
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "benice-admin-"));
     process.env.MVP_DB_PATH = path.join(tempDir, "mvp.sqlite");
@@ -88,10 +92,107 @@ test("createClient returns client and workspace", (t) => {
     assert.ok(result.workspace);
 });
 
+test("seeded booking links use 15 minute buffers", (t) => {
+    const store = withTempStore(t);
+    const bookingLink = store.getBookingLinkBySlug("teamstarter-discovery");
+
+    assert.equal(bookingLink.bufferBeforeMinutes, 15);
+    assert.equal(bookingLink.bufferAfterMinutes, 15);
+});
+
+test("createClient creates booking links with 15 minute buffers", (t) => {
+    const store = withTempStore(t);
+    const {client} = store.createClient({name: "Buffered Client"});
+    const [bookingLink] = store.listBookingLinksForClient(client.id);
+
+    assert.equal(bookingLink.bufferBeforeMinutes, 15);
+    assert.equal(bookingLink.bufferAfterMinutes, 15);
+});
+
 test("createClient defaults routingMode to pool_unique for unknown value", (t) => {
     const store = withTempStore(t);
     const {client} = store.createClient({name: "Routed Client", routingMode: "unknown_mode"});
     assert.equal(client.routingMode, "pool_unique");
+});
+
+test("legacy zero booking link buffers are backfilled to 15 minutes", (t) => {
+    const previousDbPath = process.env.MVP_DB_PATH;
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "benice-admin-"));
+    const dbPath = path.join(tempDir, "mvp.sqlite");
+    process.env.MVP_DB_PATH = dbPath;
+    const provider = createProviderStub();
+    let migratedStore = null;
+
+    t.after(() => {
+        migratedStore?.close();
+        if (previousDbPath === undefined) {
+            delete process.env.MVP_DB_PATH;
+        } else {
+            process.env.MVP_DB_PATH = previousDbPath;
+        }
+        fs.rmSync(tempDir, {recursive: true, force: true});
+    });
+
+    const initialStore = createStore(provider);
+    initialStore.close();
+
+    const db = new DatabaseSync(dbPath);
+    try {
+        db.prepare(`
+            UPDATE booking_links
+            SET buffer_before_minutes = 0,
+                buffer_after_minutes = 0
+            WHERE slug = ?
+        `).run("teamstarter-discovery");
+    } finally {
+        db.close();
+    }
+
+    migratedStore = createStore(provider);
+    const bookingLink = migratedStore.getBookingLinkBySlug("teamstarter-discovery");
+
+    assert.equal(bookingLink.bufferBeforeMinutes, 15);
+    assert.equal(bookingLink.bufferAfterMinutes, 15);
+});
+
+test("legacy non-zero booking link buffers are preserved", (t) => {
+    const previousDbPath = process.env.MVP_DB_PATH;
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "benice-admin-"));
+    const dbPath = path.join(tempDir, "mvp.sqlite");
+    process.env.MVP_DB_PATH = dbPath;
+    const provider = createProviderStub();
+    let migratedStore = null;
+
+    t.after(() => {
+        migratedStore?.close();
+        if (previousDbPath === undefined) {
+            delete process.env.MVP_DB_PATH;
+        } else {
+            process.env.MVP_DB_PATH = previousDbPath;
+        }
+        fs.rmSync(tempDir, {recursive: true, force: true});
+    });
+
+    const initialStore = createStore(provider);
+    initialStore.close();
+
+    const db = new DatabaseSync(dbPath);
+    try {
+        db.prepare(`
+            UPDATE booking_links
+            SET buffer_before_minutes = 10,
+                buffer_after_minutes = 20
+            WHERE slug = ?
+        `).run("teamstarter-discovery");
+    } finally {
+        db.close();
+    }
+
+    migratedStore = createStore(provider);
+    const bookingLink = migratedStore.getBookingLinkBySlug("teamstarter-discovery");
+
+    assert.equal(bookingLink.bufferBeforeMinutes, 10);
+    assert.equal(bookingLink.bufferAfterMinutes, 20);
 });
 
 // ─── updateClient ─────────────────────────────────────────────────────────────

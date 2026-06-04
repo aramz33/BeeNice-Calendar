@@ -477,8 +477,8 @@ function buildDefaultBookingLink(db, client, defaults) {
         timezone: client.timezone,
         durationMinutes: defaults.workspaceDurationMinutes,
         intervalMinutes: defaults.workspaceIntervalMinutes,
-        bufferBeforeMinutes: 0,
-        bufferAfterMinutes: 0,
+        bufferBeforeMinutes: defaults.workspaceBufferBeforeMinutes,
+        bufferAfterMinutes: defaults.workspaceBufferAfterMinutes,
         minNoticeMinutes: defaults.workspaceMinNoticeMinutes,
         active: true,
     };

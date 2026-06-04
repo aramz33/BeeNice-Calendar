@@ -5,6 +5,9 @@ import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
 import { createSeedState } from "./seed.mjs";
 
+const DEFAULT_BUFFER_BEFORE_MINUTES = 15;
+const DEFAULT_BUFFER_AFTER_MINUTES = 15;
+
 const DEFAULT_DB_PATH = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "../data/mvp.sqlite",
@@ -593,9 +596,15 @@ function normalizeLegacyData(db, providerMode) {
   `);
   db.exec(`
     UPDATE booking_links
-    SET buffer_before_minutes = 0,
-        buffer_after_minutes = 0
-    WHERE buffer_before_minutes != 0 OR buffer_after_minutes != 0
+    SET buffer_before_minutes = CASE
+          WHEN buffer_before_minutes = 0 THEN ${DEFAULT_BUFFER_BEFORE_MINUTES}
+          ELSE buffer_before_minutes
+        END,
+        buffer_after_minutes = CASE
+          WHEN buffer_after_minutes = 0 THEN ${DEFAULT_BUFFER_AFTER_MINUTES}
+          ELSE buffer_after_minutes
+        END
+    WHERE buffer_before_minutes = 0 OR buffer_after_minutes = 0
   `);
   normalizeConnectionOwnership(db, providerMode);
 }
