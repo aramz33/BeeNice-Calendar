@@ -259,6 +259,7 @@ function migrateSchema(db, providerMode) {
   ensureColumn(db, "bookings", "completed_at", "TEXT");
   ensureColumn(db, "bookings", "no_show_at", "TEXT");
   ensureColumn(db, "rep_calendar_connections", "connected_at", "TEXT");
+  ensureColumn(db, "callers", "user_id", "TEXT");
 
   const clientsMissingInviteToken = db
     .prepare("SELECT id FROM clients WHERE connection_invite_token IS NULL OR connection_invite_token = ''")

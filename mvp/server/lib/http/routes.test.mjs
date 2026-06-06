@@ -171,6 +171,74 @@ test("PATCH /api/admin/bookings/:id/outcome → 200 { ok: true }", async () => {
   assert.equal(capturedReason, "Great fit");
 });
 
+// ── auth middleware ────────────────────────────────────────────────────────────
+
+function createMockAuth(session = null) {
+  return {
+    api: { getSession: async () => session },
+    handler: async () => new Response(JSON.stringify({ ok: true }), { status: 200 }),
+  };
+}
+
+const adminSession = { user: { id: "u1", role: "admin", callerId: null, active: true } };
+const callerSession = { user: { id: "u2", role: "caller", callerId: "caller-clotilde", active: true } };
+
+test("GET /api/admin/bookings sans session → 401", async () => {
+  const app = createApp(createMockStore(), createMockProvider(), createMockAuth(null));
+  const res = await app.request("/api/admin/bookings");
+  assert.equal(res.status, 401);
+});
+
+test("GET /api/admin/bookings avec session caller → 403", async () => {
+  const app = createApp(createMockStore(), createMockProvider(), createMockAuth(callerSession));
+  const res = await app.request("/api/admin/bookings");
+  assert.equal(res.status, 403);
+});
+
+test("GET /api/admin/bookings avec session admin → 200", async () => {
+  const app = createApp(createMockStore(), createMockProvider(), createMockAuth(adminSession));
+  const res = await app.request("/api/admin/bookings");
+  assert.equal(res.status, 200);
+});
+
+test("GET /api/book/:slug/bookings sans session → 401", async () => {
+  const app = createApp(createMockStore(), createMockProvider(), createMockAuth(null));
+  const res = await app.request("/api/book/teamstarter-discovery/bookings");
+  assert.equal(res.status, 401);
+});
+
+test("GET /api/book/:slug/bookings avec session caller → callerId déduit de la session", async () => {
+  let capturedCallerId;
+  const store = createMockStore({
+    listCallerBookings: (slug, callerId) => {
+      capturedCallerId = callerId;
+      return [{ id: "b1" }];
+    },
+  });
+  const app = createApp(store, createMockProvider(), createMockAuth(callerSession));
+
+  const res = await app.request("/api/book/teamstarter-discovery/bookings");
+
+  assert.equal(res.status, 200);
+  assert.equal(capturedCallerId, "caller-clotilde");
+});
+
+test("GET /api/book/:slug/tasks avec session caller → callerId déduit de la session", async () => {
+  let capturedCallerId;
+  const store = createMockStore({
+    listCallerTasks: (callerId) => {
+      capturedCallerId = callerId;
+      return [];
+    },
+  });
+  const app = createApp(store, createMockProvider(), createMockAuth(callerSession));
+
+  const res = await app.request("/api/book/teamstarter-discovery/tasks");
+
+  assert.equal(res.status, 200);
+  assert.equal(capturedCallerId, "caller-clotilde");
+});
+
 // ── error handling ────────────────────────────────────────────────────────────
 
 test("Route inconnue → 404", async () => {

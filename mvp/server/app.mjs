@@ -6,11 +6,19 @@ import { createConnectionRouter } from "./lib/http/connection-routes.mjs";
 import { createWebhookRouter } from "./lib/http/webhook-routes.mjs";
 import { registerStreamRoutes } from "./lib/http/streams.mjs";
 import { serveAppAsset } from "./lib/http/asset-routes.mjs";
+import { requireAuth, requireAdmin } from "./lib/auth.mjs";
 
-export function createApp(store, provider, distDir = null) {
+export function createApp(store, provider, auth = null, distDir = null) {
   const app = new Hono();
 
-  app.use("*", cors());
+  app.use("/api/*", cors());
+
+  if (auth) {
+    app.on(["GET", "POST"], "/api/auth/**", (c) => auth.handler(c.req.raw));
+    app.use("/api/admin/*", requireAdmin(auth));
+    app.use("/api/book/*", requireAuth(auth));
+    app.use("/api/caller/*", requireAuth(auth));
+  }
 
   registerStreamRoutes(app, store);
 

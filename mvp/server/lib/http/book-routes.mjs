@@ -20,20 +20,15 @@ export function createBookRouter(store) {
     return c.json(slots);
   });
 
-  router.get("/:slug/callers/:callerId/bookings", (c) => {
-    return c.json(
-      store.listCallerBookings(c.req.param("slug"), c.req.param("callerId")),
-    );
+  router.get("/:slug/bookings", (c) => {
+    const callerId = c.get("session")?.user?.callerId;
+    return c.json(store.listCallerBookings(c.req.param("slug"), callerId));
   });
 
-  router.get("/:slug/callers/:callerId/tasks", (c) => {
+  router.get("/:slug/tasks", (c) => {
+    const callerId = c.get("session")?.user?.callerId;
     const bookingLink = store.getBookingLinkBySlug(c.req.param("slug"));
-    return c.json(
-      store.listCallerTasks(
-        c.req.param("callerId"),
-        bookingLink?.clientId ?? null,
-      ),
-    );
+    return c.json(store.listCallerTasks(callerId, bookingLink?.clientId ?? null));
   });
 
   router.post("/:slug/bookings", async (c) => {
@@ -42,10 +37,11 @@ export function createBookRouter(store) {
     return c.json(booking, 201);
   });
 
-  router.post("/:slug/callers/:callerId/bookings/:bookingId/cancel", async (c) => {
+  router.post("/:slug/bookings/:bookingId/cancel", async (c) => {
+    const callerId = c.get("session")?.user?.callerId;
     const result = await store.cancelCallerBooking(
       c.req.param("slug"),
-      c.req.param("callerId"),
+      callerId,
       c.req.param("bookingId"),
     );
     return c.json(result);

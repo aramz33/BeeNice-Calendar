@@ -114,7 +114,7 @@ export function createAdminRouter(store, provider) {
   });
 
   router.get("/integrations/nylas/callback", async (c) => {
-    const searchParams = new URLSearchParams(c.req.raw.url.split("?")[1] ?? "");
+    const searchParams = new URL(c.req.url).searchParams;
     try {
       const result = await store.finalizeRepConnection(searchParams);
       return c.html(

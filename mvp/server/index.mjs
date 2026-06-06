@@ -4,6 +4,9 @@ import { serve } from "@hono/node-server";
 import { createCalendarProvider } from "./lib/provider.mjs";
 import { createStore } from "./lib/state.mjs";
 import { createApp } from "./app.mjs";
+import { createAuth } from "./lib/auth.mjs";
+import { getDefaultDatabasePath } from "./lib/database.mjs";
+import { seedAuthUsers } from "./lib/seed-users.mjs";
 
 const provider = createCalendarProvider();
 const store = createStore(provider);
@@ -14,7 +17,11 @@ const DIST_DIR = path.resolve(
   "../dist",
 );
 
-const app = createApp(store, provider, DIST_DIR);
+const dbPath = path.resolve(process.env.MVP_DB_PATH ?? getDefaultDatabasePath());
+const auth = createAuth(dbPath);
+await seedAuthUsers(auth, dbPath);
+
+const app = createApp(store, provider, auth, DIST_DIR);
 
 serve({ fetch: app.fetch, port: PORT, hostname: HOST }, () => {
   console.log(`[mvp-api] listening on http://${HOST}:${PORT} (${provider.mode})`);
