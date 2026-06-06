@@ -4,7 +4,7 @@ export function registerStreamRoutes(app, store) {
   app.get("/api/book/:slug/stream", (c) => {
     const slug = c.req.param("slug");
     return streamSSE(c, async (stream) => {
-      const client = { write: (data) => stream.write(data) };
+      const client = { writeSSE: (opts) => stream.writeSSE(opts) };
 
       await stream.writeSSE({
         event: "availability.updated",
@@ -28,7 +28,7 @@ export function registerStreamRoutes(app, store) {
 
   app.get("/api/admin/stream", (c) => {
     return streamSSE(c, async (stream) => {
-      const client = { write: (data) => stream.write(data) };
+      const client = { writeSSE: (opts) => stream.writeSSE(opts) };
 
       await stream.writeSSE({
         event: "booking.updated",

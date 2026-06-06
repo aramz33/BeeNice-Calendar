@@ -28,21 +28,24 @@ export function createNotificationsModule({listBookingLinksForClient}) {
                 return;
             }
 
-            const payload = `event: availability.updated\ndata: ${JSON.stringify({
-                slug,
-                at: new Date().toISOString(),
-            })}\n\n`;
-            clients.forEach((response) => response.write(payload));
+            clients.forEach((response) =>
+                response.writeSSE({
+                    event: "availability.updated",
+                    data: JSON.stringify({ slug, at: new Date().toISOString() }),
+                }),
+            );
         },
 
         broadcastAdmin(eventName = "booking.updated") {
             if (adminSseClients.size === 0) {
                 return;
             }
-            const payload = `event: ${eventName}\ndata: ${JSON.stringify({
-                at: new Date().toISOString(),
-            })}\n\n`;
-            adminSseClients.forEach((response) => response.write(payload));
+            adminSseClients.forEach((response) =>
+                response.writeSSE({
+                    event: eventName,
+                    data: JSON.stringify({ at: new Date().toISOString() }),
+                }),
+            );
         },
 
         broadcastClientAvailability(clientId) {
