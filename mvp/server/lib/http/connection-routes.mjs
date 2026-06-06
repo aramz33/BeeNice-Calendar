@@ -1,30 +1,16 @@
-import { json, match, parseBody, segment } from "./helpers.mjs";
+import { Hono } from "hono";
 
-export async function handleConnectionRoutes({
-  pathname,
-  request,
-  response,
-  store,
-}) {
-  if (request.method === "GET" && match(pathname, /^\/api\/connect\/([^/]+)$/)) {
-    json(response, 200, store.getPublicRepConnectionPayload(segment(pathname, 3)));
-    return true;
-  }
+export function createConnectionRouter(store) {
+  const router = new Hono();
 
-  if (
-    request.method === "POST" &&
-    match(pathname, /^\/api\/connect\/([^/]+)\/start$/)
-  ) {
-    json(
-      response,
-      200,
-      await store.startPublicRepConnection(
-        segment(pathname, 3),
-        await parseBody(request),
-      ),
-    );
-    return true;
-  }
+  router.get("/:id", (c) => {
+    return c.json(store.getPublicRepConnectionPayload(c.req.param("id")));
+  });
 
-  return false;
+  router.post("/:id/start", async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    return c.json(await store.startPublicRepConnection(c.req.param("id"), body));
+  });
+
+  return router;
 }

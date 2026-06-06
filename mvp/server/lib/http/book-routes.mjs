@@ -1,94 +1,55 @@
-import { json, match, parseBody, segment } from "./helpers.mjs";
+import { Hono } from "hono";
 
-export async function handleBookRoutes({
-  pathname,
-  request,
-  response,
-  store,
-  url,
-}) {
-  if (request.method === "GET" && pathname === "/api/book") {
-    json(response, 200, { workspaces: store.listPublicBookingLinks() });
-    return true;
-  }
+export function createBookRouter(store) {
+  const router = new Hono();
 
-  if (request.method === "GET" && match(pathname, /^\/api\/book\/([^/]+)$/)) {
-    json(response, 200, store.getPublicBookingPayload(segment(pathname, 3)));
-    return true;
-  }
+  router.get("/", (c) => {
+    return c.json({ workspaces: store.listPublicBookingLinks() });
+  });
 
-  if (
-    request.method === "GET" &&
-    match(pathname, /^\/api\/book\/([^/]+)\/availability$/)
-  ) {
-    json(
-      response,
-      200,
-      await store.listAvailability(segment(pathname, 3), url.searchParams.get("companySize"), {
-        from: url.searchParams.get("from"),
-        to: url.searchParams.get("to"),
-      }),
+  router.get("/:slug", (c) => {
+    return c.json(store.getPublicBookingPayload(c.req.param("slug")));
+  });
+
+  router.get("/:slug/availability", async (c) => {
+    const slots = await store.listAvailability(
+      c.req.param("slug"),
+      c.req.query("companySize"),
+      { from: c.req.query("from"), to: c.req.query("to") },
     );
-    return true;
-  }
+    return c.json(slots);
+  });
 
-  if (
-    request.method === "GET" &&
-    match(pathname, /^\/api\/book\/([^/]+)\/callers\/([^/]+)\/bookings$/)
-  ) {
-    json(
-      response,
-      200,
-      store.listCallerBookings(segment(pathname, 3), segment(pathname, 5)),
+  router.get("/:slug/callers/:callerId/bookings", (c) => {
+    return c.json(
+      store.listCallerBookings(c.req.param("slug"), c.req.param("callerId")),
     );
-    return true;
-  }
+  });
 
-  if (
-    request.method === "GET" &&
-    match(pathname, /^\/api\/book\/([^/]+)\/callers\/([^/]+)\/tasks$/)
-  ) {
-    const slug = segment(pathname, 3);
-    const callerId = segment(pathname, 5);
-    const bookingLink = store.getBookingLinkBySlug(slug);
-    json(
-      response,
-      200,
-      store.listCallerTasks(callerId, bookingLink?.clientId ?? null),
-    );
-    return true;
-  }
-
-  if (
-    request.method === "POST" &&
-    match(pathname, /^\/api\/book\/([^/]+)\/bookings$/)
-  ) {
-    json(
-      response,
-      201,
-      await store.createBooking(segment(pathname, 3), await parseBody(request)),
-    );
-    return true;
-  }
-
-  if (
-    request.method === "POST" &&
-    match(
-      pathname,
-      /^\/api\/book\/([^/]+)\/callers\/([^/]+)\/bookings\/([^/]+)\/cancel$/,
-    )
-  ) {
-    json(
-      response,
-      200,
-      await store.cancelCallerBooking(
-        segment(pathname, 3),
-        segment(pathname, 5),
-        segment(pathname, 7),
+  router.get("/:slug/callers/:callerId/tasks", (c) => {
+    const bookingLink = store.getBookingLinkBySlug(c.req.param("slug"));
+    return c.json(
+      store.listCallerTasks(
+        c.req.param("callerId"),
+        bookingLink?.clientId ?? null,
       ),
     );
-    return true;
-  }
+  });
 
-  return false;
+  router.post("/:slug/bookings", async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    const booking = await store.createBooking(c.req.param("slug"), body);
+    return c.json(booking, 201);
+  });
+
+  router.post("/:slug/callers/:callerId/bookings/:bookingId/cancel", async (c) => {
+    const result = await store.cancelCallerBooking(
+      c.req.param("slug"),
+      c.req.param("callerId"),
+      c.req.param("bookingId"),
+    );
+    return c.json(result);
+  });
+
+  return router;
 }

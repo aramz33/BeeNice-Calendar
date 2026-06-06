@@ -1,48 +1,52 @@
-import { segment } from "./helpers.mjs";
+import { streamSSE } from "hono/streaming";
 
-export function handleBookingStream(pathname, request, response, store) {
-  const slug = segment(pathname, 3);
-  response.writeHead(200, {
-    "Content-Type": "text/event-stream",
-    "Cache-Control": "no-cache, no-transform",
-    Connection: "keep-alive",
-    "Access-Control-Allow-Origin": "*",
+export function registerStreamRoutes(app, store) {
+  app.get("/api/book/:slug/stream", (c) => {
+    const slug = c.req.param("slug");
+    return streamSSE(c, async (stream) => {
+      const client = { write: (data) => stream.write(data) };
+
+      await stream.writeSSE({
+        event: "availability.updated",
+        data: JSON.stringify({ slug, at: new Date().toISOString() }),
+      });
+
+      const heartbeat = setInterval(
+        () => stream.writeSSE({ event: "ping", data: String(Date.now()) }),
+        15000,
+      );
+
+      store.addSseClient(slug, client);
+      stream.onAbort(() => {
+        clearInterval(heartbeat);
+        store.removeSseClient(slug, client);
+      });
+
+      await new Promise((resolve) => stream.onAbort(resolve));
+    });
   });
-  response.write(
-    `event: availability.updated\ndata: ${JSON.stringify({ slug, at: new Date().toISOString() })}\n\n`,
-  );
 
-  const heartbeat = setInterval(() => {
-    response.write(`event: ping\ndata: ${Date.now()}\n\n`);
-  }, 15000);
+  app.get("/api/admin/stream", (c) => {
+    return streamSSE(c, async (stream) => {
+      const client = { write: (data) => stream.write(data) };
 
-  store.addSseClient(slug, response);
+      await stream.writeSSE({
+        event: "booking.updated",
+        data: JSON.stringify({ at: new Date().toISOString() }),
+      });
 
-  request.on("close", () => {
-    clearInterval(heartbeat);
-    store.removeSseClient(slug, response);
-  });
-}
+      const heartbeat = setInterval(
+        () => stream.writeSSE({ event: "ping", data: String(Date.now()) }),
+        15000,
+      );
 
-export function handleAdminStream(request, response, store) {
-  response.writeHead(200, {
-    "Content-Type": "text/event-stream",
-    "Cache-Control": "no-cache, no-transform",
-    Connection: "keep-alive",
-    "Access-Control-Allow-Origin": "*",
-  });
-  response.write(
-    `event: booking.updated\ndata: ${JSON.stringify({ at: new Date().toISOString() })}\n\n`,
-  );
+      store.addAdminSseClient(client);
+      stream.onAbort(() => {
+        clearInterval(heartbeat);
+        store.removeAdminSseClient(client);
+      });
 
-  const heartbeat = setInterval(() => {
-    response.write(`event: ping\ndata: ${Date.now()}\n\n`);
-  }, 15000);
-
-  store.addAdminSseClient(response);
-
-  request.on("close", () => {
-    clearInterval(heartbeat);
-    store.removeAdminSseClient(response);
+      await new Promise((resolve) => stream.onAbort(resolve));
+    });
   });
 }

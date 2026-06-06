@@ -11,6 +11,7 @@
     "start": "node mvp/server/index.mjs"
   },
   "dependencies": {
+    "@hono/node-server": "^2.0.4",
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-label": "2.1.2",
     "@radix-ui/react-select": "2.1.6",
@@ -19,6 +20,7 @@
     "clsx": "2.1.1",
     "date-fns": "3.6.0",
     "date-fns-tz": "3.2.0",
+    "hono": "^4.12.23",
     "lucide-react": "0.487.0",
     "react": "18.3.1",
     "react-dom": "18.3.1",
