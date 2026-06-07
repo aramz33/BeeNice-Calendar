@@ -1,27 +1,30 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
-export async function serveAppAsset(pathname, response, method, distDir) {
+export async function serveAppAsset(c, distDir) {
+  const pathname = c.req.path;
+  const method = c.req.method;
+
   const normalized = pathname === "/" ? "index.html" : pathname.replace(/^\/+/, "");
   const filePath = safeJoinDist(distDir, normalized);
   if (filePath) {
     const asset = await tryReadFile(filePath);
     if (asset) {
-      return file(response, 200, asset, getMimeType(filePath), method);
+      return respond(c, 200, asset, getMimeType(filePath), method);
     }
   }
 
   if (path.extname(pathname)) {
-    return false;
+    return null;
   }
 
   const indexPath = path.join(distDir, "index.html");
   const asset = await tryReadFile(indexPath);
   if (!asset) {
-    return false;
+    return null;
   }
 
-  return file(response, 200, asset, "text/html; charset=utf-8", method);
+  return respond(c, 200, asset, "text/html; charset=utf-8", method);
 }
 
 function safeJoinDist(distDir, relativePath) {
@@ -41,36 +44,23 @@ async function tryReadFile(filePath) {
   }
 }
 
-function file(response, status, payload, contentType, method) {
-  response.writeHead(status, {
-    "Content-Type": contentType,
-  });
+function respond(c, status, payload, contentType, method) {
+  const headers = { "Content-Type": contentType };
   if (method === "HEAD") {
-    response.end();
-    return true;
+    return c.newResponse(null, status, headers);
   }
-  response.end(payload);
-  return true;
+  return c.newResponse(payload, status, headers);
 }
 
 function getMimeType(filePath) {
-  const extension = path.extname(filePath).toLowerCase();
-  switch (extension) {
-    case ".css":
-      return "text/css; charset=utf-8";
-    case ".html":
-      return "text/html; charset=utf-8";
-    case ".js":
-      return "text/javascript; charset=utf-8";
-    case ".json":
-      return "application/json; charset=utf-8";
-    case ".svg":
-      return "image/svg+xml";
-    case ".png":
-      return "image/png";
-    case ".ico":
-      return "image/x-icon";
-    default:
-      return "application/octet-stream";
+  switch (path.extname(filePath).toLowerCase()) {
+    case ".css":  return "text/css; charset=utf-8";
+    case ".html": return "text/html; charset=utf-8";
+    case ".js":   return "text/javascript; charset=utf-8";
+    case ".json": return "application/json; charset=utf-8";
+    case ".svg":  return "image/svg+xml";
+    case ".png":  return "image/png";
+    case ".ico":  return "image/x-icon";
+    default:      return "application/octet-stream";
   }
 }

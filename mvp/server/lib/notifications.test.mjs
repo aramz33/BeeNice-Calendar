@@ -4,7 +4,7 @@ import { createNotificationsModule } from "./notifications.mjs";
 
 function fakeRes() {
   const written = [];
-  return { write(p) { written.push(p); }, written };
+  return { writeSSE(opts) { written.push(opts); }, written };
 }
 
 test("addSseClient + broadcastAvailability sends payload to client", () => {
@@ -13,8 +13,8 @@ test("addSseClient + broadcastAvailability sends payload to client", () => {
   mod.addSseClient("slug1", res);
   mod.broadcastAvailability("slug1");
   assert.equal(res.written.length, 1);
-  assert.ok(res.written[0].includes("event: availability.updated"));
-  assert.ok(res.written[0].includes('"slug":"slug1"'));
+  assert.equal(res.written[0].event, "availability.updated");
+  assert.ok(res.written[0].data.includes('"slug":"slug1"'));
 });
 
 test("broadcastAvailability with no registered clients is a no-op", () => {
@@ -56,7 +56,7 @@ test("addAdminSseClient + broadcastAdmin sends payload", () => {
   mod.addAdminSseClient(res);
   mod.broadcastAdmin("booking.updated");
   assert.equal(res.written.length, 1);
-  assert.ok(res.written[0].includes("event: booking.updated"));
+  assert.equal(res.written[0].event, "booking.updated");
 });
 
 test("broadcastAdmin uses default event name when omitted", () => {
@@ -64,7 +64,7 @@ test("broadcastAdmin uses default event name when omitted", () => {
   const res = fakeRes();
   mod.addAdminSseClient(res);
   mod.broadcastAdmin();
-  assert.ok(res.written[0].includes("event: booking.updated"));
+  assert.equal(res.written[0].event, "booking.updated");
 });
 
 test("broadcastAdmin with no admin clients is a no-op", () => {
@@ -94,7 +94,7 @@ test("broadcastClientAvailability broadcasts to all links and sends connections.
   assert.equal(a.written.length, 1);
   assert.equal(b.written.length, 1);
   assert.equal(admin.written.length, 1);
-  assert.ok(admin.written[0].includes("connections.updated"));
+  assert.equal(admin.written[0].event, "connections.updated");
 });
 
 test("broadcastClientAvailability with no links sends only connections.updated", () => {
@@ -103,5 +103,5 @@ test("broadcastClientAvailability with no links sends only connections.updated",
   mod.addAdminSseClient(admin);
   mod.broadcastClientAvailability("client-x");
   assert.equal(admin.written.length, 1);
-  assert.ok(admin.written[0].includes("connections.updated"));
+  assert.equal(admin.written[0].event, "connections.updated");
 });

@@ -1,199 +1,124 @@
-import { html, json, match, parseBody, segment } from "./helpers.mjs";
+import { Hono } from "hono";
+import { parseBody } from "./body.mjs";
 
-export async function handleAdminRoutes({
-  pathname,
-  request,
-  response,
-  store,
-  provider,
-  url,
-}) {
-  if (request.method === "GET" && pathname === "/api/admin/reps") {
-    json(response, 200, {
-      reps: store.listReps(),
-      integrations: provider.getOverview(),
-    });
-    return true;
-  }
+export function createAdminRouter(store, provider) {
+  const router = new Hono();
 
-  if (request.method === "GET" && pathname === "/api/admin/bookings") {
-    json(
-      response,
-      200,
+  router.get("/reps", (c) => {
+    return c.json({ reps: store.listReps(), integrations: provider.getOverview() });
+  });
+
+  router.get("/bookings", (c) => {
+    return c.json(
       store.listAdminBookings({
-        status: url.searchParams.get("status"),
-        clientId: url.searchParams.get("clientId"),
-        callerId: url.searchParams.get("callerId"),
-        repId: url.searchParams.get("repId"),
-        query: url.searchParams.get("query"),
+        status: c.req.query("status"),
+        clientId: c.req.query("clientId"),
+        callerId: c.req.query("callerId"),
+        repId: c.req.query("repId"),
+        query: c.req.query("query"),
       }),
     );
-    return true;
-  }
+  });
 
-  if (request.method === "GET" && pathname === "/api/admin/calendar") {
-    json(
-      response,
-      200,
+  router.get("/calendar", (c) => {
+    return c.json(
       store.listAdminCalendar({
-        from: url.searchParams.get("from"),
-        to: url.searchParams.get("to"),
-        status: url.searchParams.get("status"),
-        clientId: url.searchParams.get("clientId"),
-        callerId: url.searchParams.get("callerId"),
-        repId: url.searchParams.get("repId"),
-        query: url.searchParams.get("query"),
+        from: c.req.query("from"),
+        to: c.req.query("to"),
+        status: c.req.query("status"),
+        clientId: c.req.query("clientId"),
+        callerId: c.req.query("callerId"),
+        repId: c.req.query("repId"),
+        query: c.req.query("query"),
       }),
     );
-    return true;
-  }
+  });
 
-  if (request.method === "GET" && pathname === "/api/admin/tasks") {
-    json(
-      response,
-      200,
+  router.get("/tasks", (c) => {
+    return c.json(
       store.listAdminTasks({
-        clientId: url.searchParams.get("clientId"),
-        callerId: url.searchParams.get("callerId"),
-        query: url.searchParams.get("query"),
+        clientId: c.req.query("clientId"),
+        callerId: c.req.query("callerId"),
+        query: c.req.query("query"),
       }),
     );
-    return true;
-  }
+  });
 
-  if (request.method === "GET" && pathname === "/api/admin/settings") {
-    json(response, 200, store.listSettings());
-    return true;
-  }
+  router.get("/settings", (c) => {
+    return c.json(store.listSettings());
+  });
 
-  if (
-    request.method === "GET" &&
-    match(pathname, /^\/api\/admin\/bookings\/([^/]+)$/)
-  ) {
-    json(response, 200, store.getBookingDetail(segment(pathname, 4)));
-    return true;
-  }
-
-  if (
-    request.method === "GET" &&
-    match(pathname, /^\/api\/admin\/bookings\/([^/]+)\/availability$/)
-  ) {
-    json(
-      response,
-      200,
-      await store.listBookingRescheduleAvailability(segment(pathname, 4), {
-        from: url.searchParams.get("from"),
-        to: url.searchParams.get("to"),
+  router.get("/bookings/:id/availability", async (c) => {
+    return c.json(
+      await store.listBookingRescheduleAvailability(c.req.param("id"), {
+        from: c.req.query("from"),
+        to: c.req.query("to"),
       }),
     );
-    return true;
-  }
+  });
 
-  if (
-    request.method === "PATCH" &&
-    match(pathname, /^\/api\/admin\/bookings\/([^/]+)\/outcome$/)
-  ) {
-    const body = await parseBody(request);
-    await store.updateBookingOutcome(
-      segment(pathname, 4),
-      body.outcomeState,
-      body.reason,
-    );
-    json(response, 200, { ok: true });
-    return true;
-  }
+  router.get("/bookings/:id", (c) => {
+    return c.json(store.getBookingDetail(c.req.param("id")));
+  });
 
-  if (
-    request.method === "PATCH" &&
-    match(pathname, /^\/api\/admin\/bookings\/([^/]+)\/schedule$/)
-  ) {
-    const body = await parseBody(request);
+  router.patch("/bookings/:id/outcome", async (c) => {
+    const body = await parseBody(c);
+    await store.updateBookingOutcome(c.req.param("id"), body.outcomeState, body.reason);
+    return c.json({ ok: true });
+  });
+
+  router.patch("/bookings/:id/schedule", async (c) => {
+    const body = await parseBody(c);
     await store.updateBookingSchedule(
-      segment(pathname, 4),
+      c.req.param("id"),
       body.scheduleState,
       body.reason,
       body.nextStartAt,
     );
-    json(response, 200, { ok: true });
-    return true;
-  }
+    return c.json({ ok: true });
+  });
 
-  if (
-    request.method === "PATCH" &&
-    match(pathname, /^\/api\/admin\/tasks\/([^/]+)$/)
-  ) {
-    await store.updateTask(segment(pathname, 4), await parseBody(request));
-    json(response, 200, { ok: true });
-    return true;
-  }
+  router.patch("/tasks/:id", async (c) => {
+    const body = await parseBody(c);
+    await store.updateTask(c.req.param("id"), body);
+    return c.json({ ok: true });
+  });
 
-  if (request.method === "POST" && pathname === "/api/admin/settings/clients") {
-    json(response, 201, store.createClient(await parseBody(request)));
-    return true;
-  }
+  router.post("/settings/clients", async (c) => {
+    const body = await parseBody(c);
+    return c.json(store.createClient(body), 201);
+  });
 
-  if (
-    request.method === "PATCH" &&
-    match(pathname, /^\/api\/admin\/settings\/clients\/([^/]+)$/)
-  ) {
-    json(
-      response,
-      200,
-      store.updateClient(segment(pathname, 5), await parseBody(request)),
-    );
-    return true;
-  }
+  router.patch("/settings/clients/:id", async (c) => {
+    const body = await parseBody(c);
+    return c.json(store.updateClient(c.req.param("id"), body));
+  });
 
-  if (request.method === "POST" && pathname === "/api/admin/settings/callers") {
-    json(response, 201, store.createCaller(await parseBody(request)));
-    return true;
-  }
+  router.post("/settings/callers", async (c) => {
+    const body = await parseBody(c);
+    return c.json(store.createCaller(body), 201);
+  });
 
-  if (
-    request.method === "PATCH" &&
-    match(pathname, /^\/api\/admin\/settings\/callers\/([^/]+)$/)
-  ) {
-    json(
-      response,
-      200,
-      store.updateCaller(segment(pathname, 5), await parseBody(request)),
-    );
-    return true;
-  }
+  router.patch("/settings/callers/:id", async (c) => {
+    const body = await parseBody(c);
+    return c.json(store.updateCaller(c.req.param("id"), body));
+  });
 
-  if (
-    request.method === "POST" &&
-    match(pathname, /^\/api\/admin\/reps\/([^/]+)\/connect-nylas\/start$/)
-  ) {
-    json(
-      response,
-      200,
-      await store.startRepConnection(segment(pathname, 4), await parseBody(request)),
-    );
-    return true;
-  }
+  router.post("/reps/:id/connect-nylas/start", async (c) => {
+    const body = await parseBody(c);
+    return c.json(await store.startRepConnection(c.req.param("id"), body));
+  });
 
-  if (
-    request.method === "POST" &&
-    match(pathname, /^\/api\/admin\/reps\/([^/]+)\/connect-nylas$/)
-  ) {
-    json(
-      response,
-      200,
-      await store.startRepConnection(segment(pathname, 4), await parseBody(request)),
-    );
-    return true;
-  }
+  router.post("/reps/:id/connect-nylas", async (c) => {
+    const body = await parseBody(c);
+    return c.json(await store.startRepConnection(c.req.param("id"), body));
+  });
 
-  if (
-    request.method === "GET" &&
-    pathname === "/api/admin/integrations/nylas/callback"
-  ) {
+  router.get("/integrations/nylas/callback", async (c) => {
+    const searchParams = new URL(c.req.url).searchParams;
     try {
-      const result = await store.finalizeRepConnection(url.searchParams);
-      html(
-        response,
-        200,
+      const result = await store.finalizeRepConnection(searchParams);
+      return c.html(
         renderCallbackPage({
           title:
             result.callbackMode === "public_terminal"
@@ -213,10 +138,8 @@ export async function handleAdminRoutes({
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Connexion Nylas impossible.";
-      const state = decodeCallbackState(url.searchParams.get("state"));
-      html(
-        response,
-        400,
+      const state = decodeCallbackState(searchParams.get("state"));
+      return c.html(
         renderCallbackPage({
           title:
             state?.source === "public_invite"
@@ -229,20 +152,15 @@ export async function handleAdminRoutes({
               : `/admin/settings/connections?connectionError=${encodeURIComponent(message)}`,
           ctaLabel: "Retourner à la console admin",
         }),
+        400,
       );
     }
-    return true;
-  }
+  });
 
-  return false;
+  return router;
 }
 
-function renderCallbackPage({
-  title,
-  description,
-  target = null,
-  ctaLabel = "Retourner",
-}) {
+function renderCallbackPage({ title, description, target = null, ctaLabel = "Retourner" }) {
   return `<!doctype html>
 <html lang="fr">
   <head>
@@ -270,15 +188,8 @@ function renderCallbackPage({
         background: #fffdf9;
         box-shadow: 0 18px 48px rgba(0, 30, 91, 0.1);
       }
-      h1 {
-        margin: 0 0 0.75rem;
-        font-size: 1.5rem;
-      }
-      p {
-        margin: 0 0 1rem;
-        line-height: 1.6;
-        color: rgba(0, 30, 91, 0.74);
-      }
+      h1 { margin: 0 0 0.75rem; font-size: 1.5rem; }
+      p { margin: 0 0 1rem; line-height: 1.6; color: rgba(0, 30, 91, 0.74); }
       a {
         display: inline-flex;
         align-items: center;
@@ -296,21 +207,14 @@ function renderCallbackPage({
     <main>
       <h1>${escapeHtml(title)}</h1>
       <p>${escapeHtml(description)}</p>
-      ${
-        target
-          ? `<a href="${escapeHtml(target)}">${escapeHtml(ctaLabel)}</a>`
-          : ""
-      }
+      ${target ? `<a href="${escapeHtml(target)}">${escapeHtml(ctaLabel)}</a>` : ""}
     </main>
   </body>
 </html>`;
 }
 
 function decodeCallbackState(value) {
-  if (!value) {
-    return null;
-  }
-
+  if (!value) return null;
   try {
     return JSON.parse(Buffer.from(value, "base64url").toString("utf8"));
   } catch {

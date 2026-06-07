@@ -1,30 +1,21 @@
-import { json, parseBody } from "./helpers.mjs";
+import { Hono } from "hono";
+import { parseBody } from "./body.mjs";
 
-export async function handleWebhookRoutes({
-  pathname,
-  request,
-  response,
-  store,
-  url,
-}) {
-  if (request.method === "GET" && pathname === "/api/webhooks/nylas") {
-    const challenge = url.searchParams.get("challenge");
+export function createWebhookRouter(store) {
+  const router = new Hono();
+
+  router.get("/nylas", (c) => {
+    const challenge = c.req.query("challenge");
     if (challenge) {
-      response.writeHead(200, {
-        "Content-Type": "text/plain",
-        "Access-Control-Allow-Origin": "*",
-      });
-      response.end(challenge);
-      return true;
+      return c.text(challenge);
     }
-    json(response, 200, { ok: true });
-    return true;
-  }
+    return c.json({ ok: true });
+  });
 
-  if (request.method === "POST" && pathname === "/api/webhooks/nylas") {
-    json(response, 202, await store.handleWebhook(await parseBody(request)));
-    return true;
-  }
+  router.post("/nylas", async (c) => {
+    const body = await parseBody(c);
+    return c.json(await store.handleWebhook(body), 202);
+  });
 
-  return false;
+  return router;
 }
