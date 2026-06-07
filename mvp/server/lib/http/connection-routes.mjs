@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { parseBody } from "./body.mjs";
 
 export function createConnectionRouter(store) {
   const router = new Hono();
@@ -8,7 +9,7 @@ export function createConnectionRouter(store) {
   });
 
   router.post("/:id/start", async (c) => {
-    const body = await c.req.json().catch(() => ({}));
+    const body = await parseBody(c);
     return c.json(await store.startPublicRepConnection(c.req.param("id"), body));
   });
 

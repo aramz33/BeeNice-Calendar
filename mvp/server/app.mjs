@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { HTTPException } from "hono/http-exception";
 import { createBookRouter } from "./lib/http/book-routes.mjs";
 import { createAdminRouter } from "./lib/http/admin-routes.mjs";
 import { createConnectionRouter } from "./lib/http/connection-routes.mjs";
@@ -38,8 +39,11 @@ export function createApp(store, provider, auth = null, distDir = null) {
   app.notFound((c) => c.json({ error: "Route introuvable." }, 404));
 
   app.onError((err, c) => {
+    if (err instanceof HTTPException) {
+      return c.json({ error: err.message }, err.status);
+    }
     const message = err instanceof Error ? err.message : "Erreur serveur.";
-    const status = message.includes("plus disponible") ? 409 : 400;
+    const status = message.includes("plus disponible") ? 409 : err instanceof Error ? 400 : 500;
     return c.json({ error: message }, status);
   });
 

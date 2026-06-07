@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { parseBody } from "./body.mjs";
 
 export function createBookRouter(store) {
   const router = new Hono();
@@ -32,7 +33,7 @@ export function createBookRouter(store) {
   });
 
   router.post("/:slug/bookings", async (c) => {
-    const body = await c.req.json().catch(() => ({}));
+    const body = await parseBody(c);
     const booking = await store.createBooking(c.req.param("slug"), body);
     return c.json(booking, 201);
   });

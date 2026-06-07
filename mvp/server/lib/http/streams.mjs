@@ -17,12 +17,13 @@ export function registerStreamRoutes(app, store) {
       );
 
       store.addSseClient(slug, client);
-      stream.onAbort(() => {
-        clearInterval(heartbeat);
-        store.removeSseClient(slug, client);
+      await new Promise((resolve) => {
+        stream.onAbort(() => {
+          clearInterval(heartbeat);
+          store.removeSseClient(slug, client);
+          resolve();
+        });
       });
-
-      await new Promise((resolve) => stream.onAbort(resolve));
     });
   });
 
@@ -41,12 +42,13 @@ export function registerStreamRoutes(app, store) {
       );
 
       store.addAdminSseClient(client);
-      stream.onAbort(() => {
-        clearInterval(heartbeat);
-        store.removeAdminSseClient(client);
+      await new Promise((resolve) => {
+        stream.onAbort(() => {
+          clearInterval(heartbeat);
+          store.removeAdminSseClient(client);
+          resolve();
+        });
       });
-
-      await new Promise((resolve) => stream.onAbort(resolve));
     });
   });
 }

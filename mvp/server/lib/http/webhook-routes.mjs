@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { parseBody } from "./body.mjs";
 
 export function createWebhookRouter(store) {
   const router = new Hono();
@@ -12,7 +13,7 @@ export function createWebhookRouter(store) {
   });
 
   router.post("/nylas", async (c) => {
-    const body = await c.req.json().catch(() => ({}));
+    const body = await parseBody(c);
     return c.json(await store.handleWebhook(body), 202);
   });
 

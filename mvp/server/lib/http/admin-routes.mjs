@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { parseBody } from "./body.mjs";
 
 export function createAdminRouter(store, provider) {
   const router = new Hono();
@@ -61,13 +62,13 @@ export function createAdminRouter(store, provider) {
   });
 
   router.patch("/bookings/:id/outcome", async (c) => {
-    const body = await c.req.json().catch(() => ({}));
+    const body = await parseBody(c);
     await store.updateBookingOutcome(c.req.param("id"), body.outcomeState, body.reason);
     return c.json({ ok: true });
   });
 
   router.patch("/bookings/:id/schedule", async (c) => {
-    const body = await c.req.json().catch(() => ({}));
+    const body = await parseBody(c);
     await store.updateBookingSchedule(
       c.req.param("id"),
       body.scheduleState,
@@ -78,38 +79,38 @@ export function createAdminRouter(store, provider) {
   });
 
   router.patch("/tasks/:id", async (c) => {
-    const body = await c.req.json().catch(() => ({}));
+    const body = await parseBody(c);
     await store.updateTask(c.req.param("id"), body);
     return c.json({ ok: true });
   });
 
   router.post("/settings/clients", async (c) => {
-    const body = await c.req.json().catch(() => ({}));
+    const body = await parseBody(c);
     return c.json(store.createClient(body), 201);
   });
 
   router.patch("/settings/clients/:id", async (c) => {
-    const body = await c.req.json().catch(() => ({}));
+    const body = await parseBody(c);
     return c.json(store.updateClient(c.req.param("id"), body));
   });
 
   router.post("/settings/callers", async (c) => {
-    const body = await c.req.json().catch(() => ({}));
+    const body = await parseBody(c);
     return c.json(store.createCaller(body), 201);
   });
 
   router.patch("/settings/callers/:id", async (c) => {
-    const body = await c.req.json().catch(() => ({}));
+    const body = await parseBody(c);
     return c.json(store.updateCaller(c.req.param("id"), body));
   });
 
   router.post("/reps/:id/connect-nylas/start", async (c) => {
-    const body = await c.req.json().catch(() => ({}));
+    const body = await parseBody(c);
     return c.json(await store.startRepConnection(c.req.param("id"), body));
   });
 
   router.post("/reps/:id/connect-nylas", async (c) => {
-    const body = await c.req.json().catch(() => ({}));
+    const body = await parseBody(c);
     return c.json(await store.startRepConnection(c.req.param("id"), body));
   });
 

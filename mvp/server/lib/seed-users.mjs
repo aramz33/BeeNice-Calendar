@@ -16,6 +16,11 @@ export async function seedAuthUsers(auth, dbPath) {
   }
   if (alreadySeeded) return;
 
+  if (process.env.NODE_ENV === "production") {
+    if (!process.env.ADMIN_SEED_PASSWORD) throw new Error("ADMIN_SEED_PASSWORD must be set in production.");
+    if (!process.env.CALLER_SEED_PASSWORD) throw new Error("CALLER_SEED_PASSWORD must be set in production.");
+  }
+
   const adminPwd = process.env.ADMIN_SEED_PASSWORD ?? "changeme";
   const callerPwd = process.env.CALLER_SEED_PASSWORD ?? "changeme";
 

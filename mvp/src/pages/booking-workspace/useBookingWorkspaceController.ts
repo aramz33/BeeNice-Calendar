@@ -154,7 +154,7 @@ export function useBookingWorkspaceController() {
 
     try {
       const data = await apiFetch<CallerBookingsResponse>(
-        `/api/book/${slug}/callers/${callerId}/bookings`,
+        `/api/book/${slug}/bookings`,
       );
       setCallerBookings(data);
       setSourceTask((current) =>
@@ -238,12 +238,9 @@ export function useBookingWorkspaceController() {
       const bookingWeekStart = startOfWeek(parseISO(booking.startAt), {
         weekStartsOn: WEEK_STARTS_ON,
       });
-      await apiFetch(
-        `/api/book/${slug}/callers/${callerId}/bookings/${booking.id}/cancel`,
-        {
-          method: "POST",
-        },
-      );
+      await apiFetch(`/api/book/${slug}/bookings/${booking.id}/cancel`, {
+        method: "POST",
+      });
 
       setSourceTask(null);
       setCompanyName(booking.companyName);

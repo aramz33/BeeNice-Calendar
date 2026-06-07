@@ -2,6 +2,10 @@ import { betterAuth } from "better-auth";
 import Database from "better-sqlite3";
 
 export function createAuth(dbPath) {
+  if (process.env.NODE_ENV === "production" && !process.env.BETTER_AUTH_SECRET) {
+    throw new Error("BETTER_AUTH_SECRET must be set in production.");
+  }
+
   return betterAuth({
     baseURL: process.env.BETTER_AUTH_URL ?? "http://localhost:8787",
     secret: process.env.BETTER_AUTH_SECRET ?? "dev-secret-change-in-production-32ch",
