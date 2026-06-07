@@ -239,6 +239,32 @@ test("GET /api/book/:slug/tasks avec session caller → callerId déduit de la s
   assert.equal(capturedCallerId, "caller-clotilde");
 });
 
+// ── caller-routes ─────────────────────────────────────────────────────────────
+
+test("GET /api/caller/workspaces sans session → 401", async () => {
+  const app = createApp(createMockStore(), createMockProvider(), createMockAuth(null));
+  const res = await app.request("/api/caller/workspaces");
+  assert.equal(res.status, 401);
+});
+
+test("GET /api/caller/workspaces avec session caller → 200 + workspaces", async () => {
+  const workspaces = [{ id: "wk1", slug: "test-slug", clientId: "c1", clientName: "Acme", title: "Discovery", timezone: "Europe/Paris" }];
+  const store = createMockStore({ listPublicBookingLinks: () => workspaces });
+  const app = createApp(store, createMockProvider(), createMockAuth(callerSession));
+
+  const res = await app.request("/api/caller/workspaces");
+
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.deepEqual(body.workspaces, workspaces);
+});
+
+test("GET /api/caller/workspaces avec session admin → 200", async () => {
+  const app = createApp(createMockStore(), createMockProvider(), createMockAuth(adminSession));
+  const res = await app.request("/api/caller/workspaces");
+  assert.equal(res.status, 200);
+});
+
 // ── error handling ────────────────────────────────────────────────────────────
 
 test("Route inconnue → 404", async () => {

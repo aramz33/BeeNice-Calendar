@@ -5,6 +5,7 @@ import { createBookRouter } from "./lib/http/book-routes.mjs";
 import { createAdminRouter } from "./lib/http/admin-routes.mjs";
 import { createConnectionRouter } from "./lib/http/connection-routes.mjs";
 import { createWebhookRouter } from "./lib/http/webhook-routes.mjs";
+import { createCallerRouter } from "./lib/http/caller-routes.mjs";
 import { registerStreamRoutes } from "./lib/http/streams.mjs";
 import { serveAppAsset } from "./lib/http/asset-routes.mjs";
 import { requireAuth, requireAdmin } from "./lib/auth.mjs";
@@ -24,6 +25,7 @@ export function createApp(store, provider, auth = null, distDir = null) {
   registerStreamRoutes(app, store);
 
   app.route("/api/book", createBookRouter(store));
+  app.route("/api/caller", createCallerRouter(store));
   app.route("/api/admin", createAdminRouter(store, provider));
   app.route("/api/connect", createConnectionRouter(store));
   app.route("/api/webhooks", createWebhookRouter(store));
