@@ -171,6 +171,28 @@ test("PATCH /api/admin/bookings/:id/outcome → 200 { ok: true }", async () => {
   assert.equal(capturedReason, "Great fit");
 });
 
+test("PATCH /api/admin/tasks/:id avec assignedCallerId → appelle updateTask + 200", async () => {
+  let capturedId, capturedPayload;
+  const store = createMockStore({
+    updateTask: async (id, payload) => {
+      capturedId = id;
+      capturedPayload = payload;
+    },
+  });
+  const app = createApp(store, createMockProvider());
+
+  const res = await app.request("/api/admin/tasks/task-abc", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ assignedCallerId: "caller-florian" }),
+  });
+
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), { ok: true });
+  assert.equal(capturedId, "task-abc");
+  assert.equal(capturedPayload.assignedCallerId, "caller-florian");
+});
+
 // ── auth middleware ────────────────────────────────────────────────────────────
 
 function createMockAuth(session = null) {

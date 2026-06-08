@@ -160,6 +160,31 @@ test("getTask returns null for unknown id", (t) => {
   assert.equal(result, null);
 });
 
+test("updateTask reassigns caller", async (t) => {
+  const store = withTempStore(t);
+  const { bookingId } = await createTestBooking(store);
+  const task = store.ensureFollowUpTask(bookingId, "cancelled");
+  assert.ok(task);
+  assert.equal(task.callerId, "caller-clotilde");
+
+  store.updateTask(task.id, { assignedCallerId: "caller-florian" });
+
+  const updated = store.getTask(task.id);
+  assert.equal(updated.callerId, "caller-florian");
+});
+
+test("updateTask throws for unknown assignedCallerId", async (t) => {
+  const store = withTempStore(t);
+  const { bookingId } = await createTestBooking(store);
+  const task = store.ensureFollowUpTask(bookingId, "cancelled");
+  assert.ok(task);
+
+  assert.throws(
+    () => store.updateTask(task.id, { assignedCallerId: "caller-nonexistent" }),
+    /Colleur introuvable/,
+  );
+});
+
 test("listCallerTasks filters by clientId when provided", (t) => {
   const store = withTempStore(t);
   const allTasks = store.listCallerTasks("caller-clotilde").tasks;

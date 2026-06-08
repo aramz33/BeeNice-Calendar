@@ -167,6 +167,13 @@ export function updateTask(database, db, store, taskId, payload = {}) {
     throw new Error("Statut de tâche invalide.");
   }
 
+  let nextCallerId = task.callerId;
+  if (payload.assignedCallerId !== undefined) {
+    const caller = store.getCaller(payload.assignedCallerId);
+    if (!caller || !caller.active) throw new Error("Colleur introuvable.");
+    nextCallerId = caller.id;
+  }
+
   database.withTransaction(() => {
     db.prepare(`
       UPDATE follow_up_tasks
@@ -174,7 +181,8 @@ export function updateTask(database, db, store, taskId, payload = {}) {
           due_at = ?,
           notes = ?,
           completed_at = ?,
-          dismissed_at = ?
+          dismissed_at = ?,
+          caller_id = ?
       WHERE id = ?
     `).run(
       nextStatus,
@@ -182,6 +190,7 @@ export function updateTask(database, db, store, taskId, payload = {}) {
       payload.notes ?? task.notes ?? null,
       nextStatus === "done" ? createdAt : task.completedAt,
       nextStatus === "dismissed" ? createdAt : task.dismissedAt,
+      nextCallerId,
       taskId,
     );
 
