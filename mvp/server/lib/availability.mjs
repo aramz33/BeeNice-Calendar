@@ -24,11 +24,12 @@ export function createAvailabilityModule({
     const bookingWindowWeeks =
         config.bookingWindowWeeks ?? DEFAULT_BOOKING_WINDOW_WEEKS;
     const weekStartsOn = config.weekStartsOn ?? DEFAULT_WEEK_STARTS_ON;
+    const getNow = () => (config.now ? new Date(config.now) : new Date());
 
     return {
         async buildSlots(bookingLink, companySizeValue, filters = {}, options = {}) {
             const companySize = parseCompanySize(companySizeValue);
-            const minimumStart = addMinutes(new Date(), bookingLink.minNoticeMinutes);
+            const minimumStart = addMinutes(getNow(), bookingLink.minNoticeMinutes);
             const firstWeekStart = startOfWeek(minimumStart, {
                 weekStartsOn,
             });
@@ -151,7 +152,7 @@ export function createAvailabilityModule({
                 throw new Error("Le créneau sélectionné n'est plus disponible.");
             }
 
-            return assignRep(db, store, bookingLink, companySize, availableEligibleReps);
+            return assignRep(db, store, bookingLink, companySize, availableEligibleReps, getNow);
         },
     };
 }
@@ -195,8 +196,8 @@ function isRepAvailableAgainstIntervals(intervals, slotStart, bookingLink) {
   );
 }
 
-function getRepRollingLoad(db, repId, bookingLinkId) {
-  const lowerBound = addDays(new Date(), -30).toISOString();
+function getRepRollingLoad(db, repId, bookingLinkId, getNow = () => new Date()) {
+  const lowerBound = addDays(getNow(), -30).toISOString();
   const row = db
     .prepare(`
       SELECT COUNT(*) AS count
@@ -209,8 +210,8 @@ function getRepRollingLoad(db, repId, bookingLinkId) {
   return row?.count ?? 0;
 }
 
-function getRollingCounts(db, store, bookingLinkId) {
-  const lowerBound = addDays(new Date(), -30).toISOString();
+function getRollingCounts(db, store, bookingLinkId, getNow = () => new Date()) {
+  const lowerBound = addDays(getNow(), -30).toISOString();
   const rows = db
     .prepare(`
       SELECT assigned_rep_id
@@ -363,7 +364,7 @@ async function getAvailableEligibleRepsForSlot(db, store, provider, bookingLink,
   );
 }
 
-function assignRep(db, store, bookingLink, companySize, eligibleReps) {
+function assignRep(db, store, bookingLink, companySize, eligibleReps, getNow = () => new Date()) {
   if (eligibleReps.length === 0) {
     throw new Error("Aucun rep disponible pour ce créneau.");
   }
@@ -373,8 +374,8 @@ function assignRep(db, store, bookingLink, companySize, eligibleReps) {
   if (!policy || client?.routingMode !== "weighted_seniority") {
     const rep = [...eligibleReps].sort((left, right) => {
       const loadDelta =
-        getRepRollingLoad(db, left.id, bookingLink.id) -
-        getRepRollingLoad(db, right.id, bookingLink.id);
+        getRepRollingLoad(db, left.id, bookingLink.id, getNow) -
+        getRepRollingLoad(db, right.id, bookingLink.id, getNow);
       if (loadDelta !== 0) {
         return loadDelta;
       }
@@ -397,7 +398,7 @@ function assignRep(db, store, bookingLink, companySize, eligibleReps) {
     };
   }
 
-  const counts = getRollingCounts(db, store, bookingLink.id);
+  const counts = getRollingCounts(db, store, bookingLink.id, getNow);
   const total = counts.senior + counts.junior;
   const deficits = {
     senior: (total + 1) * policy.seniorWeight - counts.senior,

@@ -248,15 +248,20 @@ test("GET /api/caller/workspaces sans session → 401", async () => {
 });
 
 test("GET /api/caller/workspaces avec session caller → 200 + workspaces", async () => {
-  const workspaces = [{ id: "wk1", slug: "test-slug", clientId: "c1", clientName: "Acme", title: "Discovery", timezone: "Europe/Paris" }];
-  const store = createMockStore({ listPublicBookingLinks: () => workspaces });
+  const store = createMockStore({
+    listPublicBookingLinks: () => [
+      { id: "wk1", slug: "test-slug", clientId: "c1", clientName: "Acme", title: "Discovery", timezone: "Europe/Paris" },
+    ],
+  });
   const app = createApp(store, createMockProvider(), createMockAuth(callerSession));
 
   const res = await app.request("/api/caller/workspaces");
 
   assert.equal(res.status, 200);
   const body = await res.json();
-  assert.deepEqual(body.workspaces, workspaces);
+  assert.deepEqual(body.workspaces, [
+    { id: "wk1", name: "Acme", slug: "test-slug", timezone: "Europe/Paris" },
+  ]);
 });
 
 test("GET /api/caller/workspaces avec session admin → 200", async () => {

@@ -77,7 +77,7 @@ const DEFAULT_COMPANY_SIZE_THRESHOLD = 200;
 const DEFAULT_SENIOR_WEIGHT = 0.8;
 const DEFAULT_JUNIOR_WEIGHT = 0.2;
 
-export function createStore(provider) {
+export function createStore(provider, storeConfig = {}) {
   const database = createDatabase(provider.mode);
   const { db } = database;
     const records = createPersistenceAdapter(db);
@@ -839,6 +839,7 @@ export function createStore(provider) {
         config: {
             bookingWindowWeeks: BOOKING_WINDOW_WEEKS,
             weekStartsOn: WEEK_STARTS_ON,
+            now: storeConfig.now,
         },
     });
 

@@ -6,6 +6,8 @@ import path from "node:path";
 import {DatabaseSync} from "node:sqlite";
 import {createStore} from "./state.mjs";
 
+const TEST_NOW = "2030-01-07T09:00:00.000Z";
+
 function createProviderStub(providerMode = "mock") {
     return {
         mode: providerMode,
@@ -37,7 +39,7 @@ function withTempStore(t, providerMode = "mock") {
     const previousDbPath = process.env.MVP_DB_PATH;
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "benice-admin-"));
     process.env.MVP_DB_PATH = path.join(tempDir, "mvp.sqlite");
-    const store = createStore(provider);
+    const store = createStore(provider, { now: TEST_NOW });
 
     t.after(() => {
         store.close();
@@ -133,7 +135,7 @@ test("legacy zero booking link buffers are backfilled to 15 minutes", (t) => {
         fs.rmSync(tempDir, {recursive: true, force: true});
     });
 
-    const initialStore = createStore(provider);
+    const initialStore = createStore(provider, { now: TEST_NOW });
     initialStore.close();
 
     const db = new DatabaseSync(dbPath);
@@ -173,7 +175,7 @@ test("legacy non-zero booking link buffers are preserved", (t) => {
         fs.rmSync(tempDir, {recursive: true, force: true});
     });
 
-    const initialStore = createStore(provider);
+    const initialStore = createStore(provider, { now: TEST_NOW });
     initialStore.close();
 
     const db = new DatabaseSync(dbPath);
