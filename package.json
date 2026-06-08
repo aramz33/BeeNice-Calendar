@@ -8,7 +8,8 @@
     "dev:api": "node mvp/server/index.mjs",
     "dev:web": "vite --config mvp/vite.config.ts",
     "build": "vite build --config mvp/vite.config.ts",
-    "start": "node mvp/server/index.mjs"
+    "start": "node mvp/server/index.mjs",
+    "test:web": "vitest run --config mvp/vite.config.ts"
   },
   "dependencies": {
     "@hono/node-server": "^2.0.4",
@@ -26,7 +27,7 @@
     "lucide-react": "0.487.0",
     "react": "18.3.1",
     "react-dom": "18.3.1",
-    "react-router": "7.13.0",
+    "react-router": "7.17.0",
     "recharts": "^3.8.1",
     "sonner": "2.0.3",
     "tailwind-merge": "3.2.0",
@@ -34,8 +35,14 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "4.1.12",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@vitejs/plugin-react": "4.7.0",
+    "@vitest/coverage-v8": "^4.1.8",
+    "jsdom": "^29.1.1",
     "tailwindcss": "4.1.12",
-    "vite": "6.3.5"
+    "vite": "6.4.3",
+    "vitest": "^4.1.8"
   }
 }
