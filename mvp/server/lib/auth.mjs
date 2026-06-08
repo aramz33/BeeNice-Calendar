@@ -32,7 +32,7 @@ export function createAuth(dbPath) {
         },
       },
     },
-    session: { expiresIn: 60 * 60 * 24 * 7 },
+    session: { expiresIn: 60 * 60 * 5 },
   });
 }
 
