@@ -1,6 +1,6 @@
-import { createBrowserRouter, Navigate } from "react-router";
+import { createBrowserRouter, Navigate, useParams } from "react-router";
 import { LoginPage } from "@mvp/pages/LoginPage";
-import { BookingWorkspacePage } from "@mvp/pages/BookingWorkspacePage";
+import { CallerPage } from "@mvp/pages/CallerPage";
 import { AdminBookingsPage } from "@mvp/pages/AdminBookingsPage";
 import { AdminConnectionsPage } from "@mvp/pages/AdminConnectionsPage";
 import { AdminSettingsPage } from "@mvp/pages/AdminSettingsPage";
@@ -8,6 +8,11 @@ import { RepConnectPage } from "@mvp/pages/RepConnectPage";
 import { RequireAuth } from "@mvp/components/RequireAuth";
 import { RequireAdmin } from "@mvp/components/RequireAdmin";
 import { RootRedirect } from "@mvp/components/RootRedirect";
+
+function BookSlugRedirect() {
+  const { slug } = useParams<{ slug: string }>();
+  return <Navigate to={`/caller?workspace=${slug ?? ""}`} replace />;
+}
 
 export const router = createBrowserRouter([
   { path: "/login", Component: LoginPage },
@@ -25,7 +30,10 @@ export const router = createBrowserRouter([
 
   {
     Component: RequireAuth,
-    children: [{ path: "/book/:slug", Component: BookingWorkspacePage }],
+    children: [
+      { path: "/caller", Component: CallerPage },
+      { path: "/book/:slug", Component: BookSlugRedirect },
+    ],
   },
 
   { path: "*", element: <Navigate to="/" replace /> },

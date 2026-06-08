@@ -6,9 +6,15 @@ export function createAuth(dbPath) {
     throw new Error("BETTER_AUTH_SECRET must be set in production.");
   }
 
+  const webPort = process.env.MVP_WEB_PORT ?? "5174";
+  const trustedOrigins = process.env.BETTER_AUTH_TRUSTED_ORIGINS
+    ? process.env.BETTER_AUTH_TRUSTED_ORIGINS.split(",")
+    : [`http://localhost:${webPort}`];
+
   return betterAuth({
     baseURL: process.env.BETTER_AUTH_URL ?? "http://localhost:8787",
     secret: process.env.BETTER_AUTH_SECRET ?? "dev-secret-change-in-production-32ch",
+    trustedOrigins,
     database: new Database(dbPath),
     emailAndPassword: { enabled: true },
     user: {

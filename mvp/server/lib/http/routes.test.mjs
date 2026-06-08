@@ -292,6 +292,30 @@ test("GET /api/caller/workspaces avec session admin → 200", async () => {
   assert.equal(res.status, 200);
 });
 
+test("GET /api/caller/tasks sans session → 401", async () => {
+  const app = createApp(createMockStore(), createMockProvider(), createMockAuth(null));
+  const res = await app.request("/api/caller/tasks");
+  assert.equal(res.status, 401);
+});
+
+test("GET /api/caller/tasks avec session caller → callerId déduit de la session", async () => {
+  let capturedCallerId;
+  const store = createMockStore({
+    listCallerTasks: (callerId) => {
+      capturedCallerId = callerId;
+      return { timezone: "Europe/Paris", tasks: [] };
+    },
+  });
+  const app = createApp(store, createMockProvider(), createMockAuth(callerSession));
+
+  const res = await app.request("/api/caller/tasks");
+
+  assert.equal(res.status, 200);
+  assert.equal(capturedCallerId, "caller-clotilde");
+  const body = await res.json();
+  assert.ok(Array.isArray(body.tasks));
+});
+
 // ── error handling ────────────────────────────────────────────────────────────
 
 test("Route inconnue → 404", async () => {

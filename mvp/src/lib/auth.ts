@@ -10,14 +10,19 @@ export interface Session {
 }
 
 export async function getSession(): Promise<Session | null> {
-  const response = await fetch("/api/auth/session", { credentials: "include" });
+  const response = await fetch("/api/auth/get-session", {
+    credentials: "include",
+  });
   if (!response.ok) return null;
   const body = await response.json();
   if (!body?.user) return null;
   return { user: body.user };
 }
 
-export async function signIn(email: string, password: string): Promise<Session> {
+export async function signIn(
+  email: string,
+  password: string,
+): Promise<Session> {
   const response = await fetch("/api/auth/sign-in/email", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -32,9 +37,12 @@ export async function signIn(email: string, password: string): Promise<Session> 
   return { user: body.user };
 }
 
+export const TASKS_MODAL_SHOWN_KEY = "benice-tasks-modal-shown";
+
 export async function signOut(): Promise<void> {
   await fetch("/api/auth/sign-out", {
     method: "POST",
     credentials: "include",
   });
+  sessionStorage.removeItem(TASKS_MODAL_SHOWN_KEY);
 }
