@@ -12,7 +12,9 @@ interface BookingConfirmDialogProps {
   onClose: () => void;
   onConfirm: () => void;
   submitting: boolean;
-  prospectName: string;
+  salutation: string;
+  prospectFirstName: string;
+  prospectLastName: string;
   prospectEmail: string;
   companyName: string;
   notes: string;
@@ -24,12 +26,19 @@ export function BookingConfirmDialog({
   onClose,
   onConfirm,
   submitting,
-  prospectName,
+  salutation,
+  prospectFirstName,
+  prospectLastName,
   prospectEmail,
   companyName,
   notes,
   slotLabel,
 }: BookingConfirmDialogProps) {
+  const displaySalutation = salutation === "none" ? "" : salutation;
+  const prospectDisplay = [displaySalutation, prospectFirstName, prospectLastName]
+    .filter(Boolean)
+    .join(" ");
+
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
       <DialogContent>
@@ -38,7 +47,7 @@ export function BookingConfirmDialog({
         </DialogHeader>
 
         <div className="space-y-3 text-sm">
-          <Row label="Prospect" value={prospectName} />
+          <Row label="Prospect" value={prospectDisplay} />
           <Row label="Email" value={prospectEmail} />
           <Row label="Entreprise" value={companyName} />
           {notes && <Row label="Notes" value={notes} />}

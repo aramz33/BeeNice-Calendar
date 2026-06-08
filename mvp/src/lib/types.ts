@@ -36,6 +36,9 @@ export interface BookingSummary {
   clientName: string;
   companyName: string;
   companySize: number;
+  salutation?: string | null;
+  prospectFirstName?: string | null;
+  prospectLastName?: string | null;
   prospectName: string;
   prospectEmail: string;
   callerId: string;

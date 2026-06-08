@@ -45,7 +45,9 @@ export function useCallerController() {
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
-  const [prospectName, setProspectName] = useState("");
+  const [salutation, setSalutation] = useState("");
+  const [prospectFirstName, setProspectFirstName] = useState("");
+  const [prospectLastName, setProspectLastName] = useState("");
   const [prospectEmail, setProspectEmail] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [notes, setNotes] = useState("");
@@ -183,7 +185,9 @@ export function useCallerController() {
     setAvailability(null);
     setSelectedSlot(null);
     setSourceTask(null);
-    setProspectName("");
+    setSalutation("");
+    setProspectFirstName("");
+    setProspectLastName("");
     setProspectEmail("");
     setCompanyName("");
     setNotes("");
@@ -200,14 +204,18 @@ export function useCallerController() {
     }
     setSourceTask(task);
     setCompanyName(task.companyName);
-    setProspectName(task.prospectName);
+    setSalutation("");
+    setProspectFirstName(task.prospectName);
+    setProspectLastName("");
     setNotes(task.notes ?? "");
     toast.success("Contexte de repositionnement chargé.");
   };
 
   const resetTask = () => {
     setSourceTask(null);
-    setProspectName("");
+    setSalutation("");
+    setProspectFirstName("");
+    setProspectLastName("");
     setCompanyName("");
     setNotes("");
   };
@@ -242,7 +250,9 @@ export function useCallerController() {
       );
       setSourceTask(null);
       setCompanyName(booking.companyName);
-      setProspectName(booking.prospectName);
+      setSalutation(booking.salutation ?? "");
+      setProspectFirstName(booking.prospectFirstName ?? booking.prospectName);
+      setProspectLastName(booking.prospectLastName ?? "");
       setProspectEmail(booking.prospectEmail);
       setNotes(booking.notes ?? "");
       setAvailabilityWeekStartIso(bookingWeekStart.toISOString());
@@ -265,7 +275,8 @@ export function useCallerController() {
       !selectedSlug ||
       !selectedSlot ||
       !callerId ||
-      !prospectName ||
+      !prospectFirstName ||
+      !prospectLastName ||
       !prospectEmail ||
       !companyName
     ) {
@@ -283,7 +294,9 @@ export function useCallerController() {
           callerId,
           companySize: 0,
           companyName,
-          prospectName,
+          salutation: salutation === "none" ? "" : salutation,
+          prospectFirstName,
+          prospectLastName,
           prospectEmail,
           notes,
           slotStart: selectedSlot,
@@ -291,7 +304,9 @@ export function useCallerController() {
         }),
       });
       toast.success(`Rendez-vous réservé chez ${result.assignedRepName}.`);
-      setProspectName("");
+      setSalutation("");
+      setProspectFirstName("");
+      setProspectLastName("");
       setProspectEmail("");
       setCompanyName("");
       setNotes("");
@@ -325,8 +340,12 @@ export function useCallerController() {
     selectedSlot,
     setSelectedSlot,
     selectedSlotLabel,
-    prospectName,
-    setProspectName,
+    salutation,
+    setSalutation,
+    prospectFirstName,
+    setProspectFirstName,
+    prospectLastName,
+    setProspectLastName,
     prospectEmail,
     setProspectEmail,
     companyName,

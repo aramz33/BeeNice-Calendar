@@ -24,8 +24,12 @@ export function CallerPage() {
     selectedSlot,
     setSelectedSlot,
     selectedSlotLabel,
-    prospectName,
-    setProspectName,
+    salutation,
+    setSalutation,
+    prospectFirstName,
+    setProspectFirstName,
+    prospectLastName,
+    setProspectLastName,
     prospectEmail,
     setProspectEmail,
     companyName,
@@ -59,8 +63,12 @@ export function CallerPage() {
           {selectedSlug && (
             <>
               <ProspectForm
-                prospectName={prospectName}
-                setProspectName={setProspectName}
+                salutation={salutation}
+                setSalutation={setSalutation}
+                prospectFirstName={prospectFirstName}
+                setProspectFirstName={setProspectFirstName}
+                prospectLastName={prospectLastName}
+                setProspectLastName={setProspectLastName}
                 prospectEmail={prospectEmail}
                 setProspectEmail={setProspectEmail}
                 companyName={companyName}
@@ -87,7 +95,9 @@ export function CallerPage() {
         <main className="min-w-0 flex-1">
           {!selectedSlug ? (
             <div className="flex h-64 items-center justify-center rounded-2xl border-2 border-dashed border-[#001E5B]/10">
-              <p className="text-[#001E5B]/48">Sélectionnez un client pour voir les disponibilités</p>
+              <p className="text-[#001E5B]/48">
+                Sélectionnez un client pour voir les disponibilités
+              </p>
             </div>
           ) : (
             <SlotPicker
@@ -119,7 +129,9 @@ export function CallerPage() {
         onClose={() => setShowConfirmDialog(false)}
         onConfirm={() => void handleSubmit()}
         submitting={submitting}
-        prospectName={prospectName}
+        salutation={salutation}
+        prospectFirstName={prospectFirstName}
+        prospectLastName={prospectLastName}
         prospectEmail={prospectEmail}
         companyName={companyName}
         notes={notes}

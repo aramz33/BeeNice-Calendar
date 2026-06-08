@@ -158,11 +158,9 @@ export function createAvailabilityModule({
 }
 
 function parseCompanySize(value) {
+    if (value === undefined || value === null || value === '') return 0;
     const companySize = Number(value);
-    if (Number.isNaN(companySize)) {
-        throw new Error("Taille d'entreprise invalide.");
-    }
-    return companySize;
+    return Number.isNaN(companySize) ? 0 : companySize;
 }
 
 function parseSlotStart(value) {

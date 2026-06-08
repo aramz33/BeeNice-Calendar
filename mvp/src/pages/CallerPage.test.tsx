@@ -171,8 +171,9 @@ describe("CallerPage — sélection workspace", () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByLabelText(/nom du prospect/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/prénom/i)).toBeInTheDocument();
     });
+    expect(screen.getByLabelText(/^nom \*$/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/entreprise/i)).toBeInTheDocument();
   });

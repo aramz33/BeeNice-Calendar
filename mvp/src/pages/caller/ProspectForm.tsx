@@ -3,12 +3,23 @@ import { X } from "lucide-react";
 import { Button } from "@mvp/components/ui/button";
 import { Input } from "@mvp/components/ui/input";
 import { Label } from "@mvp/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@mvp/components/ui/select";
 import { Textarea } from "@mvp/components/ui/textarea";
 import type { FollowUpTask } from "@mvp/lib/types";
 
 interface ProspectFormProps {
-  prospectName: string;
-  setProspectName: (v: string) => void;
+  salutation: string;
+  setSalutation: (v: string) => void;
+  prospectFirstName: string;
+  setProspectFirstName: (v: string) => void;
+  prospectLastName: string;
+  setProspectLastName: (v: string) => void;
   prospectEmail: string;
   setProspectEmail: (v: string) => void;
   companyName: string;
@@ -23,8 +34,12 @@ interface ProspectFormProps {
 }
 
 export function ProspectForm({
-  prospectName,
-  setProspectName,
+  salutation,
+  setSalutation,
+  prospectFirstName,
+  setProspectFirstName,
+  prospectLastName,
+  setProspectLastName,
   prospectEmail,
   setProspectEmail,
   companyName,
@@ -37,7 +52,12 @@ export function ProspectForm({
   onOpenConfirm,
   submitting,
 }: ProspectFormProps) {
-  const canSubmit = !!selectedSlotLabel && !!prospectName && !!prospectEmail && !!companyName;
+  const canSubmit =
+    !!selectedSlotLabel &&
+    !!prospectFirstName &&
+    !!prospectLastName &&
+    !!prospectEmail &&
+    !!companyName;
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -56,18 +76,44 @@ export function ProspectForm({
       )}
 
       <div className="space-y-1">
-        <Label htmlFor="prospect-name">Nom du prospect</Label>
-        <Input
-          id="prospect-name"
-          value={prospectName}
-          onChange={(e) => setProspectName(e.target.value)}
-          placeholder="Jean Martin"
-          required
-        />
+        <Label>Civilité</Label>
+        <Select value={salutation} onValueChange={setSalutation}>
+          <SelectTrigger>
+            <SelectValue placeholder="Non précisé" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">Non précisé</SelectItem>
+            <SelectItem value="M.">M.</SelectItem>
+            <SelectItem value="Mme">Mme</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="flex gap-2">
+        <div className="flex-1 space-y-1">
+          <Label htmlFor="prospect-first-name">Prénom *</Label>
+          <Input
+            id="prospect-first-name"
+            value={prospectFirstName}
+            onChange={(e) => setProspectFirstName(e.target.value)}
+            placeholder="Jean"
+            required
+          />
+        </div>
+        <div className="flex-1 space-y-1">
+          <Label htmlFor="prospect-last-name">Nom *</Label>
+          <Input
+            id="prospect-last-name"
+            value={prospectLastName}
+            onChange={(e) => setProspectLastName(e.target.value)}
+            placeholder="Martin"
+            required
+          />
+        </div>
       </div>
 
       <div className="space-y-1">
-        <Label htmlFor="prospect-email">Email</Label>
+        <Label htmlFor="prospect-email">Email *</Label>
         <Input
           id="prospect-email"
           type="email"
@@ -79,7 +125,7 @@ export function ProspectForm({
       </div>
 
       <div className="space-y-1">
-        <Label htmlFor="company-name">Entreprise</Label>
+        <Label htmlFor="company-name">Entreprise *</Label>
         <Input
           id="company-name"
           value={companyName}
