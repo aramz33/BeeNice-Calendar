@@ -97,6 +97,7 @@ export function getBookingDetail(store, bookingId) {
       displayStatus: store.getDisplayStatus(booking),
       scheduleState: booking.scheduleState,
       outcomeState: booking.outcomeState,
+      prospectRsvpState: booking.prospectRsvpState,
       clientId: booking.clientId,
       clientName: client?.name ?? "Client inconnu",
       companyName: booking.companyName,

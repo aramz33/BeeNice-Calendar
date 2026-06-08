@@ -137,7 +137,7 @@ test("GET /api/admin/bookings → 200 avec liste", async () => {
 });
 
 test("GET /api/admin/bookings/:id → 200 avec détail", async () => {
-  const detail = { id: "b99", status: "confirmed", rep: "Alice" };
+  const detail = { id: "b99", status: "confirmed", rep: "Alice", prospectRsvpState: "pending" };
   const store = createMockStore({ getBookingDetail: () => detail });
   const app = createApp(store, createMockProvider());
 

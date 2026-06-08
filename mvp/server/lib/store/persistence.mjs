@@ -303,6 +303,11 @@ export function createPersistenceAdapter(db) {
             return row ? fromBookingRow(row) : null;
         },
 
+        updateProspectRsvpState(bookingId, rsvpState) {
+            db.prepare("UPDATE bookings SET prospect_rsvp_state = ? WHERE id = ?")
+                .run(rsvpState, bookingId);
+        },
+
         insertLegacyStatusHistory({
                                       bookingId,
                                       fromStatus,
@@ -443,6 +448,7 @@ function fromBookingRow(row) {
         status: row.status,
         scheduleState: row.schedule_state ?? "scheduled",
         outcomeState: row.outcome_state ?? "pending",
+        prospectRsvpState: row.prospect_rsvp_state ?? "pending",
         originalStartAt: row.original_start_at ?? row.start_at,
         previousStartAt: row.previous_start_at ?? null,
         lastCalendarChangeAt: row.last_calendar_change_at ?? null,

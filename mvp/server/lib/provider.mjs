@@ -292,7 +292,7 @@ function createNylasProvider() {
       const response = await fetch(
         `${nylas.apiUri}/v3/grants/${connection.providerGrantId}/events?calendar_id=${
           connection.bookingCalendarId ?? "primary"
-        }`,
+        }&notify_participants=true`,
         {
           method: "POST",
           headers: {
@@ -403,6 +403,7 @@ function createNylasProvider() {
         id: event?.id ?? booking.externalEventId,
         startAt: interval.startAt,
         endAt: interval.endAt,
+        participants: event?.participants ?? [],
       };
     },
 

@@ -113,6 +113,14 @@ test("createBooking persists the booking and closes the source follow-up task", 
   assert.equal(completedTask.replacementBookingId, result.bookingId);
 });
 
+test("booking créé → prospectRsvpState vaut 'pending'", async (t) => {
+  const store = withTempStore(t, createProviderStub());
+  const sourceTask = store.listCallerTasks("caller-clotilde", "client-teamstarter").tasks[0];
+  const result = await createBookingFromFirstAvailableSlot(store, { sourceTaskId: sourceTask.id });
+  const detail = store.getBookingDetail(result.bookingId);
+  assert.equal(detail.booking.prospectRsvpState, "pending");
+});
+
 test("admin reschedule updates schedule metadata and preserves provider event ownership", async (t) => {
   const store = withTempStore(t, createProviderStub());
   const result = await createBookingFromFirstAvailableSlot(store);

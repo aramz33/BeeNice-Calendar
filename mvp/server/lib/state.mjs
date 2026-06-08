@@ -295,6 +295,9 @@ export function createStore(provider, storeConfig = {}) {
               "Rendez-vous déplacé côté calendrier client.",
             );
           }
+
+          const rsvpState = extractProspectRsvpState(fresh.participants, booking.prospectEmail);
+          if (rsvpState) this.updateProspectRsvpState(booking.id, rsvpState);
         }
       }
 
@@ -636,6 +639,10 @@ export function createStore(provider, storeConfig = {}) {
         return records.findBookingByExternalEventId(externalEventId);
     },
 
+    updateProspectRsvpState(bookingId, rsvpState) {
+        return records.updateProspectRsvpState(bookingId, rsvpState);
+    },
+
     listAllTasks() {
       return listAllTasksFn(db);
     },
@@ -952,4 +959,14 @@ function isDeletionEvent(eventType) {
 
 function isUpdateEvent(eventType) {
   return typeof eventType === "string" && /updated/i.test(eventType);
+}
+
+function extractProspectRsvpState(participants = [], prospectEmail) {
+  const match = participants.find(
+    (p) => p.email?.toLowerCase() === prospectEmail?.toLowerCase(),
+  );
+  if (!match) return null;
+  if (match.status === "yes") return "accepted";
+  if (match.status === "no") return "declined";
+  return "pending";
 }
