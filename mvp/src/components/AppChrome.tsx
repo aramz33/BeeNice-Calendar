@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, NavLink, useLocation } from "react-router";
-import { Cable, ChevronDown, LayoutDashboard, LogOut, Settings2 } from "lucide-react";
+import {
+  Cable,
+  ChevronDown,
+  LayoutDashboard,
+  LogOut,
+  Settings2,
+} from "lucide-react";
 import { Button } from "@mvp/components/ui/button";
 import { BeeNiceLogo } from "@mvp/components/BeeNiceLogo";
 import { signOut } from "@mvp/lib/auth";
@@ -40,15 +46,19 @@ function NavButton({
 export function AppChrome({ title, children }: AppChromeProps) {
   const { session } = useSession();
 
-  const logoHref = session?.user.role === "admin"
-    ? "/admin/bookings"
-    : session?.user.role === "caller"
-      ? "/caller"
-      : "/";
+  const logoHref =
+    session?.user.role === "admin"
+      ? "/admin/bookings"
+      : session?.user.role === "caller"
+        ? "/caller"
+        : "/";
 
   async function handleSignOut() {
-    await signOut();
-    window.location.replace("/login");
+    try {
+      await signOut();
+    } finally {
+      window.location.replace("/login");
+    }
   }
 
   return (

@@ -40,9 +40,10 @@ export async function signIn(
 export const TASKS_MODAL_SHOWN_KEY = "benice-tasks-modal-shown";
 
 export async function signOut(): Promise<void> {
-  await fetch("/api/auth/sign-out", {
+  const res = await fetch("/api/auth/sign-out", {
     method: "POST",
     credentials: "include",
   });
+  if (!res.ok) throw new Error(`sign-out failed: ${res.status}`);
   sessionStorage.removeItem(TASKS_MODAL_SHOWN_KEY);
 }

@@ -13,10 +13,20 @@ import { requireAuth, requireAdmin } from "./lib/auth.mjs";
 export function createApp(store, provider, auth = null, distDir = null) {
   const app = new Hono();
 
+  const webOrigin = process.env.BETTER_AUTH_TRUSTED_ORIGINS?.split(",")[0]
+    ?? `http://localhost:${process.env.MVP_WEB_PORT ?? "5174"}`;
+
+  app.use("/api/auth/*", cors({
+    origin: webOrigin,
+    allowHeaders: ["Content-Type", "Authorization"],
+    allowMethods: ["POST", "GET", "OPTIONS"],
+    maxAge: 600,
+    credentials: true,
+  }));
   app.use("/api/*", cors());
 
   if (auth) {
-    app.on(["GET", "POST"], "/api/auth/**", (c) => auth.handler(c.req.raw));
+    app.on(["GET", "POST"], "/api/auth/*", (c) => auth.handler(c.req.raw));
     app.use("/api/admin/*", requireAdmin(auth));
     app.use("/api/book/*", requireAuth(auth));
     app.use("/api/caller/*", requireAuth(auth));
