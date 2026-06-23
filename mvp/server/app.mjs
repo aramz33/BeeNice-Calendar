@@ -8,16 +8,15 @@ import { createWebhookRouter } from "./lib/http/webhook-routes.mjs";
 import { createCallerRouter } from "./lib/http/caller-routes.mjs";
 import { registerStreamRoutes } from "./lib/http/streams.mjs";
 import { serveAppAsset } from "./lib/http/asset-routes.mjs";
-import { requireAuth, requireAdmin } from "./lib/auth.mjs";
+import { getTrustedOrigins, requireAuth, requireAdmin } from "./lib/auth.mjs";
 
 export function createApp(store, provider, auth = null, distDir = null) {
   const app = new Hono();
 
-  const webOrigin = process.env.BETTER_AUTH_TRUSTED_ORIGINS?.split(",")[0]
-    ?? `http://localhost:${process.env.MVP_WEB_PORT ?? "5174"}`;
+  const trustedOrigins = getTrustedOrigins();
 
   app.use("/api/auth/*", cors({
-    origin: webOrigin,
+    origin: trustedOrigins,
     allowHeaders: ["Content-Type", "Authorization"],
     allowMethods: ["POST", "GET", "OPTIONS"],
     maxAge: 600,

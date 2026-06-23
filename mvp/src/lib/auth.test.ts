@@ -45,13 +45,44 @@ describe("signIn", () => {
 });
 
 describe("signOut", () => {
-  it("calls POST /api/auth/sign-out", async () => {
+  it("calls POST /api/auth/sign-out with a JSON body", async () => {
     const fetchMock = mockFetch(200, {});
     vi.stubGlobal("fetch", fetchMock);
     await signOut();
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/auth/sign-out",
-      expect.objectContaining({ method: "POST" }),
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({}),
+      },
     );
+  });
+
+  it("throws when sign-out does not clear the server session", async () => {
+    vi.stubGlobal("fetch", mockFetch(403, { message: "Invalid origin" }));
+    await expect(signOut()).rejects.toThrow("sign-out failed: 403");
+  });
+
+  it("throws when the session is still active after a 200 sign-out", async () => {
+    const user = { id: "u1", email: "a@b.com", name: "A", role: "admin" as const, active: true, callerId: null };
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ success: true }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ user }),
+        }),
+    );
+
+    await expect(signOut()).rejects.toThrow("sign-out failed: session still active");
   });
 });

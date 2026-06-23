@@ -7,6 +7,7 @@ import {
   LogOut,
   Settings2,
 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@mvp/components/ui/button";
 import { BeeNiceLogo } from "@mvp/components/BeeNiceLogo";
 import { signOut } from "@mvp/lib/auth";
@@ -45,6 +46,7 @@ function NavButton({
 
 export function AppChrome({ title, children }: AppChromeProps) {
   const { session } = useSession();
+  const [signingOut, setSigningOut] = useState(false);
 
   const logoHref =
     session?.user.role === "admin"
@@ -54,10 +56,17 @@ export function AppChrome({ title, children }: AppChromeProps) {
         : "/";
 
   async function handleSignOut() {
+    setSigningOut(true);
     try {
       await signOut();
-    } finally {
       window.location.replace("/login");
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Déconnexion impossible. Réessayez.",
+      );
+      setSigningOut(false);
     }
   }
 
@@ -94,9 +103,10 @@ export function AppChrome({ title, children }: AppChromeProps) {
                 size="sm"
                 className="rounded-full border-[#001E5B]/15 bg-transparent text-[#001E5B]/64 hover:bg-[#001E5B]/06 hover:text-[#001E5B]"
                 onClick={handleSignOut}
+                disabled={signingOut}
               >
                 <LogOut className="h-4 w-4" />
-                Déconnexion
+                {signingOut ? "Déconnexion..." : "Déconnexion"}
               </Button>
             </div>
           )}

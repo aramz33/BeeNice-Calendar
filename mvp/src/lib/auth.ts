@@ -42,8 +42,16 @@ export const TASKS_MODAL_SHOWN_KEY = "benice-tasks-modal-shown";
 export async function signOut(): Promise<void> {
   const res = await fetch("/api/auth/sign-out", {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
     credentials: "include",
+    body: JSON.stringify({}),
   });
   if (!res.ok) throw new Error(`sign-out failed: ${res.status}`);
+
+  const session = await getSession();
+  if (session) {
+    throw new Error("sign-out failed: session still active");
+  }
+
   sessionStorage.removeItem(TASKS_MODAL_SHOWN_KEY);
 }
