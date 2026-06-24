@@ -36,7 +36,6 @@ import {
   updateBookingSchedule as updateBookingScheduleFn,
 } from "./bookings.mjs";
 import {
-  getPublicBookingPayload as getPublicBookingPayloadView,
   listCallerBookings as listCallerBookingsView,
 } from "./store/public-booking.mjs";
 import {createPersistenceAdapter} from "./store/persistence.mjs";
@@ -107,10 +106,6 @@ export function createStore(provider, storeConfig = {}) {
     getDisplayStatus,
     close() {
       database.close();
-    },
-
-    getPublicBookingPayload(slug) {
-      return getPublicBookingPayloadView(this, provider.mode, slug);
     },
 
     async listAvailability(slug, companySizeValue, filters = {}) {

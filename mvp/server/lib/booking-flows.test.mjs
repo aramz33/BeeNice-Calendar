@@ -75,25 +75,6 @@ async function createBookingFromFirstAvailableSlot(store, overrides = {}) {
   });
 }
 
-test("getPublicBookingPayload exposes the current workspace and the public workspace list", (t) => {
-  const store = withTempStore(t, createProviderStub());
-
-  const payload = store.getPublicBookingPayload("teamstarter-discovery");
-
-  assert.equal(payload.bookingLink.slug, "teamstarter-discovery");
-  assert.equal(payload.bookingLink.clientName, "TeamStarter");
-  assert.equal(payload.workspaces.length, 2);
-  assert.deepEqual(
-    payload.workspaces.map((workspace) => workspace.slug),
-    ["doctolib-discovery", "teamstarter-discovery"],
-  );
-
-  const adminPayload = store.listAdminBookings();
-  assert.equal(adminPayload.integrations.providerMode, "mock");
-  assert.ok(adminPayload.filters.clients.some((client) => client.id === "client-teamstarter"));
-  assert.ok(adminPayload.filters.reps.some((rep) => rep.id === "rep-quentin"));
-});
-
 test("createBooking persists the booking and closes the source follow-up task", async (t) => {
   const store = withTempStore(t, createProviderStub());
   const sourceTask = store.listCallerTasks("caller-clotilde", "client-teamstarter").tasks[0];

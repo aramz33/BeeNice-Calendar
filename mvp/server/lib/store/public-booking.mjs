@@ -1,44 +1,5 @@
 import {parseISO} from "date-fns";
 
-export function getPublicBookingPayload(store, providerMode, slug) {
-  const bookingLink = store.getBookingLinkBySlug(slug);
-  if (!bookingLink) {
-    throw new Error("Booking link introuvable.");
-  }
-
-  const client = store.getClient(bookingLink.clientId);
-  const routingPolicy = store.getRoutingPolicy(bookingLink.id);
-  const reps = store.getRepsForLink(bookingLink.id).map((rep) =>
-    store.decorateRep(rep),
-  );
-
-  return {
-    bookingLink: {
-      id: bookingLink.id,
-      slug: bookingLink.slug,
-      clientId: bookingLink.clientId,
-      title: bookingLink.title,
-      clientName: client?.name ?? "Client inconnu",
-      timezone: bookingLink.timezone,
-      durationMinutes: bookingLink.durationMinutes,
-      intervalMinutes: bookingLink.intervalMinutes,
-      bufferBeforeMinutes: bookingLink.bufferBeforeMinutes,
-      bufferAfterMinutes: bookingLink.bufferAfterMinutes,
-      routingMode: client?.routingMode ?? "pool_unique",
-      companySizeThreshold: routingPolicy?.companySizeThreshold ?? 200,
-      providerMode: providerMode === "nylas" ? "nylas" : "mock",
-      reps: reps.map((rep) => ({
-        id: rep.id,
-        name: rep.name,
-        seniority: rep.seniority,
-        connectionStatus: rep.connectionStatus,
-      })),
-    },
-    callers: store.listActiveCallers(),
-    workspaces: store.listPublicBookingLinks(),
-  };
-}
-
 export function listCallerBookings(
   db,
   store,

@@ -4,14 +4,6 @@ import { parseBody } from "./body.mjs";
 export function createBookRouter(store) {
   const router = new Hono();
 
-  router.get("/", (c) => {
-    return c.json({ workspaces: store.listPublicBookingLinks() });
-  });
-
-  router.get("/:slug", (c) => {
-    return c.json(store.getPublicBookingPayload(c.req.param("slug")));
-  });
-
   router.get("/:slug/availability", async (c) => {
     const slots = await store.listAvailability(
       c.req.param("slug"),
@@ -24,12 +16,6 @@ export function createBookRouter(store) {
   router.get("/:slug/bookings", (c) => {
     const callerId = c.get("session")?.user?.callerId;
     return c.json(store.listCallerBookings(c.req.param("slug"), callerId));
-  });
-
-  router.get("/:slug/tasks", (c) => {
-    const callerId = c.get("session")?.user?.callerId;
-    const bookingLink = store.getBookingLinkBySlug(c.req.param("slug"));
-    return c.json(store.listCallerTasks(callerId, bookingLink?.clientId ?? null));
   });
 
   router.post("/:slug/bookings", async (c) => {

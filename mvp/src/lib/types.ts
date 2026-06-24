@@ -97,12 +97,6 @@ export interface TimelineEvent {
   meta?: Record<string, string | number | boolean | null>;
 }
 
-export interface Caller {
-  id: string;
-  name: string;
-  active: boolean;
-}
-
 export interface PublicWorkspace {
   id: string;
   slug: string;
@@ -125,31 +119,6 @@ export interface CallerWorkspacesResponse {
 
 export interface CallerTasksResponse {
   tasks: FollowUpTask[];
-}
-
-export interface BookingLinkResponse {
-  bookingLink: {
-    id: string;
-    slug: string;
-    clientId?: string;
-    title: string;
-    clientName: string;
-    timezone: string;
-    durationMinutes: number;
-    intervalMinutes: number;
-    bufferBeforeMinutes: number;
-    bufferAfterMinutes: number;
-    companySizeThreshold: number;
-    providerMode: "mock" | "nylas";
-    reps: Array<{
-      id: string;
-      name: string;
-      seniority: Seniority;
-      connectionStatus: string;
-    }>;
-  };
-  callers: Caller[];
-  workspaces?: PublicWorkspace[];
 }
 
 export interface AvailabilityResponse {
@@ -304,10 +273,6 @@ export interface SettingsPayload {
 export interface ClientCreationResponse {
   client: SettingsPayload["clients"][number];
   workspace: PublicWorkspace;
-}
-
-export interface PublicWorkspacesResponse {
-  workspaces: PublicWorkspace[];
 }
 
 export interface PublicRepConnectionResponse {

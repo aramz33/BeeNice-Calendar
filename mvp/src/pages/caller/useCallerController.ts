@@ -8,7 +8,6 @@ import { useSession } from "@mvp/lib/session";
 import { formatDateTime } from "@mvp/lib/time";
 import type {
   AvailabilityResponse,
-  BookingSummary,
   CallerBookingsResponse,
   CallerTasksResponse,
   CallerWorkspace,
@@ -36,9 +35,6 @@ export function useCallerController() {
   const [openTasks, setOpenTasks] = useState<FollowUpTask[]>([]);
   const [loadingAvailability, setLoadingAvailability] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [cancellingBookingId, setCancellingBookingId] = useState<string | null>(
-    null,
-  );
   const [modalDismissed, setModalDismissed] = useState(
     () => !!sessionStorage.getItem(TASKS_MODAL_SHOWN_KEY),
   );
@@ -235,41 +231,6 @@ export function useCallerController() {
       setAvailabilityWeekStartIso(addWeeks(currentWeekStart, 1).toISOString());
   };
 
-  const handleCancelBooking = async (booking: BookingSummary) => {
-    if (!callerId || !selectedSlug || booking.cancelMode !== "direct") return;
-    setCancellingBookingId(booking.id);
-    try {
-      const bookingWeekStart = startOfWeek(parseISO(booking.startAt), {
-        weekStartsOn: WEEK_STARTS_ON,
-      });
-      await apiFetch(
-        `/api/book/${selectedSlug}/bookings/${booking.id}/cancel`,
-        {
-          method: "POST",
-        },
-      );
-      setSourceTask(null);
-      setCompanyName(booking.companyName);
-      setSalutation(booking.salutation ?? "");
-      setProspectFirstName(booking.prospectFirstName ?? booking.prospectName);
-      setProspectLastName(booking.prospectLastName ?? "");
-      setProspectEmail(booking.prospectEmail);
-      setNotes(booking.notes ?? "");
-      setAvailabilityWeekStartIso(bookingWeekStart.toISOString());
-      await Promise.all([
-        fetchAvailability(booking.startAt, bookingWeekStart),
-        fetchCallerData(),
-      ]);
-      toast.success(
-        "Rendez-vous annulé. Le créneau a été rechargé pour rebooker.",
-      );
-    } catch (err) {
-      toast.error((err as Error).message);
-    } finally {
-      setCancellingBookingId(null);
-    }
-  };
-
   const handleSubmit = async () => {
     if (
       !selectedSlug ||
@@ -332,7 +293,6 @@ export function useCallerController() {
     loadingWorkspaces,
     loadingAvailability,
     submitting,
-    cancellingBookingId,
     showTasksModal,
     dismissModal,
     showConfirmDialog,
@@ -361,7 +321,6 @@ export function useCallerController() {
     resetTask,
     handlePreviousAvailabilityWeek,
     handleNextAvailabilityWeek,
-    handleCancelBooking,
     handleSubmit,
   };
 }

@@ -7,10 +7,6 @@
   color-scheme: light;
 }
 
-.dark {
-  color-scheme: light;
-}
-
 body {
   min-height: 100vh;
   background: var(--background);
