@@ -5,7 +5,7 @@ import type { FollowUpTask, FollowUpTaskTrigger } from "@mvp/lib/types";
 const TRIGGER_LABELS: Record<FollowUpTaskTrigger, string> = {
   cancelled: "Annulation",
   no_show: "No-show",
-  mvn: "MVN",
+  refused: "Refus",
 };
 
 export function TaskCard({

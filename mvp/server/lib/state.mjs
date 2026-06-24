@@ -901,17 +901,16 @@ function initializeTimeline(store, db) {
   });
 }
 
+const REPOSITIONABLE_DISPLAY_STATUSES = new Set(["no_show", "cancelled", "refused"]);
+
 function initializeFollowUpTasks(store) {
   store
     .listAllBookings()
-    .filter((booking) => {
-      const displayStatus = getDisplayStatus(booking);
-      return displayStatus === "no_show" || displayStatus === "cancelled";
-    })
+    .filter((booking) => REPOSITIONABLE_DISPLAY_STATUSES.has(getDisplayStatus(booking)))
     .forEach((booking) => {
       store.ensureFollowUpTask(
         booking.id,
-        getDisplayStatus(booking) === "cancelled" ? "cancelled" : "no_show",
+        getDisplayStatus(booking),
         booking.noShowAt ?? booking.cancelledAt ?? booking.createdAt,
       );
     });

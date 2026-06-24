@@ -19,7 +19,7 @@ export type DisplayStatus =
   | "refused";
 export type BookingStatus = DisplayStatus;
 export type FollowUpTaskStatus = "open" | "done" | "dismissed";
-export type FollowUpTaskTrigger = "no_show" | "cancelled" | "mvn";
+export type FollowUpTaskTrigger = "no_show" | "cancelled" | "refused";
 
 export interface AssignmentReason {
   routingMode: RoutingMode;

@@ -13,17 +13,18 @@ keys lives in n8n, never in the app.
 | `no_show`       | No-show       | **yes**          | Prospect absent → re-book. |
 | `not_qualified` | Non qualifié  | no               | Out of ICP after discovery. Terminal. |
 | `cancelled`     | Annulé        | **yes**          | Cancellation (schedule axis). |
-| `mvn`           | MVN           | **yes**          | Mauvais numéro (wrong number) → re-book. |
-| `refused`       | Refus         | no               | Prospect refuses. Terminal. |
+| `mvn`           | MVN           | no               | Mauvais numéro (wrong number). Terminal. |
+| `refused`       | Refus         | **yes**          | Prospect not available at that time → re-book. |
 
 A booking also has transient lifecycle values `scheduled` / `rescheduled` (planned, not
 yet an outcome) — these are not client dispositions and are not Sheet-mapped.
 
 ## Reposition trigger
 
-Setting an outcome of `no_show` or `mvn` spawns a `reposition_booking` follow-up task for
-the original caller. `cancelled` (schedule change) also spawns one. `completed`,
-`not_qualified`, and `refused` are terminal — no task.
+Setting an outcome of `no_show` or `refused` spawns a `reposition_booking` follow-up task
+for the original caller (`refused` = prospect not available at that slot → re-book).
+`cancelled` (schedule change) also spawns one. `completed`, `not_qualified`, and `mvn`
+(wrong number) are terminal — no task.
 
 ## Stability rules
 
@@ -34,7 +35,7 @@ the original caller. `cancelled` (schedule change) also spawns one. `completed`,
   frontend `OutcomeState`/`DisplayStatus` unions (`mvp/src/lib/types.ts`), and notify
   Corentin so the n8n mapping stays in sync.
 
-## Open question (for Julien)
+## Confirmed (Julien, 2026-06-24)
 
-`MVN` triggering a reposition task is assumed (wrong number → retry). Confirm. `Refus` is
-assumed terminal.
+`MVN` (wrong number) is terminal — no reposition task. `Refus` means the prospect was not
+available at that slot (not a hard no), so it **does** spawn a reposition task.

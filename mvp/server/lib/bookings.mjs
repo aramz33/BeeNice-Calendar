@@ -10,7 +10,7 @@ export const OUTCOME_STATES = [
   "refused",
 ];
 
-const REPOSITIONABLE_OUTCOMES = new Set(["no_show", "mvn"]);
+const REPOSITIONABLE_OUTCOMES = new Set(["no_show", "refused"]);
 
 export const SCHEDULE_STATES = ["scheduled", "rescheduled", "cancelled"];
 
