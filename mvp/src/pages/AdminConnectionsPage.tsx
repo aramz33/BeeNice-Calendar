@@ -10,7 +10,12 @@ import {
 import { toast } from "sonner";
 import { Badge } from "@mvp/components/ui/badge";
 import { Button } from "@mvp/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@mvp/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@mvp/components/ui/card";
 import { AppChrome } from "@mvp/components/AppChrome";
 import { apiFetch } from "@mvp/lib/api";
 import { formatRepSeniority } from "@mvp/lib/format";
@@ -31,10 +36,11 @@ interface ConnectionGroup {
 }
 
 export function AdminConnectionsPage() {
-  const [repsPayload, setRepsPayload] = useState<AdminRepsResponse | null>(null);
-  const [settingsPayload, setSettingsPayload] = useState<SettingsPayload | null>(
+  const [repsPayload, setRepsPayload] = useState<AdminRepsResponse | null>(
     null,
   );
+  const [settingsPayload, setSettingsPayload] =
+    useState<SettingsPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [expandedClientId, setExpandedClientId] = useState<string | null>(null);
 
@@ -100,7 +106,9 @@ export function AdminConnectionsPage() {
 
   const connectionGroups = useMemo<ConnectionGroup[]>(() => {
     const reps = repsPayload?.reps ?? [];
-    const clients = (settingsPayload?.clients ?? []).filter((client) => client.active);
+    const clients = (settingsPayload?.clients ?? []).filter(
+      (client) => client.active,
+    );
 
     return clients.map((client) => {
       const clientReps = reps.filter((rep) => rep.clientId === client.id);
@@ -121,7 +129,8 @@ export function AdminConnectionsPage() {
 
   const totalReps = repsPayload?.reps.length ?? 0;
   const connectedReps =
-    repsPayload?.reps.filter((rep) => rep.connectionStatus === "connected").length ?? 0;
+    repsPayload?.reps.filter((rep) => rep.connectionStatus === "connected")
+      .length ?? 0;
   const integrationMode = repsPayload?.integrations.providerMode ?? "mock";
 
   return (
@@ -209,6 +218,10 @@ function ConnectionGroupRow({
 }) {
   const inviteLink = buildInviteLink(group.client.connectionInviteToken);
   const Icon = expanded ? ChevronDown : ChevronRight;
+  const effectivePercents = useMemo(
+    () => computeEffectivePercents(group.reps),
+    [group.reps],
+  );
 
   return (
     <div className="rounded-[1.25rem] border border-[#001E5B]/8 bg-white">
@@ -224,9 +237,7 @@ function ConnectionGroupRow({
             <p className="truncate font-semibold text-[#001E5B]">
               {group.client.name}
             </p>
-            <p className="text-sm text-[#001E5B]/56">
-              {formatRoutingMode(group.client.routingMode)}
-            </p>
+            <p className="text-sm text-[#001E5B]/56">{formatRoutingMode()}</p>
           </div>
         </div>
 
@@ -257,7 +268,9 @@ function ConnectionGroupRow({
               <Button
                 variant="outline"
                 className="rounded-full"
-                onClick={() => void copyInviteLink(group.client.connectionInviteToken)}
+                onClick={() =>
+                  void copyInviteLink(group.client.connectionInviteToken)
+                }
               >
                 <Copy className="h-4 w-4" />
                 Copier
@@ -273,7 +286,13 @@ function ConnectionGroupRow({
 
           <div className="mt-4 grid gap-3 lg:grid-cols-2">
             {group.reps.length ? (
-              group.reps.map((rep) => <RepConnectionRow key={rep.id} rep={rep} />)
+              group.reps.map((rep) => (
+                <RepConnectionRow
+                  key={rep.id}
+                  rep={rep}
+                  effectivePercent={effectivePercents.get(rep.id) ?? 0}
+                />
+              ))
             ) : (
               <div className="rounded-[1rem] border border-dashed border-[#001E5B]/12 px-4 py-8 text-sm text-[#001E5B]/44">
                 Aucun rep pour ce client.
@@ -286,7 +305,13 @@ function ConnectionGroupRow({
   );
 }
 
-function RepConnectionRow({ rep }: { rep: AdminRep }) {
+function RepConnectionRow({
+  rep,
+  effectivePercent,
+}: {
+  rep: AdminRep;
+  effectivePercent: number;
+}) {
   return (
     <div className="rounded-[1rem] border border-[#001E5B]/8 bg-[#FFFDF9] px-4 py-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -300,6 +325,8 @@ function RepConnectionRow({ rep }: { rep: AdminRep }) {
         <ConnectionStatusBadge status={rep.connectionStatus} />
       </div>
 
+      <RepWeightField rep={rep} effectivePercent={effectivePercent} />
+
       <div className="mt-3 space-y-1 text-xs text-[#001E5B]/56">
         {rep.providerEmail ? <p>Calendrier: {rep.providerEmail}</p> : null}
         {rep.connectedAt ? (
@@ -311,9 +338,13 @@ function RepConnectionRow({ rep }: { rep: AdminRep }) {
         </p>
         <p>
           Dernier webhook:{" "}
-          {rep.lastWebhookAt ? formatRelativeShort(rep.lastWebhookAt) : "jamais"}
+          {rep.lastWebhookAt
+            ? formatRelativeShort(rep.lastWebhookAt)
+            : "jamais"}
         </p>
-        {rep.lastError ? <p className="text-rose-600">{rep.lastError}</p> : null}
+        {rep.lastError ? (
+          <p className="text-rose-600">{rep.lastError}</p>
+        ) : null}
       </div>
     </div>
   );
@@ -355,10 +386,97 @@ function CounterBadge({
   return <Badge className={className}>{label}</Badge>;
 }
 
-function formatRoutingMode(routingMode: string): string {
-  return routingMode === "weighted_seniority"
-    ? "Routing senior/junior"
-    : "Pool unique";
+function RepWeightField({
+  rep,
+  effectivePercent,
+}: {
+  rep: AdminRep;
+  effectivePercent: number;
+}) {
+  const pinned = rep.weightPct != null;
+  const [value, setValue] = useState(pinned ? String(rep.weightPct) : "");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setValue(rep.weightPct != null ? String(rep.weightPct) : "");
+  }, [rep.weightPct]);
+
+  const save = async () => {
+    const trimmed = value.trim();
+    const nextWeight = trimmed === "" ? null : Number(trimmed);
+    const currentWeight = rep.weightPct ?? null;
+    if (nextWeight === currentWeight) return;
+    if (nextWeight !== null && Number.isNaN(nextWeight)) {
+      toast.error("Le pourcentage doit être un nombre.");
+      setValue(currentWeight != null ? String(currentWeight) : "");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const result = await apiFetch<{ warning: string | null }>(
+        `/api/admin/reps/${rep.id}/weight`,
+        { method: "PATCH", body: JSON.stringify({ weightPct: nextWeight }) },
+      );
+      if (result.warning === "benched") {
+        toast.warning(
+          "Les reps flexibles restants sont à 0% : la somme épinglée atteint déjà 100.",
+        );
+      } else {
+        toast.success("Pourcentage mis à jour.");
+      }
+    } catch (error) {
+      toast.error((error as Error).message);
+      setValue(currentWeight != null ? String(currentWeight) : "");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="mt-3 flex items-center justify-between gap-3 rounded-[1rem] border border-dashed border-[#001E5B]/12 bg-[#F9F4ED] px-3 py-2">
+      <div className="min-w-0">
+        <p className="text-xs font-medium text-[#001E5B]">Répartition</p>
+        <p className="text-xs text-[#001E5B]/56">
+          {pinned ? "Épinglé" : "Flexible"} · {effectivePercent}% effectif
+        </p>
+      </div>
+      <div className="flex items-center gap-1">
+        <input
+          type="number"
+          min={0}
+          max={100}
+          inputMode="numeric"
+          placeholder="auto"
+          value={value}
+          disabled={saving}
+          onChange={(event) => setValue(event.target.value)}
+          onBlur={() => void save()}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") event.currentTarget.blur();
+          }}
+          className="w-16 rounded-full border border-[#001E5B]/12 bg-white px-3 py-1 text-right text-sm text-[#001E5B] focus:outline-none focus:ring-2 focus:ring-[#F7A600]/40"
+          aria-label={`Pourcentage pour ${rep.name}`}
+        />
+        <span className="text-xs text-[#001E5B]/56">%</span>
+      </div>
+    </div>
+  );
+}
+
+function computeEffectivePercents(reps: AdminRep[]): Map<string, number> {
+  const pinnedSum = reps.reduce((sum, rep) => sum + (rep.weightPct ?? 0), 0);
+  const flexibleCount = reps.filter((rep) => rep.weightPct == null).length;
+  const flexShare =
+    flexibleCount > 0 ? Math.max(0, 100 - pinnedSum) / flexibleCount : 0;
+
+  return new Map(
+    reps.map((rep) => [rep.id, Math.round(rep.weightPct ?? flexShare)]),
+  );
+}
+
+function formatRoutingMode(): string {
+  return "Répartition par pourcentage";
 }
 
 function buildInviteLink(inviteToken?: string | null): string {

@@ -91,6 +91,7 @@ export function createSeedState(providerMode = "mock") {
       timezone: TIMEZONE,
       active: true,
       sortOrder: 1,
+      weightPct: 50,
     },
     {
       id: "rep-josette",
@@ -101,6 +102,7 @@ export function createSeedState(providerMode = "mock") {
       timezone: TIMEZONE,
       active: true,
       sortOrder: 2,
+      weightPct: null,
     },
     {
       id: "rep-pierre",
@@ -111,6 +113,7 @@ export function createSeedState(providerMode = "mock") {
       timezone: TIMEZONE,
       active: true,
       sortOrder: 3,
+      weightPct: null,
     },
   ];
 
@@ -152,10 +155,8 @@ export function createSeedState(providerMode = "mock") {
   }));
 
   const assignmentBase = {
-    companySizeThreshold: routingPolicy.companySizeThreshold,
+    routingMode: "percentage",
     seniorityPool: "all",
-    chosenRole: "senior",
-    roleDeficits: { senior: 0.8, junior: 0.2 },
     candidateRepIds: ["rep-quentin", "rep-josette"],
   };
 
@@ -364,6 +365,7 @@ export function createSeedState(providerMode = "mock") {
       timezone: TIMEZONE,
       active: true,
       sortOrder: 1,
+      weightPct: 60,
     },
     {
       id: "rep-marc",
@@ -374,6 +376,7 @@ export function createSeedState(providerMode = "mock") {
       timezone: TIMEZONE,
       active: true,
       sortOrder: 2,
+      weightPct: null,
     },
     {
       id: "rep-julie",
@@ -384,6 +387,7 @@ export function createSeedState(providerMode = "mock") {
       timezone: TIMEZONE,
       active: true,
       sortOrder: 3,
+      weightPct: null,
     },
   ];
 
@@ -425,10 +429,8 @@ export function createSeedState(providerMode = "mock") {
   }));
 
   const doctolibAssignmentBase = {
-    companySizeThreshold: doctolibRoutingPolicy.companySizeThreshold,
+    routingMode: "percentage",
     seniorityPool: "all",
-    chosenRole: "senior",
-    roleDeficits: { senior: 0.7, junior: 0.3 },
     candidateRepIds: ["rep-sophie"],
   };
 

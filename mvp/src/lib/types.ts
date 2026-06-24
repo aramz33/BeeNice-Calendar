@@ -22,13 +22,16 @@ export type FollowUpTaskStatus = "open" | "done" | "dismissed";
 export type FollowUpTaskTrigger = "no_show" | "cancelled" | "refused";
 
 export interface AssignmentReason {
-  routingMode: RoutingMode;
-  companySizeThreshold: number;
+  routingMode: RoutingMode | "percentage";
   seniorityPool: "all" | "senior";
-  chosenRole: Seniority | "pool_unique";
-  roleDeficits?: Record<string, number> | null;
   candidateRepIds: string[];
   candidateRepNames?: string[];
+  effectiveWeights?: Record<string, number>;
+  rollingCounts?: Record<string, number>;
+  // Legacy weighted_seniority fields, retained for older booking records.
+  companySizeThreshold?: number;
+  chosenRole?: Seniority | "pool_unique";
+  roleDeficits?: Record<string, number> | null;
 }
 
 export interface BookingSummary {
@@ -174,6 +177,7 @@ export interface AdminBookingsResponse {
       clientName: string;
       businessEmail?: string | null;
       seniority: Seniority;
+      weightPct?: number | null;
       connectionStatus: string;
       provider: string;
       providerEmail?: string | null;

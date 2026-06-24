@@ -133,31 +133,12 @@ export function BookingDetailPanel({
             <div className="mt-3 grid gap-2 text-sm text-[#001E5B]/72">
               <p>
                 Mode de routing:{" "}
-                {detail.booking.assignmentReason.routingMode ===
-                "weighted_seniority"
-                  ? "Routing senior/junior"
-                  : "Pool unique"}
-              </p>
-              <p>
-                Pool retenu:{" "}
-                {detail.booking.assignmentReason.seniorityPool === "senior"
-                  ? "Senior uniquement"
-                  : "Pool complet"}
-              </p>
-              <p>
-                Rôle choisi:{" "}
-                {detail.booking.assignmentReason.chosenRole === "senior"
-                  ? "Senior"
-                  : detail.booking.assignmentReason.chosenRole === "junior"
-                    ? "Junior"
-                    : detail.booking.assignmentReason.chosenRole ===
-                        "non_defini"
-                      ? "Non défini"
-                      : "Pool unique"}
-              </p>
-              <p>
-                Seuil de qualification:{" "}
-                {detail.booking.assignmentReason.companySizeThreshold}
+                {detail.booking.assignmentReason.routingMode === "percentage"
+                  ? "Répartition par pourcentage"
+                  : detail.booking.assignmentReason.routingMode ===
+                      "weighted_seniority"
+                    ? "Routing senior/junior"
+                    : "Pool unique"}
               </p>
               <p>
                 Candidats éligibles:{" "}

@@ -27,6 +27,7 @@ import {
   upsertConnection,
 } from "./connections.mjs";
 import {createAvailabilityModule,} from "./availability.mjs";
+import {validateWeights} from "./routing.mjs";
 import {
   cancelCallerBooking as cancelCallerBookingFn,
   createBooking as createBookingFn,
@@ -522,9 +523,39 @@ export function createStore(provider, storeConfig = {}) {
             timezone: payload.timezone?.trim() || rep.timezone,
             active: payload.active ?? rep.active,
             sortOrder: payload.sortOrder ?? rep.sortOrder,
+            weightPct: payload.weightPct !== undefined ? payload.weightPct : rep.weightPct,
         });
 
       return this.getRep(repId);
+    },
+
+    updateRepWeight(repId, weightPct) {
+      const rep = this.getRep(repId);
+      if (!rep) {
+        throw new Error("Rep introuvable.");
+      }
+
+      const normalized = weightPct === null || weightPct === undefined || weightPct === ""
+        ? null
+        : Number(weightPct);
+      if (normalized !== null && Number.isNaN(normalized)) {
+        throw new Error("Le pourcentage doit être un nombre ou vide.");
+      }
+
+      const proposedReps = this.listAllReps()
+        .filter((candidate) => candidate.clientId === rep.clientId && candidate.active)
+        .map((candidate) =>
+          candidate.id === repId ? { ...candidate, weightPct: normalized } : candidate,
+        );
+
+      const validation = validateWeights(proposedReps);
+      if (!validation.ok) {
+        throw new Error(validation.error);
+      }
+
+      const updated = this.updateRep(repId, { weightPct: normalized });
+      this.broadcastAdmin("settings.updated");
+      return { rep: updated, warning: validation.warning ?? null };
     },
 
     createRep(payload = {}) {
@@ -544,6 +575,7 @@ export function createStore(provider, storeConfig = {}) {
         timezone: payload.timezone?.trim() || client.timezone,
         active: payload.active !== false,
           sortOrder: payload.sortOrder ?? records.getMaxRepSortOrder(client.id) + 1,
+        weightPct: payload.weightPct ?? null,
       };
 
       if (!rep.name) {

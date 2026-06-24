@@ -112,7 +112,8 @@ function initSchema(db) {
       seniority TEXT NOT NULL,
       timezone TEXT NOT NULL,
       active INTEGER NOT NULL DEFAULT 1,
-      sort_order INTEGER NOT NULL DEFAULT 0
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      weight_pct REAL
     );
 
     CREATE TABLE IF NOT EXISTS rep_calendar_connections (
@@ -249,6 +250,7 @@ function migrateSchema(db, providerMode) {
     "rep_connection_form_config_json",
     "TEXT NOT NULL DEFAULT '[]'",
   );
+  ensureColumn(db, "reps", "weight_pct", "REAL");
   ensureColumn(db, "bookings", "schedule_state", "TEXT NOT NULL DEFAULT 'scheduled'");
   ensureColumn(db, "bookings", "outcome_state", "TEXT NOT NULL DEFAULT 'pending'");
   ensureColumn(db, "bookings", "original_start_at", "TEXT");
@@ -396,8 +398,9 @@ function seedDatabase(db, providerMode) {
       seniority,
       timezone,
       active,
-      sort_order
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      sort_order,
+      weight_pct
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   seed.reps.forEach((rep) => {
     insertRep.run(
@@ -409,6 +412,7 @@ function seedDatabase(db, providerMode) {
       rep.timezone,
       toDbBool(rep.active),
       rep.sortOrder,
+      rep.weightPct ?? null,
     );
   });
 
