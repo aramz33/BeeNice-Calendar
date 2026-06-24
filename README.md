@@ -15,8 +15,19 @@ et l'API locale regroupés au même endroit. Elle couvre :
 ## Lancer la démo
 
 ```bash
+nvm use
 npm install
 npm run dev
+```
+
+Le repo cible Node 24 (`.nvmrc`). `better-sqlite3` est un module natif : si
+`node_modules` a été installé avec une autre version majeure de Node, Better Auth
+peut échouer au chargement SQLite avec un message `NODE_MODULE_VERSION`.
+Dans ce cas :
+
+```bash
+nvm use
+npm run rebuild:native
 ```
 
 Par défaut :
