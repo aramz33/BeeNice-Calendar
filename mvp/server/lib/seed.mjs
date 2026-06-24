@@ -266,6 +266,48 @@ export function createSeedState(providerMode = "mock") {
         candidateRepIds: ["rep-pierre"],
       },
     }),
+    buildBooking({
+      id: "booking-6",
+      bookingLinkId: bookingLink.id,
+      clientId: client.id,
+      callerId: "caller-florian",
+      assignedRepId: "rep-quentin",
+      companyName: "Spendesk",
+      companySize: 110,
+      prospectName: "Karim Benali",
+      prospectEmail: "karim@spendesk.com",
+      notes: "Mauvais numéro, à recontacter via LinkedIn.",
+      dayOffset: 1,
+      hour: 11,
+      minute: 0,
+      status: "mvn",
+      assignmentReason: {
+        ...assignmentBase,
+        chosenRole: "senior",
+        candidateRepIds: ["rep-quentin"],
+      },
+    }),
+    buildBooking({
+      id: "booking-7",
+      bookingLinkId: bookingLink.id,
+      clientId: client.id,
+      callerId: "caller-clotilde",
+      assignedRepId: "rep-josette",
+      companyName: "Alan",
+      companySize: 140,
+      prospectName: "Sophie Lemaire",
+      prospectEmail: "sophie@alan.com",
+      notes: "Prospect refuse la démarche commerciale.",
+      dayOffset: 0,
+      hour: 10,
+      minute: 30,
+      status: "refused",
+      assignmentReason: {
+        ...assignmentBase,
+        chosenRole: "senior",
+        candidateRepIds: ["rep-josette"],
+      },
+    }),
   ];
 
   const bookingStatusHistory = [
@@ -285,6 +327,10 @@ export function createSeedState(providerMode = "mock") {
       "Admin Be Nice",
       "Lead non qualifié après call de découverte.",
     ),
+    history("history-10", "booking-6", null, "booked", "Workspace caller"),
+    history("history-11", "booking-6", "booked", "mvn", "Admin Be Nice", "Mauvais numéro."),
+    history("history-12", "booking-7", null, "booked", "Workspace caller"),
+    history("history-13", "booking-7", "booked", "refused", "Admin Be Nice", "Prospect refuse."),
   ];
 
   const calendarEvents =

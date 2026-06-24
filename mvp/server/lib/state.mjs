@@ -36,7 +36,6 @@ import {
   updateBookingSchedule as updateBookingScheduleFn,
 } from "./bookings.mjs";
 import {
-  getPublicBookingPayload as getPublicBookingPayloadView,
   listCallerBookings as listCallerBookingsView,
 } from "./store/public-booking.mjs";
 import {createPersistenceAdapter} from "./store/persistence.mjs";
@@ -61,6 +60,8 @@ const DISPLAY_STATUSES = [
   "cancelled",
   "rescheduled",
   "not_qualified",
+  "mvn",
+  "refused",
 ];
 
 const ROUTING_MODES = ["pool_unique", "weighted_seniority"];
@@ -105,10 +106,6 @@ export function createStore(provider, storeConfig = {}) {
     getDisplayStatus,
     close() {
       database.close();
-    },
-
-    getPublicBookingPayload(slug) {
-      return getPublicBookingPayloadView(this, provider.mode, slug);
     },
 
     async listAvailability(slug, companySizeValue, filters = {}) {
@@ -904,17 +901,16 @@ function initializeTimeline(store, db) {
   });
 }
 
+const REPOSITIONABLE_DISPLAY_STATUSES = new Set(["no_show", "cancelled", "refused"]);
+
 function initializeFollowUpTasks(store) {
   store
     .listAllBookings()
-    .filter((booking) => {
-      const displayStatus = getDisplayStatus(booking);
-      return displayStatus === "no_show" || displayStatus === "cancelled";
-    })
+    .filter((booking) => REPOSITIONABLE_DISPLAY_STATUSES.has(getDisplayStatus(booking)))
     .forEach((booking) => {
       store.ensureFollowUpTask(
         booking.id,
-        getDisplayStatus(booking) === "cancelled" ? "cancelled" : "no_show",
+        getDisplayStatus(booking),
         booking.noShowAt ?? booking.cancelledAt ?? booking.createdAt,
       );
     });

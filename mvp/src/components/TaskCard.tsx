@@ -1,6 +1,12 @@
 import { Button } from "@mvp/components/ui/button";
 import { formatRelativeShort } from "@mvp/lib/time";
-import type { FollowUpTask } from "@mvp/lib/types";
+import type { FollowUpTask, FollowUpTaskTrigger } from "@mvp/lib/types";
+
+const TRIGGER_LABELS: Record<FollowUpTaskTrigger, string> = {
+  cancelled: "Annulation",
+  no_show: "No-show",
+  refused: "Refus",
+};
 
 export function TaskCard({
   task,
@@ -23,9 +29,7 @@ export function TaskCard({
         </div>
       </div>
       <div className="mt-3 space-y-1 text-sm text-[#001E5B]/64">
-        <p>
-          Motif: {task.triggerReason === "cancelled" ? "Annulation" : "No-show"}
-        </p>
+        <p>Motif: {TRIGGER_LABELS[task.triggerReason] ?? task.triggerReason}</p>
         <p>RDV source: {formatRelativeShort(task.sourceStartAt)}</p>
         <p>Échéance: {formatRelativeShort(task.dueAt)}</p>
       </div>

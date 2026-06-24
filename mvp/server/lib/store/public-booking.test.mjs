@@ -54,33 +54,6 @@ async function createTestBooking(store, overrides = {}) {
   });
 }
 
-// ─── getPublicBookingPayload ──────────────────────────────────────────────────
-
-test("getPublicBookingPayload throws for unknown slug", (t) => {
-  const store = withTempStore(t);
-  assert.throws(
-    () => store.getPublicBookingPayload("nonexistent-slug"),
-    /Booking link introuvable/,
-  );
-});
-
-test("getPublicBookingPayload returns booking link with client info", (t) => {
-  const store = withTempStore(t);
-  const payload = store.getPublicBookingPayload("teamstarter-discovery");
-  assert.equal(payload.bookingLink.slug, "teamstarter-discovery");
-  assert.equal(payload.bookingLink.clientName, "TeamStarter");
-  assert.ok(Array.isArray(payload.bookingLink.reps));
-  assert.ok(payload.bookingLink.reps.length > 0);
-});
-
-test("getPublicBookingPayload includes callers and workspaces", (t) => {
-  const store = withTempStore(t);
-  const payload = store.getPublicBookingPayload("teamstarter-discovery");
-  assert.ok(Array.isArray(payload.callers));
-  assert.ok(payload.callers.length > 0);
-  assert.ok(Array.isArray(payload.workspaces));
-});
-
 // ─── listCallerBookings ───────────────────────────────────────────────────────
 
 test("listCallerBookings throws for unknown slug", (t) => {

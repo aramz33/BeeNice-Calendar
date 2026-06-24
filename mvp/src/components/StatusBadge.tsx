@@ -40,6 +40,16 @@ const badgeMap: Record<
     className: "border-stone-200 bg-stone-100 text-stone-700",
     variant: "outline",
   },
+  mvn: {
+    label: "MVN",
+    className: "border-amber-300 bg-amber-50 text-amber-800",
+    variant: "outline",
+  },
+  refused: {
+    label: "Refus",
+    className: "border-rose-300 bg-rose-100 text-rose-800",
+    variant: "outline",
+  },
 };
 
 const fallbackBadge = {

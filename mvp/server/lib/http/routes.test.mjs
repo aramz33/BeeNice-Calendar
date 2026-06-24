@@ -5,7 +5,6 @@ import { createApp } from "../../app.mjs";
 function createMockStore(overrides = {}) {
   return {
     listPublicBookingLinks: () => [],
-    getPublicBookingPayload: () => ({}),
     listAvailability: async () => [],
     listCallerBookings: () => [],
     listCallerTasks: () => [],
@@ -48,32 +47,20 @@ function createMockProvider() {
 
 // ── book-routes ───────────────────────────────────────────────────────────────
 
-test("GET /api/book → 200 avec workspaces", async () => {
-  const store = createMockStore({
-    listPublicBookingLinks: () => [
-      { id: "1", name: "TeamStarter", slug: "teamstarter-discovery", timezone: "Europe/Paris" },
-    ],
-  });
-  const app = createApp(store, createMockProvider());
+test("GET /api/book → 404 endpoint legacy supprimé", async () => {
+  const app = createApp(createMockStore(), createMockProvider());
 
   const res = await app.request("/api/book");
 
-  assert.equal(res.status, 200);
-  const body = await res.json();
-  assert.deepEqual(body, {
-    workspaces: [{ id: "1", name: "TeamStarter", slug: "teamstarter-discovery", timezone: "Europe/Paris" }],
-  });
+  assert.equal(res.status, 404);
 });
 
-test("GET /api/book/:slug → 200 avec payload du workspace", async () => {
-  const payload = { slug: "test-slug", clientName: "Acme", reps: [] };
-  const store = createMockStore({ getPublicBookingPayload: () => payload });
-  const app = createApp(store, createMockProvider());
+test("GET /api/book/:slug → 404 endpoint legacy supprimé", async () => {
+  const app = createApp(createMockStore(), createMockProvider());
 
   const res = await app.request("/api/book/test-slug");
 
-  assert.equal(res.status, 200);
-  assert.deepEqual(await res.json(), payload);
+  assert.equal(res.status, 404);
 });
 
 test("GET /api/book/:slug/availability → 200, passe les query params", async () => {
@@ -240,22 +227,6 @@ test("GET /api/book/:slug/bookings avec session caller → callerId déduit de l
   const app = createApp(store, createMockProvider(), createMockAuth(callerSession));
 
   const res = await app.request("/api/book/teamstarter-discovery/bookings");
-
-  assert.equal(res.status, 200);
-  assert.equal(capturedCallerId, "caller-clotilde");
-});
-
-test("GET /api/book/:slug/tasks avec session caller → callerId déduit de la session", async () => {
-  let capturedCallerId;
-  const store = createMockStore({
-    listCallerTasks: (callerId) => {
-      capturedCallerId = callerId;
-      return [];
-    },
-  });
-  const app = createApp(store, createMockProvider(), createMockAuth(callerSession));
-
-  const res = await app.request("/api/book/teamstarter-discovery/tasks");
 
   assert.equal(res.status, 200);
   assert.equal(capturedCallerId, "caller-clotilde");

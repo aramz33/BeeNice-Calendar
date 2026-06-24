@@ -6,7 +6,11 @@ export const OUTCOME_STATES = [
   "completed",
   "no_show",
   "not_qualified",
+  "mvn",
+  "refused",
 ];
+
+const REPOSITIONABLE_OUTCOMES = new Set(["no_show", "refused"]);
 
 export const SCHEDULE_STATES = ["scheduled", "rescheduled", "cancelled"];
 
@@ -22,6 +26,12 @@ export function getDisplayStatus(booking) {
   }
   if (booking.outcomeState === "not_qualified") {
     return "not_qualified";
+  }
+  if (booking.outcomeState === "mvn") {
+    return "mvn";
+  }
+  if (booking.outcomeState === "refused") {
+    return "refused";
   }
   if (booking.scheduleState === "rescheduled") {
     return "rescheduled";
@@ -303,8 +313,8 @@ export async function updateBookingOutcome(database, db, store, provider, bookin
       meta: { outcomeState },
     });
 
-    if (outcomeState === "no_show") {
-      store.ensureFollowUpTask(bookingId, "no_show", createdAt);
+    if (REPOSITIONABLE_OUTCOMES.has(outcomeState)) {
+      store.ensureFollowUpTask(bookingId, outcomeState, createdAt);
     }
   });
 

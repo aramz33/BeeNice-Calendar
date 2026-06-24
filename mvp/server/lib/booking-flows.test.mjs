@@ -75,25 +75,6 @@ async function createBookingFromFirstAvailableSlot(store, overrides = {}) {
   });
 }
 
-test("getPublicBookingPayload exposes the current workspace and the public workspace list", (t) => {
-  const store = withTempStore(t, createProviderStub());
-
-  const payload = store.getPublicBookingPayload("teamstarter-discovery");
-
-  assert.equal(payload.bookingLink.slug, "teamstarter-discovery");
-  assert.equal(payload.bookingLink.clientName, "TeamStarter");
-  assert.equal(payload.workspaces.length, 2);
-  assert.deepEqual(
-    payload.workspaces.map((workspace) => workspace.slug),
-    ["doctolib-discovery", "teamstarter-discovery"],
-  );
-
-  const adminPayload = store.listAdminBookings();
-  assert.equal(adminPayload.integrations.providerMode, "mock");
-  assert.ok(adminPayload.filters.clients.some((client) => client.id === "client-teamstarter"));
-  assert.ok(adminPayload.filters.reps.some((rep) => rep.id === "rep-quentin"));
-});
-
 test("createBooking persists the booking and closes the source follow-up task", async (t) => {
   const store = withTempStore(t, createProviderStub());
   const sourceTask = store.listCallerTasks("caller-clotilde", "client-teamstarter").tasks[0];
@@ -157,4 +138,31 @@ test("caller cancellation keeps direct-cancel behavior and marks the booking can
   const booking = store.getBooking(result.bookingId);
   assert.equal(booking.scheduleState, "cancelled");
   assert.equal(store.getCallerCancelMode(booking), null);
+});
+
+test("outcome MVN sets the disposition and is terminal (no reposition task)", async (t) => {
+  const store = withTempStore(t, createProviderStub());
+  const result = await createBookingFromFirstAvailableSlot(store);
+
+  await store.updateBookingOutcome(result.bookingId, "mvn", "Mauvais numéro.");
+
+  const booking = store.getBooking(result.bookingId);
+  assert.equal(booking.outcomeState, "mvn");
+  assert.equal(store.getDisplayStatus(booking), "mvn");
+  assert.equal(store.getOpenTaskByBookingId(result.bookingId), null);
+});
+
+test("outcome Refus sets the disposition and spawns a reposition task", async (t) => {
+  const store = withTempStore(t, createProviderStub());
+  const result = await createBookingFromFirstAvailableSlot(store);
+
+  await store.updateBookingOutcome(result.bookingId, "refused", "Pas dispo à ce créneau.");
+
+  const booking = store.getBooking(result.bookingId);
+  assert.equal(booking.outcomeState, "refused");
+  assert.equal(store.getDisplayStatus(booking), "refused");
+
+  const task = store.getOpenTaskByBookingId(result.bookingId);
+  assert.ok(task, "expected Refus to spawn a reposition task");
+  assert.equal(task.triggerReason, "refused");
 });
