@@ -1,4 +1,3 @@
-export const REP_ROLES = ["senior", "junior", "non_defini"];
 
 const PUBLIC_PROVIDER_OPTIONS = [
   { id: "google", label: "Google" },
@@ -71,8 +70,7 @@ function normalizePublicRepConnectionFields(fields) {
           : undefined,
     }))
     .filter(
-      (field) =>
-        !["firstName", "lastName", "provider", "role"].includes(field.id),
+      (field) => !["firstName", "lastName", "provider"].includes(field.id),
     );
 }
 
@@ -328,17 +326,6 @@ export function getPublicRepConnectionPayload(store, inviteToken) {
         required: true,
         options: PUBLIC_PROVIDER_OPTIONS,
       },
-      {
-        id: "role",
-        label: "Rôle",
-        type: "select",
-        required: true,
-        options: [
-          { id: "junior", label: "Actif junior" },
-          { id: "senior", label: "Actif senior" },
-          { id: "non_defini", label: "Non défini" },
-        ],
-      },
       ...normalizePublicRepConnectionFields(client.repConnectionFormConfig),
     ],
   };
@@ -356,10 +343,6 @@ export async function startPublicRepConnection(store, inviteToken, payload = {})
 
   if (!payload.firstName?.trim() || !payload.lastName?.trim()) {
     throw new Error("Le prénom et le nom sont obligatoires.");
-  }
-
-  if (!REP_ROLES.includes(payload.role)) {
-    throw new Error("Rôle de rep invalide.");
   }
 
   const rep = store.findOrCreateRepForPublicConnection(client, payload);

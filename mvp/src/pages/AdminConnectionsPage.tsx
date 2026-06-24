@@ -19,7 +19,6 @@ import {
 import { AppChrome } from "@mvp/components/AppChrome";
 import { apiFetch } from "@mvp/lib/api";
 import { buildInviteLink, copyInviteLink } from "@mvp/lib/invite-link";
-import { formatRepSeniority } from "@mvp/lib/format";
 import { formatRelativeShort } from "@mvp/lib/time";
 import type { AdminRepsResponse, SettingsPayload } from "@mvp/lib/types";
 
@@ -318,10 +317,9 @@ function RepConnectionRow({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate font-semibold text-[#001E5B]">{rep.name}</p>
-          <p className="text-sm text-[#001E5B]/56">
-            {formatRepSeniority(rep.seniority)}
-            {rep.businessEmail ? ` · ${rep.businessEmail}` : ""}
-          </p>
+          {rep.businessEmail ? (
+            <p className="text-sm text-[#001E5B]/56">{rep.businessEmail}</p>
+          ) : null}
         </div>
         <ConnectionStatusBadge status={rep.connectionStatus} />
       </div>

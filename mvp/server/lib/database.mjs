@@ -113,7 +113,6 @@ function initSchema(db) {
       client_id TEXT NOT NULL REFERENCES clients(id),
       name TEXT NOT NULL,
       email TEXT NOT NULL,
-      seniority TEXT NOT NULL,
       timezone TEXT NOT NULL,
       active INTEGER NOT NULL DEFAULT 1,
       sort_order INTEGER NOT NULL DEFAULT 0,
@@ -259,6 +258,9 @@ function migrateSchema(db, providerMode) {
   ensureColumn(db, "clients", "primary_contact_phone", "TEXT NOT NULL DEFAULT '+33000000000'");
   ensureColumn(db, "clients", "primary_contact_email", "TEXT NOT NULL DEFAULT 'demo-contact@example.com'");
   ensureColumn(db, "reps", "weight_pct", "REAL");
+  if (db.prepare("PRAGMA table_info(reps)").all().some((c) => c.name === "seniority")) {
+    db.exec("ALTER TABLE reps DROP COLUMN seniority");
+  }
   ensureColumn(db, "bookings", "schedule_state", "TEXT NOT NULL DEFAULT 'scheduled'");
   ensureColumn(db, "bookings", "outcome_state", "TEXT NOT NULL DEFAULT 'pending'");
   ensureColumn(db, "bookings", "original_start_at", "TEXT");
@@ -403,12 +405,11 @@ function seedDatabase(db, providerMode) {
       client_id,
       name,
       email,
-      seniority,
       timezone,
       active,
       sort_order,
       weight_pct
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `);
   seed.reps.forEach((rep) => {
     insertRep.run(
@@ -416,7 +417,6 @@ function seedDatabase(db, providerMode) {
       rep.clientId,
       rep.name,
       rep.email,
-      rep.seniority,
       rep.timezone,
       toDbBool(rep.active),
       rep.sortOrder,

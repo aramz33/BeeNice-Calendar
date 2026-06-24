@@ -140,7 +140,7 @@ test("findConflictingConnections returns empty array when both identity fields a
 test("disconnectConnection returns null when rep has no connection", (t) => {
     const {store, provider} = withTempStore(t);
     const client = store.createClient({name: "TestCo", ...CLIENT_CONTACT}).client;
-    const rep = store.createRep({clientId: client.id, name: "Rep A", seniority: "junior"});
+    const rep = store.createRep({clientId: client.id, name: "Rep A"});
 
     const result = disconnectConnection(
         {prepare: () => ({get: () => null})},
@@ -173,7 +173,7 @@ test("getPublicRepConnectionPayload returns client and fields for valid token", 
     assert.ok(fieldIds.includes("firstName"));
     assert.ok(fieldIds.includes("lastName"));
     assert.ok(fieldIds.includes("provider"));
-    assert.ok(fieldIds.includes("role"));
+    assert.ok(!fieldIds.includes("role"));
 });
 
 test("getPublicRepConnectionPayload includes custom select field from repConnectionFormConfig", (t) => {
@@ -238,7 +238,6 @@ test("startPublicRepConnection throws for invalid provider", async (t) => {
             provider: "zoom",
             firstName: "Alice",
             lastName: "Martin",
-            role: "junior",
         }),
         /Provider de connexion invalide/,
     );
@@ -253,24 +252,8 @@ test("startPublicRepConnection throws when firstName or lastName is missing", as
             provider: "google",
             firstName: "",
             lastName: "Martin",
-            role: "junior",
         }),
         /prénom et le nom sont obligatoires/,
-    );
-});
-
-test("startPublicRepConnection throws for invalid role", async (t) => {
-    const {store} = withTempStore(t);
-    const {client} = store.createClient({name: "TestCo", ...CLIENT_CONTACT});
-
-    await assert.rejects(
-        () => startPublicRepConnection(store, client.connectionInviteToken, {
-            provider: "google",
-            firstName: "Alice",
-            lastName: "Martin",
-            role: "director",
-        }),
-        /Rôle de rep invalide/,
     );
 });
 
@@ -282,7 +265,6 @@ test("startPublicRepConnection creates rep and starts connection for valid paylo
         provider: "google",
         firstName: "Alice",
         lastName: "Martin",
-        role: "junior",
     });
 
     assert.ok(result);

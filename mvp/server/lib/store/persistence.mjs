@@ -134,18 +134,16 @@ export function createPersistenceAdapter(db) {
           client_id,
           name,
           email,
-          seniority,
           timezone,
           active,
           sort_order,
           weight_pct
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
                 rep.id,
                 rep.clientId,
                 rep.name,
                 rep.email,
-                rep.seniority,
                 rep.timezone,
                 toDbBool(rep.active),
                 rep.sortOrder,
@@ -158,7 +156,6 @@ export function createPersistenceAdapter(db) {
         UPDATE reps
         SET name = ?,
             email = ?,
-            seniority = ?,
             timezone = ?,
             active = ?,
             sort_order = ?,
@@ -167,7 +164,6 @@ export function createPersistenceAdapter(db) {
       `).run(
                 patch.name,
                 patch.email,
-                patch.seniority,
                 patch.timezone,
                 toDbBool(patch.active),
                 patch.sortOrder,
@@ -429,7 +425,6 @@ function fromRepRow(row) {
         clientId: row.client_id,
         name: row.name,
         email: row.email,
-        seniority: row.seniority,
         timezone: row.timezone,
         active: Boolean(row.active),
         sortOrder: row.sort_order,

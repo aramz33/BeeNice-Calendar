@@ -26,7 +26,10 @@ export function createApp(store, provider, auth = null, distDir = null) {
 
   if (auth) {
     app.on(["GET", "POST"], "/api/auth/*", (c) => auth.handler(c.req.raw));
-    app.use("/api/admin/*", requireAdmin(auth));
+    app.use("/api/admin/*", async (c, next) => {
+      if (c.req.path === "/api/admin/integrations/nylas/callback") return next();
+      return requireAdmin(auth)(c, next);
+    });
     app.use("/api/book/*", requireAuth(auth));
     app.use("/api/caller/*", requireAuth(auth));
   }

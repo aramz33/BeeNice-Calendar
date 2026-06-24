@@ -40,7 +40,6 @@ export function listAdminBookings(store, provider, filters = {}) {
         name: rep.name,
         clientName: store.getClient(rep.clientId)?.name ?? "Client inconnu",
         businessEmail: rep.businessEmail,
-        seniority: rep.seniority,
         connectionStatus: rep.connectionStatus,
         provider: rep.provider,
         providerEmail: rep.providerEmail,

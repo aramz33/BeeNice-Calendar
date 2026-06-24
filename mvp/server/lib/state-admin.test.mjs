@@ -333,18 +333,11 @@ test("createRep throws when name is missing", (t) => {
     );
 });
 
-test("createRep defaults seniority to non_defini for unknown value", (t) => {
-    const store = withTempStore(t);
-    const {client} = store.createClient(validClientPayload({name: "TestCo"}));
-    const rep = store.createRep({clientId: client.id, name: "Rep A", seniority: "god"});
-    assert.equal(rep.seniority, "non_defini");
-});
-
 test("createRep increments sortOrder", (t) => {
     const store = withTempStore(t);
     const {client} = store.createClient(validClientPayload({name: "TestCo"}));
-    const rep1 = store.createRep({clientId: client.id, name: "Rep A", seniority: "junior"});
-    const rep2 = store.createRep({clientId: client.id, name: "Rep B", seniority: "senior"});
+    const rep1 = store.createRep({clientId: client.id, name: "Rep A"});
+    const rep2 = store.createRep({clientId: client.id, name: "Rep B"});
     assert.ok(rep2.sortOrder > rep1.sortOrder);
 });
 
@@ -362,7 +355,7 @@ test("updateRep throws when clientId changes", (t) => {
     const store = withTempStore(t);
     const {client: c1} = store.createClient(validClientPayload({name: "Client 1"}));
     const {client: c2} = store.createClient(validClientPayload({name: "Client 2"}));
-    const rep = store.createRep({clientId: c1.id, name: "Rep A", seniority: "junior"});
+    const rep = store.createRep({clientId: c1.id, name: "Rep A"});
     assert.throws(
         () => store.updateRep(rep.id, {clientId: c2.id}),
         /Le client d'un rep ne peut pas être modifié/,
@@ -372,7 +365,7 @@ test("updateRep throws when clientId changes", (t) => {
 test("updateRep updates rep name", (t) => {
     const store = withTempStore(t);
     const {client} = store.createClient(validClientPayload({name: "TestCo"}));
-    const rep = store.createRep({clientId: client.id, name: "Rep A", seniority: "junior"});
+    const rep = store.createRep({clientId: client.id, name: "Rep A"});
     const updated = store.updateRep(rep.id, {name: "Rep Alpha"});
     assert.equal(updated.name, "Rep Alpha");
 });
@@ -386,26 +379,22 @@ test("findOrCreateRepForPublicConnection creates new rep when no match", (t) => 
     const rep = store.findOrCreateRepForPublicConnection(client, {
         firstName: "Alice",
         lastName: "Martin",
-        role: "junior",
     });
 
     assert.equal(rep.name, "Alice Martin");
-    assert.equal(rep.seniority, "junior");
 });
 
 test("findOrCreateRepForPublicConnection updates existing rep when single match", (t) => {
     const store = withTempStore(t);
     const {client} = store.createClient(validClientPayload({name: "TestCo"}));
-    store.createRep({clientId: client.id, name: "Bob Dupont", seniority: "non_defini"});
+    store.createRep({clientId: client.id, name: "Bob Dupont"});
 
     const rep = store.findOrCreateRepForPublicConnection(client, {
         firstName: "Bob",
         lastName: "Dupont",
-        role: "senior",
     });
 
     assert.equal(rep.name, "Bob Dupont");
-    assert.equal(rep.seniority, "senior");
 });
 
 // ─── listSettings ─────────────────────────────────────────────────────────────
