@@ -11,22 +11,28 @@ Target: v0 live early July 2026; first client Cosy RH (Microsoft/Azure).
 
 ## Where are we? / end of session
 
-State, next actions, and decisions are **not** duplicated here — they live in the
-Obsidian vault (single source of truth). Resume via the `adam-vault` skill:
+State, next actions, and decisions are **not** duplicated here — they live in
+`project/` (the source of truth, committed to the repo so the team shares it). An
+Obsidian vault mirror is synced occasionally by Adam, but **`project/` in this repo
+is authoritative** — read and write it here.
 
-- **Entrypoint** → `6 - Main Notes/Pro/BeeNice/TODO.md` (`## Resume` = goal, state,
-  next action; `## Checklist` = done vs. remaining). Usually enough on its own.
-- **Depth** → `Pro/BeeNice/LOG.md` (history + rationale), `ARCHITECTURE.md`,
-  `wiki/` (routing-design, microsoft-enterprise-auth, nylas-microsoft-oauth, …).
+- **Entrypoint** → `project/TODO.md` (`## Resume` = goal, state, next action;
+  `## Checklist` = done vs. remaining). Usually enough on its own.
+- **Depth** → `project/LOG.md` (history + rationale), `project/ARCHITECTURE.md`,
+  `project/wiki/` (routing-design, microsoft-enterprise-auth, nylas-microsoft-oauth,
+  brief-julien-auth-prod, …).
 - **Cross-check** → root `CONTEXT.md` (domain terms + decisions) and `git log`.
 
-End a session with the `handoff` skill (rewrites `TODO.md`, appends `LOG.md`).
+End a session by updating `project/TODO.md` (rewrite `## Resume` + flip checklist) and
+appending a dated `project/LOG.md` entry (newest on top, never rewrite past entries);
+update `project/ARCHITECTURE.md` when the code shape changes. Notes use Obsidian-style
+`[[wikilinks]]` — kept for vault round-trip; they render as plain text on GitHub.
 Never create dated handoff files at the project root.
 
 ## Workflow guardrails
 
-- **Open work / issues**: no separate folder — checklist items in `TODO.md`, design
-  notes for open questions in `Pro/BeeNice/wiki/`. Triage vocab: see
+- **Open work / issues**: no separate folder — checklist items in `project/TODO.md`,
+  design notes for open questions in `project/wiki/`. Triage vocab: see
   `docs/agents/triage-labels.md`.
 - **Before major decisions** (rewrite vs. continue, new sprint with a deadline,
   scoping a new client): invoke `/delivery-scoping` first — it explores the code

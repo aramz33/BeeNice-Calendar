@@ -1,0 +1,84 @@
+---
+tags: [domaine/pro, projet/beeniche, type/todo, agents]
+updated: 2026-06-24
+---
+
+# BeeNice Calendar — TODO
+
+## Resume
+- **Goal:** outil B2B de booking pour les sales reps. **Cible : v0 live début juillet 2026** (Julien, réunion [[LOG|11-06]]). Premier client = **Cozy RH** (avec un Z, Microsoft).
+- **State:** PRs #2→#7 mergées sur `main`. **PR #6** (formulaire création client v0) + **PR #7** (drop rep role/seniority + fix callback OAuth public-invite) mergées. Détail [[LOG|session 6]].
+- **Next:** **débloquer l'auth Microsoft pour Cozy RH = chemin critique juillet.** La demande de **consentement admin** doit partir de **Julien/BeeNice** (Adam n'a pas de contact Cozy direct). Brief prêt → [[brief-julien-auth-prod]]. Google = pas bloquant juillet (Cozy = Microsoft), à lancer en parallèle.
+  - ⚠️ DB dev (`mvp/server/data/mvp.sqlite` + WAL) **supprimée** → toute **connexion Nylas réelle de test est à refaire**.
+  - **Reshape seed démo = déprioritisé** : à faire au dernier moment avant la démo, dépend de l'archi qui peut encore bouger.
+- **Run:** `npm run dev` (API 8787 + web 5174) · tests : `npm run test:web` et `node --test mvp/server/lib/**/*.test.mjs mvp/server/lib/*.test.mjs mvp/server/lib/http/*.test.mjs`
+- Contexte → [[overview]] · Specs → [[functional-spec]] · Archi → [[ARCHITECTURE]] · wiki → [[wiki/index|wiki]] · Historique → [[LOG]]
+
+## Checklist
+
+### Livré
+- [x] B1 Hono · B2 auth better-auth · B3 `caller/workspaces` + response shape · B4 réassignation tâche · B5 RSVP prospect
+- [x] F1 login + guards de route · F2 vue caller unifiée
+- [x] T1 buffer défaut 15 min · T2 suppression champ taille société
+- [x] Durcissement auth (CORS, trusted origins, seeding idempotent, tests) — `5c5635f`, [PR #2](https://github.com/aramz33/BeeNice-Calendar/pull/2) **mergée** (`9790693`)
+- [x] Cleanup safe legacy caller/API — suppression `BookingWorkspacePage`, `useBookingWorkspaceController`, `AccordionSection`, `useTheme`, endpoints read `/api/book`; `/book/:slug` reste redirect et availability/bookings/create/cancel/SSE restent actifs
+- [x] **Statuts RDV — 6 valeurs de Julien** : MVN + Refus de bout en bout, [PR #3](https://github.com/aramz33/BeeNice-Calendar/pull/3) **mergée** (`5ed4055`). Contrat → `docs/status-contract.md`. ✅ confirmé Julien : **MVN = terminal** (pas de tâche) ; **Refus = pas dispo à ce créneau → tâche de repositionnement**.
+- [x] **Tooling Node natif SQLite** — [PR #5](https://github.com/aramz33/BeeNice-Calendar/pull/5) **mergée** (`2175a98`) : `.nvmrc`, `engines`, `engine-strict`, script `npm run rebuild:native`.
+- [x] **Round robin pondéré par % par rep** — [PR #4](https://github.com/aramz33/BeeNice-Calendar/pull/4) **mergée** (`f6873e9`) : `reps.weight_pct`, % effectif live, somme=100 par construction, UI sur page connexions reps.
+- [x] **Création client — formulaire v0** — [PR #6](https://github.com/aramz33/BeeNice-Calendar/pull/6) **mergée** (`0c9a528`). Spec [[client-creation-form]], détail [[LOG|session 5]].
+- [x] **Drop rep role/seniority + fix callback OAuth public-invite** — [PR #7](https://github.com/aramz33/BeeNice-Calendar/pull/7) **mergée** (`166647a`/`ea43249`). Champ « Rôle » retiré du lien de connexion rep ; colonne `reps.seniority` droppée de bout en bout (migration `DROP COLUMN` idempotente). **Bug réel corrigé** : le flux OAuth public-invite tapait le callback admin-guardé → `{"error":"Unauthorized"}` ; exemption du seul path `/api/admin/integrations/nylas/callback` (pas de reconfig Nylas). Doc Google prod ajoutée → `docs/google-oauth-production-setup.md`. Backend 215/215 + web 34/34 + build verts.
+
+### Démo — priorité immédiate · audience = **Julien + Camille** (opérateurs/admins BeeNice)
+- [ ] **Valider auth Nylas Google ET Microsoft** sur connexions réelles  → verify: les deux providers connectent un calendrier et les créneaux s'affichent
+  - risque n°1 (externe, infaisable à 9h) · DB dev wipée cette session → reconnecter les calendriers
+- [ ] **Reshape seed pour la narration démo** (⏸ **déprioritisé** — à faire au dernier moment avant la démo, dépend de l'archi qui peut encore bouger) : 1 client héros, 4-5 reps avec % visibles, les 6 statuts + 2-3 tâches de repositionnement vivantes + contact client crédible  → verify: chaque écran du parcours a des données crédibles
+  - reset DB : supprimer `mvp/server/data/mvp.sqlite*` puis relancer (seed ne tourne que si `clients` vide)
+  - ne pas confondre avec le seed minimal du formulaire client ; reshape démo = tâche séparée
+
+### Chemin critique — début juillet
+- [x] **Création client — formulaire v0** — spec [[client-creation-form]], commit `4f95260` (branche `feat/client-creation-form`, pas encore PR). 5 champs requis, contact commercial persisté (`primary_contact_*`), `Europe/Paris` forcé, lien rep absolu copiable par ligne client, doublon email = `window.confirm`. `routingMode` plus envoyé par l'UI (cleanup colonne = TODO séparé ci-dessous). Tests backend 217/217 + web 34/34 + build verts.
+- [ ] **Google Sheets — sync bidirectionnelle** (débloquée, [schéma fourni](https://docs.google.com/spreadsheets/d/1nom9ywiN7NFhVGUPZZ15ZWcqlkIR66D2xTsdZ8vbV0Q/edit))  → verify: statut Sheet → tâche reposition ; tâche faite → push retour Sheet
+  - source de vérité = Google Sheet · contrat de statuts app = `docs/status-contract.md` (Julien type son Sheet dessus, n8n mappe) · pont Sheet↔Pipedrive via leur n8n (Hostinger) · coordonner avec **Corentin**
+
+### Repositionnement
+- [ ] Pop-up tâches de repositionnement à la connexion (1×/session, session 5h) + notifications **admin ET caller**  → verify: popup au login, liste "x clients à repositionner"
+- [ ] Assignation manuelle ET auto via Google Sheet — auto = toujours réassigner au **même caller**
+
+### Frontend restant
+- [ ] F3 — Calendrier semaine avec axe horaire (`@schedule-x/react`, depends F2 ✅)  → verify: rendu créneaux, `npm run test:web` vert
+- [ ] F4a — Badge provider Google/Microsoft sur connexions rep
+- [ ] F4b — Bonus timezone côté caller/prospect : permettre au caller de voir les disponibilités depuis le fuseau du prospect appelé  → verify: affichage créneaux lisible dans timezone choisie, sans changer timezone client (`Europe/Paris`)
+- [ ] F4c — Assignation tâche de repositionnement depuis vue admin (depends B4 ✅)
+- [ ] F5 — Affichage statut RSVP dans détail booking (depends B5 ✅)
+- [ ] **Édition contact client** dans `/admin/settings`  → verify: modifier prénom/nom/tel/email d'un client existant
+
+### Livraison / déploiement
+- [ ] **Sécu avant VPS** : `BETTER_AUTH_SECRET` — remplacer le fallback hardcodé de `auth.mjs` par un fail-fast au démarrage + provisionner la var (`openssl rand -base64 32`)  → verify: serveur refuse de démarrer sans la var → détail [[beeniceapp-auth-secret-fallback]]
+- [ ] **Cleanup routingMode** : retirer/déprécier la colonne/API `routingMode` devenue inutile après routing %  → verify: plus aucune UI/API métier n'en dépend, migration sans casse des données existantes
+  - pour l'implémentation formulaire client, ne pas exposer/envoyer `routingMode`; le backend peut ignorer un payload legacy en attendant ce cleanup
+- [ ] **Cleanup cluster routing legacy** (suite du drop `rep.seniority`) : retirer le moteur de routing mort restant — `routing_mode = "weighted_seniority"`, `seniorityPool` (`availability.mjs`, toujours `"all"`), table `routing_policies`, et `AssignmentReason.chosenRole`/`roleDeficits`  → verify: routing % seul actif, lecture des bookings historiques (assignmentReason JSON legacy) toujours tolérée
+  - ⚠️ `chosenRole`/`roleDeficits`/`seniorityPool` sont sérialisés dans l'historique des bookings → garder la lecture tolérante, ne pas casser les anciennes lignes. Cleanup séparé du drop `seniority` (fait dans `feat/client-creation-form`).
+- [ ] Coordonner avec **Corentin** le format de packaging (conteneur) — impacte l'organisation du code
+- [ ] T6 — `docs/DEPLOIEMENT.md` (déploiement VPS Hostinger)
+- [ ] T3 — Filtre semaine dans liste admin (frontend seul, backend prêt)
+- [ ] T5 — Extraire `withTempStore` + `createProviderStub` → `test-helpers.mjs`
+- [ ] T7 — Documentation fonctionnelle + technique + session de formation
+
+### Microsoft Azure (chemin critique client Cozy RH)
+- [ ] **Julien fait remonter à l'IT de Cozy RH la demande de consentement admin** pour l'app BeeNice Calendar (Adam n'a pas de contact Cozy direct). Brief + mail prêts → [[brief-julien-auth-prod]] · [[nylas-microsoft-oauth/08 - Gerer le consentement admin client]]  → verify: admin Cozy a cliqué accepter
+  - **Vérifié (sources MS Learn)** : le **consentement admin SEUL suffit** pour faire marcher Cozy RH — la vérification éditeur n'est PAS requise pour ça. Permissions demandées = `openid profile User.Read offline_access Calendars.ReadWrite` (+ `Calendars.ReadWrite.Shared` optionnel). Rien d'autre.
+- [ ] **Vérification éditeur Microsoft (publisher verification)** — *gratuite*, recommandée avant de scaler (sans elle un rep ne peut pas s'auto-consentir → tout client doit passer par son admin ; + avertissement « éditeur non vérifié »). Pré-requis à valider : app Azure dans un **tenant pro BeeNice** (pas compte perso) + **domaine BeeNice** (pas `*.onmicrosoft.com`).  → verify: badge bleu « Vérifié » sur le consent screen
+- [→] Tester l'auth Microsoft avec Cozy RH dès que l'IT a accordé les droits → [[microsoft-enterprise-auth]]
+
+### Google OAuth production (pas bloquant juillet — Cozy = Microsoft)
+- [ ] **Publier + faire vérifier l'app Google** (scopes calendrier = *sensibles* → vérification requise, mais **pas de CASA** payant). Guide complet → `docs/google-oauth-production-setup.md`. Sans ça : mode test = déconnexion tous les 7 j + plafond 100 users.  → verify: plus d'avertissement « app non vérifiée »
+  - **À demander à BeeNice** (via [[brief-julien-auth-prod]]) : URL site + **page politique de confidentialité** (point lent, juridique) + **accès DNS → Corentin** (1 enreg. TXT) + logo/email support. Reste = Adam (config + soumission + vidéo démo).
+
+### Actions Adam (non-code)
+- [ ] Obtenir le SIRET → envoyer devis + facture acompte 30 %
+- [ ] Envoyer documentation Nylas (RGPD, sécurité) à Julien + caler RDV tarif volume
+- [ ] Process : créer une ligne/ticket et taguer Julien pour toute question
+- [ ] Accès séparés admin/caller — freelancers hors Clotilde/Florian sans accès complet par défaut
+
+### Standby
+- [→] Vue Client miroir — en pause, remplacée par Google Sheets dans un premier temps
