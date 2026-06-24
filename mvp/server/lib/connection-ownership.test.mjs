@@ -74,7 +74,6 @@ test("claimCalendarConnection disconnects the previous owner and isolates worksp
     clientId: client.id,
     name: "Rep Test",
     email: "rep.test@example.com",
-    seniority: "non_defini",
     timezone: "Europe/Paris",
     active: true,
   });

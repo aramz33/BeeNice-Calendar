@@ -3,7 +3,12 @@ import { useParams } from "react-router";
 import { Cable } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@mvp/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@mvp/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@mvp/components/ui/card";
 import { Input } from "@mvp/components/ui/input";
 import { Label } from "@mvp/components/ui/label";
 import {
@@ -20,11 +25,13 @@ import type {
   StartRepConnectionResponse,
 } from "@mvp/lib/types";
 
-const FIXED_FIELD_IDS = new Set(["firstName", "lastName", "provider", "role"]);
+const FIXED_FIELD_IDS = new Set(["firstName", "lastName", "provider"]);
 
 export function RepConnectPage() {
   const { inviteToken = "" } = useParams();
-  const [payload, setPayload] = useState<PublicRepConnectionResponse | null>(null);
+  const [payload, setPayload] = useState<PublicRepConnectionResponse | null>(
+    null,
+  );
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
@@ -77,11 +84,6 @@ export function RepConnectPage() {
       return;
     }
 
-    if (!formValues.role) {
-      toast.error("Choisissez un rôle.");
-      return;
-    }
-
     setConnecting(true);
     try {
       const result = await apiFetch<StartRepConnectionResponse>(
@@ -92,7 +94,6 @@ export function RepConnectPage() {
             firstName: formValues.firstName,
             lastName: formValues.lastName,
             provider: formValues.provider,
-            role: formValues.role,
             extraFields: customFieldValues,
           }),
         },

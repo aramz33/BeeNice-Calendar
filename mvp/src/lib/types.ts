@@ -176,7 +176,6 @@ export interface AdminBookingsResponse {
       name: string;
       clientName: string;
       businessEmail?: string | null;
-      seniority: Seniority;
       weightPct?: number | null;
       connectionStatus: string;
       provider: string;

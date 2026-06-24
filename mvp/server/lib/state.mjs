@@ -21,7 +21,6 @@ import {
   getEffectiveConnectionStatus,
   getPublicRepConnectionPayload as getPublicRepConnectionPayloadFn,
   isConnectionUsable,
-  REP_ROLES,
   startPublicRepConnection as startPublicRepConnectionFn,
   startRepConnection as startRepConnectionFn,
   upsertConnection,
@@ -541,7 +540,6 @@ export function createStore(provider, storeConfig = {}) {
         records.updateRep(repId, {
             name: payload.name?.trim() || rep.name,
             email: payload.email ?? rep.email,
-            seniority: REP_ROLES.includes(payload.seniority) ? payload.seniority : rep.seniority,
             timezone: payload.timezone?.trim() || rep.timezone,
             active: payload.active ?? rep.active,
             sortOrder: payload.sortOrder ?? rep.sortOrder,
@@ -591,9 +589,6 @@ export function createStore(provider, storeConfig = {}) {
         clientId: client.id,
         name: payload.name?.trim(),
         email: payload.email ?? "",
-        seniority: REP_ROLES.includes(payload.seniority)
-          ? payload.seniority
-          : "non_defini",
         timezone: payload.timezone?.trim() || client.timezone,
         active: payload.active !== false,
           sortOrder: payload.sortOrder ?? records.getMaxRepSortOrder(client.id) + 1,
@@ -623,7 +618,6 @@ export function createStore(provider, storeConfig = {}) {
       if (matchingReps.length === 1) {
         return this.updateRep(matchingReps[0].id, {
           name: fullName,
-          seniority: payload.role,
           active: true,
         });
       }
@@ -631,7 +625,6 @@ export function createStore(provider, storeConfig = {}) {
       return this.createRep({
         clientId: client.id,
         name: fullName,
-        seniority: payload.role,
         timezone: client.timezone,
         email: "",
         active: true,

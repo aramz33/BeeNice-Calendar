@@ -196,7 +196,6 @@ test("existing bookings block slots without 15 minutes free before and after", a
     const rep = store.createRep({
         clientId: client.id,
         name: "Solo Rep",
-        seniority: "non_defini",
     });
     store.upsertConnection(rep.id, {
         provider: "mock",
