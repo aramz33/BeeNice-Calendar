@@ -13,6 +13,13 @@ import {
     startPublicRepConnection,
 } from "./connections.mjs";
 
+const CLIENT_CONTACT = {
+    primaryContactFirstName: "Marie",
+    primaryContactLastName: "Martin",
+    primaryContactPhone: "+33611223344",
+    primaryContactEmail: "marie.martin@example.com",
+};
+
 function withTempStore(t, providerMode = "mock") {
     const provider = {
         mode: providerMode,
@@ -132,7 +139,7 @@ test("findConflictingConnections returns empty array when both identity fields a
 
 test("disconnectConnection returns null when rep has no connection", (t) => {
     const {store, provider} = withTempStore(t);
-    const client = store.createClient({name: "TestCo"}).client;
+    const client = store.createClient({name: "TestCo", ...CLIENT_CONTACT}).client;
     const rep = store.createRep({clientId: client.id, name: "Rep A", seniority: "junior"});
 
     const result = disconnectConnection(
@@ -155,7 +162,7 @@ test("getPublicRepConnectionPayload throws for unknown invite token", (t) => {
 
 test("getPublicRepConnectionPayload returns client and fields for valid token", (t) => {
     const {store} = withTempStore(t);
-    const {client} = store.createClient({name: "TestCo", timezone: "Europe/Paris"});
+    const {client} = store.createClient({name: "TestCo", timezone: "Europe/Paris", ...CLIENT_CONTACT});
 
     const payload = getPublicRepConnectionPayload(store, client.connectionInviteToken);
 
@@ -173,6 +180,7 @@ test("getPublicRepConnectionPayload includes custom select field from repConnect
     const {store} = withTempStore(t);
     const {client} = store.createClient({
         name: "TestCo",
+        ...CLIENT_CONTACT,
         repConnectionFormConfig: [
             {
                 id: "territory",
@@ -198,6 +206,7 @@ test("getPublicRepConnectionPayload strips reserved field ids from custom config
     const {store} = withTempStore(t);
     const {client} = store.createClient({
         name: "TestCo",
+        ...CLIENT_CONTACT,
         repConnectionFormConfig: [
             {id: "firstName", label: "Prénom overridden", type: "text", required: true},
             {id: "customField", label: "Custom", type: "text", required: false},
@@ -222,7 +231,7 @@ test("startPublicRepConnection throws for unknown invite token", async (t) => {
 
 test("startPublicRepConnection throws for invalid provider", async (t) => {
     const {store} = withTempStore(t);
-    const {client} = store.createClient({name: "TestCo"});
+    const {client} = store.createClient({name: "TestCo", ...CLIENT_CONTACT});
 
     await assert.rejects(
         () => startPublicRepConnection(store, client.connectionInviteToken, {
@@ -237,7 +246,7 @@ test("startPublicRepConnection throws for invalid provider", async (t) => {
 
 test("startPublicRepConnection throws when firstName or lastName is missing", async (t) => {
     const {store} = withTempStore(t);
-    const {client} = store.createClient({name: "TestCo"});
+    const {client} = store.createClient({name: "TestCo", ...CLIENT_CONTACT});
 
     await assert.rejects(
         () => startPublicRepConnection(store, client.connectionInviteToken, {
@@ -252,7 +261,7 @@ test("startPublicRepConnection throws when firstName or lastName is missing", as
 
 test("startPublicRepConnection throws for invalid role", async (t) => {
     const {store} = withTempStore(t);
-    const {client} = store.createClient({name: "TestCo"});
+    const {client} = store.createClient({name: "TestCo", ...CLIENT_CONTACT});
 
     await assert.rejects(
         () => startPublicRepConnection(store, client.connectionInviteToken, {
@@ -267,7 +276,7 @@ test("startPublicRepConnection throws for invalid role", async (t) => {
 
 test("startPublicRepConnection creates rep and starts connection for valid payload", async (t) => {
     const {store} = withTempStore(t);
-    const {client} = store.createClient({name: "TestCo"});
+    const {client} = store.createClient({name: "TestCo", ...CLIENT_CONTACT});
 
     const result = await startPublicRepConnection(store, client.connectionInviteToken, {
         provider: "google",

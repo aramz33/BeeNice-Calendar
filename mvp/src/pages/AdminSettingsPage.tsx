@@ -1,30 +1,38 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router";
+import { Copy } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@mvp/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@mvp/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@mvp/components/ui/card";
 import { Input } from "@mvp/components/ui/input";
 import { Label } from "@mvp/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@mvp/components/ui/select";
 import { AppChrome } from "@mvp/components/AppChrome";
 import { apiFetch } from "@mvp/lib/api";
+import { copyInviteLink } from "@mvp/lib/invite-link";
 import type { ClientCreationResponse, SettingsPayload } from "@mvp/lib/types";
-import { openWorkspaceFromHome } from "@mvp/lib/workspaces";
+
+const EMPTY_CLIENT_FORM = {
+  name: "",
+  primaryContactFirstName: "",
+  primaryContactLastName: "",
+  primaryContactPhone: "",
+  primaryContactEmail: "",
+};
 
 export function AdminSettingsPage() {
-  const navigate = useNavigate();
   const [payload, setPayload] = useState<SettingsPayload | null>(null);
   const [loading, setLoading] = useState(true);
-  const [clientName, setClientName] = useState("");
-  const [clientTimezone, setClientTimezone] = useState("Europe/Paris");
-  const [clientRoutingMode, setClientRoutingMode] = useState("pool_unique");
+  const [clientForm, setClientForm] = useState(EMPTY_CLIENT_FORM);
   const [callerName, setCallerName] = useState("");
+
+  const updateClientField =
+    (field: keyof typeof EMPTY_CLIENT_FORM) =>
+    (event: React.ChangeEvent<HTMLInputElement>) =>
+      setClientForm((current) => ({ ...current, [field]: event.target.value }));
 
   const fetchSettings = async () => {
     setLoading(true);
@@ -44,28 +52,31 @@ export function AdminSettingsPage() {
 
   const createClient = async (event: React.FormEvent) => {
     event.preventDefault();
+    const email = clientForm.primaryContactEmail.trim().toLowerCase();
+    const duplicate = payload?.clients.find(
+      (client) => client.primaryContactEmail.toLowerCase() === email,
+    );
+    if (
+      duplicate &&
+      !window.confirm(
+        `L'email ${email} est déjà associé au client « ${duplicate.name} ». Créer quand même ?`,
+      )
+    ) {
+      return;
+    }
     try {
-      const result = await apiFetch<ClientCreationResponse>(
-        "/api/admin/settings/clients",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            name: clientName,
-            timezone: clientTimezone,
-            routingMode: clientRoutingMode,
-          }),
-        },
-      );
-      toast.success("Client ajouté.", {
-        description: `${result.client.name} est prêt.`,
-        action: {
-          label: "Voir le workspace",
-          onClick: () => openWorkspaceFromHome(navigate, result.workspace.slug),
-        },
+      await apiFetch<ClientCreationResponse>("/api/admin/settings/clients", {
+        method: "POST",
+        body: JSON.stringify({
+          name: clientForm.name,
+          primaryContactFirstName: clientForm.primaryContactFirstName,
+          primaryContactLastName: clientForm.primaryContactLastName,
+          primaryContactPhone: clientForm.primaryContactPhone,
+          primaryContactEmail: clientForm.primaryContactEmail,
+        }),
       });
-      setClientName("");
-      setClientTimezone("Europe/Paris");
-      setClientRoutingMode("pool_unique");
+      toast.success("Client ajouté.");
+      setClientForm(EMPTY_CLIENT_FORM);
       await fetchSettings();
     } catch (error) {
       toast.error((error as Error).message);
@@ -99,21 +110,6 @@ export function AdminSettingsPage() {
     }
   };
 
-  const updateClientRoutingMode = async (
-    clientId: string,
-    routingMode: "pool_unique" | "weighted_seniority",
-  ) => {
-    try {
-      await apiFetch(`/api/admin/settings/clients/${clientId}`, {
-        method: "PATCH",
-        body: JSON.stringify({ routingMode }),
-      });
-      await fetchSettings();
-    } catch (error) {
-      toast.error((error as Error).message);
-    }
-  };
-
   return (
     <AppChrome title="Paramètres">
       <div className="grid gap-6 xl:grid-cols-2">
@@ -122,46 +118,69 @@ export function AdminSettingsPage() {
             <CardTitle>Clients</CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
-            <form
-              className="grid gap-3 md:grid-cols-[1fr_220px_220px_auto]"
-              onSubmit={createClient}
-            >
-              <div className="space-y-2">
-                <Label htmlFor="client-name">Nom du client</Label>
+            <form className="grid gap-3 md:grid-cols-2" onSubmit={createClient}>
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="client-name">Entreprise</Label>
                 <Input
                   id="client-name"
-                  value={clientName}
-                  onChange={(event) => setClientName(event.target.value)}
+                  required
+                  value={clientForm.name}
+                  onChange={updateClientField("name")}
                   placeholder="Doctolib"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="client-timezone">Timezone</Label>
+                <Label htmlFor="client-contact-first-name">
+                  Prénom du responsable commercial
+                </Label>
                 <Input
-                  id="client-timezone"
-                  value={clientTimezone}
-                  onChange={(event) => setClientTimezone(event.target.value)}
+                  id="client-contact-first-name"
+                  required
+                  value={clientForm.primaryContactFirstName}
+                  onChange={updateClientField("primaryContactFirstName")}
+                  placeholder="Camille"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="client-routing-mode">Routing</Label>
-                <Select
-                  value={clientRoutingMode}
-                  onValueChange={setClientRoutingMode}
-                >
-                  <SelectTrigger id="client-routing-mode">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pool_unique">Pool unique</SelectItem>
-                    <SelectItem value="weighted_seniority">
-                      Routing senior/junior
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label htmlFor="client-contact-last-name">
+                  Nom du responsable commercial
+                </Label>
+                <Input
+                  id="client-contact-last-name"
+                  required
+                  value={clientForm.primaryContactLastName}
+                  onChange={updateClientField("primaryContactLastName")}
+                  placeholder="Durand"
+                />
               </div>
-              <div className="flex items-end">
-                <Button type="submit" className="w-full rounded-full">
+              <div className="space-y-2">
+                <Label htmlFor="client-contact-phone">Téléphone</Label>
+                <Input
+                  id="client-contact-phone"
+                  required
+                  type="tel"
+                  inputMode="tel"
+                  value={clientForm.primaryContactPhone}
+                  onChange={updateClientField("primaryContactPhone")}
+                  placeholder="+33612345678"
+                />
+                <p className="text-xs text-[#001E5B]/56">
+                  Format international, ex. +336…
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="client-contact-email">Email</Label>
+                <Input
+                  id="client-contact-email"
+                  required
+                  type="email"
+                  value={clientForm.primaryContactEmail}
+                  onChange={updateClientField("primaryContactEmail")}
+                  placeholder="camille.durand@doctolib.com"
+                />
+              </div>
+              <div className="flex items-end md:col-span-2">
+                <Button type="submit" className="rounded-full">
                   Ajouter
                 </Button>
               </div>
@@ -185,36 +204,26 @@ export function AdminSettingsPage() {
                           {client.name}
                         </p>
                         <p className="text-sm text-[#001E5B]/56">
-                          {client.timezone}
+                          Responsable commercial :{" "}
+                          {client.primaryContactFirstName}{" "}
+                          {client.primaryContactLastName}
                         </p>
                         <p className="text-sm text-[#001E5B]/56">
-                          {client.routingMode === "weighted_seniority"
-                            ? "Routing senior/junior"
-                            : "Pool unique"}
+                          {client.primaryContactEmail} ·{" "}
+                          {client.primaryContactPhone}
                         </p>
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
-                        <Select
-                          value={client.routingMode}
-                          onValueChange={(value) =>
-                            void updateClientRoutingMode(
-                              client.id,
-                              value as "pool_unique" | "weighted_seniority",
-                            )
+                        <Button
+                          variant="outline"
+                          className="rounded-full"
+                          onClick={() =>
+                            void copyInviteLink(client.connectionInviteToken)
                           }
                         >
-                          <SelectTrigger className="w-52">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="pool_unique">
-                              Pool unique
-                            </SelectItem>
-                            <SelectItem value="weighted_seniority">
-                              Routing senior/junior
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
+                          <Copy className="h-4 w-4" />
+                          Copier le lien rep
+                        </Button>
                         <Button
                           variant={client.active ? "outline" : "default"}
                           className="rounded-full"

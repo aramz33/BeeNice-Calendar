@@ -18,6 +18,7 @@ import {
 } from "@mvp/components/ui/card";
 import { AppChrome } from "@mvp/components/AppChrome";
 import { apiFetch } from "@mvp/lib/api";
+import { buildInviteLink, copyInviteLink } from "@mvp/lib/invite-link";
 import { formatRepSeniority } from "@mvp/lib/format";
 import { formatRelativeShort } from "@mvp/lib/time";
 import type { AdminRepsResponse, SettingsPayload } from "@mvp/lib/types";
@@ -477,26 +478,4 @@ function computeEffectivePercents(reps: AdminRep[]): Map<string, number> {
 
 function formatRoutingMode(): string {
   return "Répartition par pourcentage";
-}
-
-function buildInviteLink(inviteToken?: string | null): string {
-  if (!inviteToken) return "";
-  const relativePath = `/connect/${inviteToken}`;
-  if (typeof window === "undefined") return relativePath;
-  return `${window.location.origin}${relativePath}`;
-}
-
-async function copyInviteLink(inviteToken?: string | null): Promise<void> {
-  const inviteLink = buildInviteLink(inviteToken);
-  if (!inviteLink) {
-    toast.error("Lien de connexion indisponible.");
-    return;
-  }
-
-  try {
-    await navigator.clipboard.writeText(inviteLink);
-    toast.success("Lien de connexion copié.");
-  } catch {
-    toast.error("Copie du lien impossible.");
-  }
 }

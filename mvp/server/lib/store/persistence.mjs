@@ -63,9 +63,13 @@ export function createPersistenceAdapter(db) {
           connection_invite_token,
           routing_mode,
           rep_connection_form_config_json,
+          primary_contact_first_name,
+          primary_contact_last_name,
+          primary_contact_phone,
+          primary_contact_email,
           active
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
                 client.id,
                 client.name,
@@ -73,6 +77,10 @@ export function createPersistenceAdapter(db) {
                 client.connectionInviteToken,
                 client.routingMode,
                 JSON.stringify(client.repConnectionFormConfig),
+                client.primaryContactFirstName,
+                client.primaryContactLastName,
+                client.primaryContactPhone,
+                client.primaryContactEmail,
                 toDbBool(client.active),
             );
         },
@@ -383,6 +391,10 @@ function fromClientRow(row) {
         connectionInviteToken: row.connection_invite_token ?? null,
         routingMode: row.routing_mode === "weighted_seniority" ? "weighted_seniority" : "pool_unique",
         repConnectionFormConfig: parseJson(row.rep_connection_form_config_json, []),
+        primaryContactFirstName: row.primary_contact_first_name,
+        primaryContactLastName: row.primary_contact_last_name,
+        primaryContactPhone: row.primary_contact_phone,
+        primaryContactEmail: row.primary_contact_email,
         active: Boolean(row.active),
     };
 }

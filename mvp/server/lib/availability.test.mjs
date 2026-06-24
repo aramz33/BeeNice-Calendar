@@ -186,7 +186,13 @@ test("reschedule availability excludes the booking being moved", async (t) => {
 
 test("existing bookings block slots without 15 minutes free before and after", async (t) => {
     const store = withTempStore(t);
-    const {client, workspace} = store.createClient({name: "Buffer Client"});
+    const {client, workspace} = store.createClient({
+        name: "Buffer Client",
+        primaryContactFirstName: "Marie",
+        primaryContactLastName: "Martin",
+        primaryContactPhone: "+33611223344",
+        primaryContactEmail: "marie.martin@example.com",
+    });
     const rep = store.createRep({
         clientId: client.id,
         name: "Solo Rep",
