@@ -74,6 +74,10 @@ export function createSeedState(providerMode = "mock") {
     connectionInviteToken: "invite-teamstarter",
     routingMode: "weighted_seniority",
     repConnectionFormConfig: [],
+    primaryContactFirstName: "Camille",
+    primaryContactLastName: "Durand",
+    primaryContactPhone: "+33611223344",
+    primaryContactEmail: "camille.durand@teamstarter.com",
   };
 
   const callers = [

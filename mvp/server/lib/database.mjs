@@ -81,6 +81,10 @@ function initSchema(db) {
       connection_invite_token TEXT UNIQUE,
       routing_mode TEXT NOT NULL DEFAULT 'pool_unique',
       rep_connection_form_config_json TEXT NOT NULL DEFAULT '[]',
+      primary_contact_first_name TEXT NOT NULL DEFAULT 'Demo',
+      primary_contact_last_name TEXT NOT NULL DEFAULT 'Contact',
+      primary_contact_phone TEXT NOT NULL DEFAULT '+33000000000',
+      primary_contact_email TEXT NOT NULL DEFAULT 'demo-contact@example.com',
       active INTEGER NOT NULL DEFAULT 1
     );
 
@@ -250,6 +254,10 @@ function migrateSchema(db, providerMode) {
     "rep_connection_form_config_json",
     "TEXT NOT NULL DEFAULT '[]'",
   );
+  ensureColumn(db, "clients", "primary_contact_first_name", "TEXT NOT NULL DEFAULT 'Demo'");
+  ensureColumn(db, "clients", "primary_contact_last_name", "TEXT NOT NULL DEFAULT 'Contact'");
+  ensureColumn(db, "clients", "primary_contact_phone", "TEXT NOT NULL DEFAULT '+33000000000'");
+  ensureColumn(db, "clients", "primary_contact_email", "TEXT NOT NULL DEFAULT 'demo-contact@example.com'");
   ensureColumn(db, "reps", "weight_pct", "REAL");
   ensureColumn(db, "bookings", "schedule_state", "TEXT NOT NULL DEFAULT 'scheduled'");
   ensureColumn(db, "bookings", "outcome_state", "TEXT NOT NULL DEFAULT 'pending'");

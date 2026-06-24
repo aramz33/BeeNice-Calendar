@@ -66,6 +66,8 @@ const DISPLAY_STATUSES = [
 ];
 
 const ROUTING_MODES = ["pool_unique", "weighted_seniority"];
+const E164_PHONE_PATTERN = /^\+[1-9]\d{7,14}$/;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const ACTIVE_SCHEDULE_STATES = new Set(["scheduled", "rescheduled"]);
 const BOOKING_WINDOW_WEEKS = 12;
@@ -317,12 +319,28 @@ export function createStore(provider, storeConfig = {}) {
       if (!payload.name?.trim()) {
         throw new Error("Le nom du client est obligatoire.");
       }
+      const firstName = payload.primaryContactFirstName?.trim();
+      const lastName = payload.primaryContactLastName?.trim();
+      const phone = payload.primaryContactPhone?.trim();
+      const email = payload.primaryContactEmail?.trim().toLowerCase();
+      if (!firstName) {
+        throw new Error("Le prénom du responsable commercial est obligatoire.");
+      }
+      if (!lastName) {
+        throw new Error("Le nom du responsable commercial est obligatoire.");
+      }
+      if (!phone || !E164_PHONE_PATTERN.test(phone)) {
+        throw new Error("Le téléphone doit être au format international E.164 (ex. +33612345678).");
+      }
+      if (!email || !EMAIL_PATTERN.test(email)) {
+        throw new Error("L'email du responsable commercial est invalide.");
+      }
 
       const result = database.withTransaction(() => {
         const client = {
           id: makeId("client"),
           name: payload.name.trim(),
-          timezone: payload.timezone?.trim() || "Europe/Paris",
+          timezone: "Europe/Paris",
           connectionInviteToken: `invite-${randomUUID()}`,
           routingMode: ROUTING_MODES.includes(payload.routingMode)
             ? payload.routingMode
@@ -330,6 +348,10 @@ export function createStore(provider, storeConfig = {}) {
           repConnectionFormConfig: Array.isArray(payload.repConnectionFormConfig)
             ? payload.repConnectionFormConfig
             : [],
+          primaryContactFirstName: firstName,
+          primaryContactLastName: lastName,
+          primaryContactPhone: phone,
+          primaryContactEmail: email,
           active: payload.active !== false,
         };
 

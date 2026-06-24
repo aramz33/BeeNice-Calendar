@@ -269,6 +269,10 @@ export interface SettingsPayload {
     connectionInviteToken?: string | null;
     routingMode: RoutingMode;
     repConnectionFormConfig: PublicRepConnectionField[];
+    primaryContactFirstName: string;
+    primaryContactLastName: string;
+    primaryContactPhone: string;
+    primaryContactEmail: string;
     active: boolean;
   }>;
   callers: Array<{ id: string; name: string; active: boolean }>;

@@ -65,6 +65,10 @@ test("claimCalendarConnection disconnects the previous owner and isolates worksp
     name: "Doctolib Test",
     timezone: "Europe/Paris",
     routingMode: "pool_unique",
+    primaryContactFirstName: "Marie",
+    primaryContactLastName: "Martin",
+    primaryContactPhone: "+33611223344",
+    primaryContactEmail: "marie.martin@example.com",
   });
   const newRep = store.createRep({
     clientId: client.id,

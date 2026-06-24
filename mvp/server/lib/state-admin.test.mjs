@@ -73,10 +73,21 @@ async function createTestBooking(store) {
 
 // ─── createClient ─────────────────────────────────────────────────────────────
 
+function validClientPayload(overrides = {}) {
+    return {
+        name: "New Client",
+        primaryContactFirstName: "Marie",
+        primaryContactLastName: "Martin",
+        primaryContactPhone: "+33611223344",
+        primaryContactEmail: "marie.martin@example.com",
+        ...overrides,
+    };
+}
+
 test("createClient throws when name is empty", (t) => {
     const store = withTempStore(t);
     assert.throws(
-        () => store.createClient({name: ""}),
+        () => store.createClient(validClientPayload({name: ""})),
         /Le nom du client est obligatoire/,
     );
 });
@@ -89,9 +100,56 @@ test("createClient throws when name is missing", (t) => {
     );
 });
 
+test("createClient throws when a contact field is empty", (t) => {
+    const store = withTempStore(t);
+    assert.throws(
+        () => store.createClient(validClientPayload({primaryContactFirstName: "  "})),
+        /prénom du responsable commercial/,
+    );
+    assert.throws(
+        () => store.createClient(validClientPayload({primaryContactLastName: ""})),
+        /nom du responsable commercial/,
+    );
+});
+
+test("createClient rejects an invalid email", (t) => {
+    const store = withTempStore(t);
+    assert.throws(
+        () => store.createClient(validClientPayload({primaryContactEmail: "not-an-email"})),
+        /email du responsable commercial est invalide/,
+    );
+});
+
+test("createClient rejects a non-E.164 phone", (t) => {
+    const store = withTempStore(t);
+    assert.throws(
+        () => store.createClient(validClientPayload({primaryContactPhone: "06 11 22 33 44"})),
+        /format international E\.164/,
+    );
+});
+
+test("createClient lowercases the contact email and forces Europe/Paris", (t) => {
+    const store = withTempStore(t);
+    const {client} = store.createClient(
+        validClientPayload({primaryContactEmail: "MixedCase@Example.COM", timezone: "Europe/London"}),
+    );
+    assert.equal(client.primaryContactEmail, "mixedcase@example.com");
+    assert.equal(client.timezone, "Europe/Paris");
+});
+
+test("createClient persists the four contact fields", (t) => {
+    const store = withTempStore(t);
+    const {client} = store.createClient(validClientPayload());
+    const persisted = store.listSettings().clients.find((entry) => entry.id === client.id);
+    assert.equal(persisted.primaryContactFirstName, "Marie");
+    assert.equal(persisted.primaryContactLastName, "Martin");
+    assert.equal(persisted.primaryContactPhone, "+33611223344");
+    assert.equal(persisted.primaryContactEmail, "marie.martin@example.com");
+});
+
 test("createClient returns client and workspace", (t) => {
     const store = withTempStore(t);
-    const result = store.createClient({name: "New Client", timezone: "Europe/London"});
+    const result = store.createClient(validClientPayload());
     assert.equal(result.client.name, "New Client");
     assert.ok(result.workspace);
 });
@@ -106,7 +164,7 @@ test("seeded booking links use 15 minute buffers", (t) => {
 
 test("createClient creates booking links with 15 minute buffers", (t) => {
     const store = withTempStore(t);
-    const {client} = store.createClient({name: "Buffered Client"});
+    const {client} = store.createClient(validClientPayload({name: "Buffered Client"}));
     const [bookingLink] = store.listBookingLinksForClient(client.id);
 
     assert.equal(bookingLink.bufferBeforeMinutes, 15);
@@ -115,7 +173,7 @@ test("createClient creates booking links with 15 minute buffers", (t) => {
 
 test("createClient defaults routingMode to pool_unique for unknown value", (t) => {
     const store = withTempStore(t);
-    const {client} = store.createClient({name: "Routed Client", routingMode: "unknown_mode"});
+    const {client} = store.createClient(validClientPayload({name: "Routed Client", routingMode: "unknown_mode"}));
     assert.equal(client.routingMode, "pool_unique");
 });
 
@@ -211,7 +269,7 @@ test("updateClient throws for unknown clientId", (t) => {
 
 test("updateClient updates name and returns updated client", (t) => {
     const store = withTempStore(t);
-    const {client} = store.createClient({name: "Original"});
+    const {client} = store.createClient(validClientPayload({name: "Original"}));
     const updated = store.updateClient(client.id, {name: "Renamed"});
     assert.equal(updated.name, "Renamed");
 });
@@ -268,7 +326,7 @@ test("createRep throws for unknown clientId", (t) => {
 
 test("createRep throws when name is missing", (t) => {
     const store = withTempStore(t);
-    const {client} = store.createClient({name: "TestCo"});
+    const {client} = store.createClient(validClientPayload({name: "TestCo"}));
     assert.throws(
         () => store.createRep({clientId: client.id, name: ""}),
         /Le nom du rep est obligatoire/,
@@ -277,14 +335,14 @@ test("createRep throws when name is missing", (t) => {
 
 test("createRep defaults seniority to non_defini for unknown value", (t) => {
     const store = withTempStore(t);
-    const {client} = store.createClient({name: "TestCo"});
+    const {client} = store.createClient(validClientPayload({name: "TestCo"}));
     const rep = store.createRep({clientId: client.id, name: "Rep A", seniority: "god"});
     assert.equal(rep.seniority, "non_defini");
 });
 
 test("createRep increments sortOrder", (t) => {
     const store = withTempStore(t);
-    const {client} = store.createClient({name: "TestCo"});
+    const {client} = store.createClient(validClientPayload({name: "TestCo"}));
     const rep1 = store.createRep({clientId: client.id, name: "Rep A", seniority: "junior"});
     const rep2 = store.createRep({clientId: client.id, name: "Rep B", seniority: "senior"});
     assert.ok(rep2.sortOrder > rep1.sortOrder);
@@ -302,8 +360,8 @@ test("updateRep throws for unknown repId", (t) => {
 
 test("updateRep throws when clientId changes", (t) => {
     const store = withTempStore(t);
-    const {client: c1} = store.createClient({name: "Client 1"});
-    const {client: c2} = store.createClient({name: "Client 2"});
+    const {client: c1} = store.createClient(validClientPayload({name: "Client 1"}));
+    const {client: c2} = store.createClient(validClientPayload({name: "Client 2"}));
     const rep = store.createRep({clientId: c1.id, name: "Rep A", seniority: "junior"});
     assert.throws(
         () => store.updateRep(rep.id, {clientId: c2.id}),
@@ -313,7 +371,7 @@ test("updateRep throws when clientId changes", (t) => {
 
 test("updateRep updates rep name", (t) => {
     const store = withTempStore(t);
-    const {client} = store.createClient({name: "TestCo"});
+    const {client} = store.createClient(validClientPayload({name: "TestCo"}));
     const rep = store.createRep({clientId: client.id, name: "Rep A", seniority: "junior"});
     const updated = store.updateRep(rep.id, {name: "Rep Alpha"});
     assert.equal(updated.name, "Rep Alpha");
@@ -323,7 +381,7 @@ test("updateRep updates rep name", (t) => {
 
 test("findOrCreateRepForPublicConnection creates new rep when no match", (t) => {
     const store = withTempStore(t);
-    const {client} = store.createClient({name: "TestCo"});
+    const {client} = store.createClient(validClientPayload({name: "TestCo"}));
 
     const rep = store.findOrCreateRepForPublicConnection(client, {
         firstName: "Alice",
@@ -337,7 +395,7 @@ test("findOrCreateRepForPublicConnection creates new rep when no match", (t) => 
 
 test("findOrCreateRepForPublicConnection updates existing rep when single match", (t) => {
     const store = withTempStore(t);
-    const {client} = store.createClient({name: "TestCo"});
+    const {client} = store.createClient(validClientPayload({name: "TestCo"}));
     store.createRep({clientId: client.id, name: "Bob Dupont", seniority: "non_defini"});
 
     const rep = store.findOrCreateRepForPublicConnection(client, {
