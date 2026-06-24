@@ -9,6 +9,17 @@ Historique append-only + rationale des décisions. Newest en haut, jamais rééc
 
 <!-- append newest entries directly below; never rewrite past entries -->
 
+## 2026-06-24 (session 7) — Prep démo : reshape seed + badge provider + titre Caller + split PRs
+- **Décision priorisation démo** (audience = Julien + Camille, admins). Exploration (3 agents) → constat clé : **les écrans admin polis existent déjà** (AgendaBoard time-grid, SlotPicker, métriques). Donc « le frontend important » ≠ construire du neuf. Ce qui manquait = **des données crédibles** + **1 petit gap** (vendor non affiché). F3 (calendrier `@schedule-x`) **non touché** — choix UX délibéré d'Adam (NB : `@schedule-x/react` pas encore dans `package.json`, AgendaBoard actuel custom → à vérifier avant F3).
+- **PR #9 ouverte** (`feat/demo-seed-provider-badge`, partie d'`origin/main`) — 9 fichiers `mvp/` :
+  - **Seed reshape** (`seed.mjs`, `database.mjs`) : `weight_pct` sur les 6 reps, somme=100/client (50/30/20 ; 60/25/15, était 2/6 → blancs) ; `insertClient` persiste enfin `primary_contact_*` (**les 2 clients** montraient le défaut « Demo Contact », pas juste Doctolib) + contact Doctolib. **Tâches reposition : rien à seeder** — `initializeFollowUpTasks` (`state.mjs:898`) les crée au boot du store (5 vivantes vérifiées).
+  - **Badge provider** : colonne **additive** `provider_vendor` (le champ `provider` reste « nylas »/« mock » car `isConnected` en dépend — ne pas surcharger) ; persistée depuis `state.provider` (google/microsoft) au callback Nylas ; remontée `fromConnectionRow → upsertConnection → decorateRep → types.ts → ProviderVendorBadge` (`AdminConnectionsPage`).
+  - **Titre** `CallerPage` « Colleur » → « Caller ».
+  - Tests : 4 `updateRepWeight` (`state-admin.test.mjs`) cassés car couplés à l'ancien baseline null → helper `flexBaseline` qui dé-pin les reps avant de tester la mécanique pin/flex. Backend 215/215 + web 34/34 + build verts. Vérif niveau store (reset DB) : poids=100, contacts réels, vendors alternés, 5 tâches.
+- **Démêlage Git** : pendant la session, le code démo a été committé **mélangé** dans le commit « import project notes » de `chore/import-project-notes` (PR #8, ouverte au début de session). Extrait les 9 fichiers `mvp/` sur une branche propre `feat/demo-seed-provider-badge` (#9), puis **strip** des mêmes fichiers de #8 (amend + `--force-with-lease`). Résultat : **PR #8 = notes-only, PR #9 = code-only, disjointes** → mergeables dans n'importe quel ordre, zéro conflit.
+- **À vérifier en live (nylas)** : connecter un vrai Google + Microsoft → la carte rep doit montrer le badge correspondant (seul moment infaisable hors run réel ; DB dev wipée cette session = c'est la démo live).
+- **Next** : merger #9 + #8 ; démo ; puis chemin critique juillet (consentement admin Microsoft Cozy RH via Julien).
+
 ## 2026-06-24 (session 6) — Drop role/seniority + fix callback OAuth public-invite + recherche auth prod
 - **PR #6 mergée** (`0c9a528`, squash de `feat/client-creation-form`). La branche a été squash-mergée → nouvelle branche `feat/drop-rep-role` partie d'`origin/main` (pas de l'ancien tip pré-squash, pour un diff propre).
 - **PR #7 mergée** (`feat/drop-rep-role`, commits `166647a` + `ea43249`) — 3 parties :

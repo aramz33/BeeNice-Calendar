@@ -7,10 +7,10 @@ updated: 2026-06-24
 
 ## Resume
 - **Goal:** outil B2B de booking pour les sales reps. **Cible : v0 live début juillet 2026** (Julien, réunion [[LOG|11-06]]). Premier client = **Cozy RH** (avec un Z, Microsoft).
-- **State:** PRs #2→#7 mergées sur `main`. **PR #6** (formulaire création client v0) + **PR #7** (drop rep role/seniority + fix callback OAuth public-invite) mergées. Détail [[LOG|session 6]].
-- **Next:** **débloquer l'auth Microsoft pour Cozy RH = chemin critique juillet.** La demande de **consentement admin** doit partir de **Julien/BeeNice** (Adam n'a pas de contact Cozy direct). Brief prêt → [[brief-julien-auth-prod]]. Google = pas bloquant juillet (Cozy = Microsoft), à lancer en parallèle.
-  - ⚠️ DB dev (`mvp/server/data/mvp.sqlite` + WAL) **supprimée** → toute **connexion Nylas réelle de test est à refaire**.
-  - **Reshape seed démo = déprioritisé** : à faire au dernier moment avant la démo, dépend de l'archi qui peut encore bouger.
+- **State:** PRs #2→#7 mergées sur `main`. **PR #9** (prep démo : reshape seed + badge provider + titre Caller) + **PR #8** (import `project/` notes → source de vérité repo) **ouvertes, disjointes** — mergeables dans n'importe quel ordre (fichiers séparés). Détail [[LOG|session 7]].
+- **Next:** **démo Julien + Camille** — connecter MS + Google en live (preuve auth Nylas) sur données seed crédibles. Après démo : **débloquer l'auth Microsoft pour Cozy RH = chemin critique juillet**, consentement admin à faire partir de **Julien/BeeNice** (Adam n'a pas de contact Cozy direct). Brief prêt → [[brief-julien-auth-prod]].
+  - ⚠️ DB dev (`mvp/server/data/mvp.sqlite` + WAL) **supprimée** cette session → reconnecter les calendriers (c'est justement la démo live).
+  - **AgendaBoard / `@schedule-x` = choix UX délibéré, ne pas toucher.** (NB : `@schedule-x/react` pas encore dans `package.json`, AgendaBoard actuel est custom — à vérifier avant F3.)
 - **Run:** `npm run dev` (API 8787 + web 5174) · tests : `npm run test:web` et `node --test mvp/server/lib/**/*.test.mjs mvp/server/lib/*.test.mjs mvp/server/lib/http/*.test.mjs`
 - Contexte → [[overview]] · Specs → [[functional-spec]] · Archi → [[ARCHITECTURE]] · wiki → [[wiki/index|wiki]] · Historique → [[LOG]]
 
@@ -31,9 +31,8 @@ updated: 2026-06-24
 ### Démo — priorité immédiate · audience = **Julien + Camille** (opérateurs/admins BeeNice)
 - [ ] **Valider auth Nylas Google ET Microsoft** sur connexions réelles  → verify: les deux providers connectent un calendrier et les créneaux s'affichent
   - risque n°1 (externe, infaisable à 9h) · DB dev wipée cette session → reconnecter les calendriers
-- [ ] **Reshape seed pour la narration démo** (⏸ **déprioritisé** — à faire au dernier moment avant la démo, dépend de l'archi qui peut encore bouger) : 1 client héros, 4-5 reps avec % visibles, les 6 statuts + 2-3 tâches de repositionnement vivantes + contact client crédible  → verify: chaque écran du parcours a des données crédibles
+- [x] **Reshape seed pour la narration démo** — [PR #9](https://github.com/aramz33/BeeNice-Calendar/pull/9). Les 6 reps ont un `weight_pct` (somme=100 par client : 50/30/20 et 60/25/15) ; `insertClient` persiste enfin `primary_contact_*` (les 2 clients montraient le défaut « Demo Contact ») + contact Doctolib ajouté. Tâches de repositionnement : **rien à seeder**, `initializeFollowUpTasks` (`state.mjs`) les crée au boot (5 vivantes : Meetic, Qonto, Alan, Leboncoin, Spendesk). Backend 215/215 + web 34/34 + build verts.
   - reset DB : supprimer `mvp/server/data/mvp.sqlite*` puis relancer (seed ne tourne que si `clients` vide)
-  - ne pas confondre avec le seed minimal du formulaire client ; reshape démo = tâche séparée
 
 ### Chemin critique — début juillet
 - [x] **Création client — formulaire v0** — spec [[client-creation-form]], commit `4f95260` (branche `feat/client-creation-form`, pas encore PR). 5 champs requis, contact commercial persisté (`primary_contact_*`), `Europe/Paris` forcé, lien rep absolu copiable par ligne client, doublon email = `window.confirm`. `routingMode` plus envoyé par l'UI (cleanup colonne = TODO séparé ci-dessous). Tests backend 217/217 + web 34/34 + build verts.
@@ -46,7 +45,7 @@ updated: 2026-06-24
 
 ### Frontend restant
 - [ ] F3 — Calendrier semaine avec axe horaire (`@schedule-x/react`, depends F2 ✅)  → verify: rendu créneaux, `npm run test:web` vert
-- [ ] F4a — Badge provider Google/Microsoft sur connexions rep
+- [x] **F4a — Badge provider Google/Microsoft sur connexions rep** — [PR #9](https://github.com/aramz33/BeeNice-Calendar/pull/9). Colonne **additive** `provider_vendor` (le champ `provider` reste « nylas »/« mock » car `isConnected` en dépend) ; persistée depuis `state.provider` au callback Nylas ; remontée `fromConnectionRow → upsertConnection → decorateRep → types.ts → ProviderVendorBadge` dans `AdminConnectionsPage`. Vendors seedés pour que les cartes mock affichent aussi un badge. **À vérifier en live (nylas)** : après connexion réelle Google/MS, la carte rep montre le bon badge.
 - [ ] F4b — Bonus timezone côté caller/prospect : permettre au caller de voir les disponibilités depuis le fuseau du prospect appelé  → verify: affichage créneaux lisible dans timezone choisie, sans changer timezone client (`Europe/Paris`)
 - [ ] F4c — Assignation tâche de repositionnement depuis vue admin (depends B4 ✅)
 - [ ] F5 — Affichage statut RSVP dans détail booking (depends B5 ✅)
