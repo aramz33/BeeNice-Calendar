@@ -3,11 +3,16 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "engines": {
+    "node": ">=24 <25",
+    "npm": ">=11 <12"
+  },
   "scripts": {
     "dev": "node mvp/dev.mjs",
     "dev:api": "node mvp/server/index.mjs",
     "dev:web": "vite --config mvp/vite.config.ts",
     "build": "vite build --config mvp/vite.config.ts",
+    "rebuild:native": "npm rebuild better-sqlite3",
     "start": "node mvp/server/index.mjs",
     "test:web": "vitest run --config mvp/vite.config.ts"
   },
