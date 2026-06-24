@@ -104,7 +104,7 @@ export function createSeedState(providerMode = "mock") {
       timezone: TIMEZONE,
       active: true,
       sortOrder: 2,
-      weightPct: null,
+      weightPct: 30,
     },
     {
       id: "rep-pierre",
@@ -114,7 +114,7 @@ export function createSeedState(providerMode = "mock") {
       timezone: TIMEZONE,
       active: true,
       sortOrder: 3,
-      weightPct: null,
+      weightPct: 20,
     },
   ];
 
@@ -140,10 +140,11 @@ export function createSeedState(providerMode = "mock") {
     juniorWeight: 0.2,
   };
 
-  const repCalendarConnections = reps.map((rep) => ({
+  const repCalendarConnections = reps.map((rep, index) => ({
     id: `connection-${rep.id}`,
     repId: rep.id,
     provider: providerMode === "nylas" ? "nylas" : "mock",
+    providerVendor: index % 2 === 0 ? "google" : "microsoft",
     providerEmail: providerMode === "mock" ? rep.email : null,
     nylasGrantId: providerMode === "mock" ? `mock-grant-${rep.id}` : null,
     nylasAccountId: providerMode === "mock" ? `mock-account-${rep.id}` : null,
@@ -354,6 +355,10 @@ export function createSeedState(providerMode = "mock") {
     connectionInviteToken: "invite-doctolib",
     routingMode: "weighted_seniority",
     repConnectionFormConfig: [],
+    primaryContactFirstName: "Thomas",
+    primaryContactLastName: "Mercier",
+    primaryContactPhone: "+33755667788",
+    primaryContactEmail: "thomas.mercier@doctolib.com",
   };
 
   const doctolibReps = [
@@ -375,7 +380,7 @@ export function createSeedState(providerMode = "mock") {
       timezone: TIMEZONE,
       active: true,
       sortOrder: 2,
-      weightPct: null,
+      weightPct: 25,
     },
     {
       id: "rep-julie",
@@ -385,7 +390,7 @@ export function createSeedState(providerMode = "mock") {
       timezone: TIMEZONE,
       active: true,
       sortOrder: 3,
-      weightPct: null,
+      weightPct: 15,
     },
   ];
 
@@ -411,10 +416,11 @@ export function createSeedState(providerMode = "mock") {
     juniorWeight: 0.3,
   };
 
-  const doctolibConnections = doctolibReps.map((rep) => ({
+  const doctolibConnections = doctolibReps.map((rep, index) => ({
     id: `connection-${rep.id}`,
     repId: rep.id,
     provider: providerMode === "nylas" ? "nylas" : "mock",
+    providerVendor: index % 2 === 0 ? "microsoft" : "google",
     providerEmail: providerMode === "mock" ? rep.email : null,
     nylasGrantId: providerMode === "mock" ? `mock-grant-${rep.id}` : null,
     nylasAccountId: providerMode === "mock" ? `mock-account-${rep.id}` : null,

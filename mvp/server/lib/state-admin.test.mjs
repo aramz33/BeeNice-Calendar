@@ -545,8 +545,16 @@ test("applyProviderReschedule moves the booking to a new time", async (t) => {
 
 // ─── updateRepWeight ──────────────────────────────────────────────────────────
 
+// Seed pins every TeamStarter rep (50/30/20). These tests exercise pin/flex
+// mechanics from a baseline where only Quentin is pinned, so unpin the rest.
+function flexBaseline(store) {
+    store.updateRepWeight("rep-josette", null);
+    store.updateRepWeight("rep-pierre", null);
+}
+
 test("updateRepWeight pins a rep percentage and reports no warning", async (t) => {
     const store = withTempStore(t);
+    flexBaseline(store);
     const result = store.updateRepWeight("rep-quentin", 40);
     assert.equal(result.rep.weightPct, 40);
     assert.equal(result.warning, null);
@@ -555,6 +563,7 @@ test("updateRepWeight pins a rep percentage and reports no warning", async (t) =
 
 test("updateRepWeight clears a pin back to flexible", async (t) => {
     const store = withTempStore(t);
+    flexBaseline(store);
     store.updateRepWeight("rep-quentin", 40);
     const result = store.updateRepWeight("rep-quentin", null);
     assert.equal(result.rep.weightPct, null);
@@ -562,6 +571,7 @@ test("updateRepWeight clears a pin back to flexible", async (t) => {
 
 test("updateRepWeight rejects pins that push the client over 100", async (t) => {
     const store = withTempStore(t);
+    flexBaseline(store);
     store.updateRepWeight("rep-quentin", 70);
     assert.throws(() => store.updateRepWeight("rep-josette", 40), /100/);
     assert.equal(store.getRep("rep-josette").weightPct, null);
@@ -569,6 +579,7 @@ test("updateRepWeight rejects pins that push the client over 100", async (t) => 
 
 test("updateRepWeight warns when flexible reps get benched", async (t) => {
     const store = withTempStore(t);
+    flexBaseline(store);
     store.updateRepWeight("rep-quentin", 60);
     const result = store.updateRepWeight("rep-josette", 40);
     assert.equal(result.warning, "benched");

@@ -179,6 +179,7 @@ export interface AdminBookingsResponse {
       weightPct?: number | null;
       connectionStatus: string;
       provider: string;
+      providerVendor?: string | null;
       providerEmail?: string | null;
       connectedAt?: string | null;
       lastSyncAt?: string | null;

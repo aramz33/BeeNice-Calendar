@@ -321,7 +321,12 @@ function RepConnectionRow({
             <p className="text-sm text-[#001E5B]/56">{rep.businessEmail}</p>
           ) : null}
         </div>
-        <ConnectionStatusBadge status={rep.connectionStatus} />
+        <div className="flex items-center gap-2">
+          {rep.providerVendor ? (
+            <ProviderVendorBadge vendor={rep.providerVendor} />
+          ) : null}
+          <ConnectionStatusBadge status={rep.connectionStatus} />
+        </div>
       </div>
 
       <RepWeightField rep={rep} effectivePercent={effectivePercent} />
@@ -346,6 +351,19 @@ function RepConnectionRow({
         ) : null}
       </div>
     </div>
+  );
+}
+
+const PROVIDER_VENDOR_LABELS: Record<string, string> = {
+  google: "Google",
+  microsoft: "Microsoft",
+};
+
+function ProviderVendorBadge({ vendor }: { vendor: string }) {
+  return (
+    <Badge className="border-[#001E5B]/10 bg-[#F9F4ED] text-[#001E5B]">
+      {PROVIDER_VENDOR_LABELS[vendor] ?? vendor}
+    </Badge>
   );
 }
 

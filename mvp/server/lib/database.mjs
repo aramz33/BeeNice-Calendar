@@ -258,6 +258,7 @@ function migrateSchema(db, providerMode) {
   ensureColumn(db, "clients", "primary_contact_phone", "TEXT NOT NULL DEFAULT '+33000000000'");
   ensureColumn(db, "clients", "primary_contact_email", "TEXT NOT NULL DEFAULT 'demo-contact@example.com'");
   ensureColumn(db, "reps", "weight_pct", "REAL");
+  ensureColumn(db, "rep_calendar_connections", "provider_vendor", "TEXT");
   if (db.prepare("PRAGMA table_info(reps)").all().some((c) => c.name === "seniority")) {
     db.exec("ALTER TABLE reps DROP COLUMN seniority");
   }
@@ -346,8 +347,12 @@ function seedDatabase(db, providerMode) {
       connection_invite_token,
       routing_mode,
       rep_connection_form_config_json,
-      active
-    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      active,
+      primary_contact_first_name,
+      primary_contact_last_name,
+      primary_contact_phone,
+      primary_contact_email
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   seed.clients.forEach((client) => {
     insertClient.run(
@@ -358,6 +363,10 @@ function seedDatabase(db, providerMode) {
       client.routingMode,
       JSON.stringify(client.repConnectionFormConfig ?? []),
       toDbBool(true),
+      client.primaryContactFirstName ?? "Demo",
+      client.primaryContactLastName ?? "Contact",
+      client.primaryContactPhone ?? "+33000000000",
+      client.primaryContactEmail ?? "demo-contact@example.com",
     );
   });
 
@@ -429,6 +438,7 @@ function seedDatabase(db, providerMode) {
       id,
       rep_id,
       provider,
+      provider_vendor,
       provider_email,
       provider_grant_id,
       provider_account_id,
@@ -439,13 +449,14 @@ function seedDatabase(db, providerMode) {
       connected_at,
       last_webhook_at,
       last_error
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   seed.repCalendarConnections.forEach((connection) => {
     insertConnection.run(
       connection.id,
       connection.repId,
       connection.provider,
+      connection.providerVendor ?? null,
       connection.providerEmail,
       connection.nylasGrantId,
       connection.nylasAccountId,

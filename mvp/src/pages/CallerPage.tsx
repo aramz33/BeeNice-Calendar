@@ -49,7 +49,7 @@ export function CallerPage() {
   } = useCallerController();
 
   return (
-    <AppChrome title="Colleur">
+    <AppChrome title="Caller">
       <div className="flex gap-6">
         {/* Panel gauche */}
         <aside className="flex w-64 shrink-0 flex-col gap-4 lg:w-72">
