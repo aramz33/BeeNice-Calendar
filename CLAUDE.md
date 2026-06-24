@@ -2,48 +2,39 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Session start (obligatoire)
+## Project
 
-À chaque début de session sur ce projet, invoquer `/obsidian-context` **avant toute action**.
-Obsidian est le second cerveau du projet — il contient le contexte à jour, le backlog,
-et les décisions prises entre les sessions. Ne pas commencer à coder ou planifier sans
-avoir chargé ce contexte.
+BeeNice Calendar — B2B booking tool. Be Nice callers book discovery meetings for
+prospects onto a client's sales reps' calendars. Runnable product is under `mvp/`
+(Hono + SQLite backend, React 18 frontend, Nylas calendar provider). Target: v0
+live early July 2026; first client Cosy RH (Microsoft/Azure).
 
-Si Obsidian n'est pas ouvert, le skill se rabat sur `CONTEXT.md` + mémoire projet.
+## "Where are we?" — how to resume
 
-### Trouver les notes destinées aux agents
+State, next action, and decisions are NOT duplicated here — they live in the
+Obsidian vault (single source of truth). To answer "where are we / what's next":
 
-Les notes Obsidian à lire en priorité portent le tag `agents`. Pour les récupérer :
-```
-obsidian search query="tag:agents" limit=20
-```
+1. **Read the entrypoint** via the `adam-vault` skill →
+   `6 - Main Notes/Pro/BeeNice/TODO.md`. `## Resume` = goal, current state, frozen
+   facts, next action; `## Checklist` = done vs. remaining. That file alone is enough.
+2. **Depth on demand**: `Pro/BeeNice/LOG.md` (append-only history + decision
+   rationale) · `ARCHITECTURE.md` (code map) · `wiki/` (overview, functional-spec,
+   routing-design, microsoft-enterprise-auth, nylas-microsoft-oauth).
+3. **Cross-check code**: root `CONTEXT.md` (domain terms + product decisions) and
+   `git log` confirm what's actually committed.
 
-Notes taguées `agents` pour ce projet (vault `Adam's Vault`) :
-- `6 - Main Notes/Pro/BeeNice/Bee Nice Calendar.md` — statut projet, backlog, contacts
-- `6 - Main Notes/Pro/BeeNice/Spécifications Fonctionnelles.md` — toutes les features avec logique métier
-- `6 - Main Notes/Pro/BeeNice/Architecture Technique.md` — modules, routes API, schéma DB
-- `6 - Main Notes/Pro/BeeNice/issues/*.md` — issues ouvertes (routing, Azure)
+## End of session
 
-## Fin de session / après décision majeure
-
-Invoquer `/sync-project-to-obsidian` après :
-- toute session de planification ou de livraison
-- toute décision d'architecture ou de scope
-- toute réunion client dont les notes ont été partagées
-
-Cela maintient Obsidian synchronisé pour les prochaines sessions et les autres agents.
+Use the `handoff` skill — it rewrites `TODO.md` in place and appends to `LOG.md`.
+Never create dated handoff files at the project root.
 
 ## Agent skills
 
 ### Issue tracker
 
-Issues live as markdown files in the external Obsidian vault folder. See `docs/agents/issue-tracker.md`.
-
-Canonical issue folder:
-
-```text
-/Users/aramsis/Library/Mobile Documents/iCloud~md~obsidian/Documents/Adam's Vault/6 - Main Notes/BeeNice/issues
-```
+No separate issues folder. Open work and unresolved questions live as checklist
+items in `Pro/BeeNice/TODO.md`; technical design notes for open questions live in
+`Pro/BeeNice/wiki/` (e.g. `routing-design.md`, `microsoft-enterprise-auth.md`).
 
 ### Triage labels
 
