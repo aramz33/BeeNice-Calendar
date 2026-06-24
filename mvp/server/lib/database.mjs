@@ -587,6 +587,8 @@ function normalizeLegacyData(db, providerMode) {
           WHEN 'completed' THEN 'completed'
           WHEN 'no_show' THEN 'no_show'
           WHEN 'not_qualified' THEN 'not_qualified'
+          WHEN 'mvn' THEN 'mvn'
+          WHEN 'refused' THEN 'refused'
           ELSE 'pending'
         END
   `);
@@ -811,6 +813,10 @@ function normalizeLegacyStatus(status) {
       return { scheduleState: "rescheduled", outcomeState: "pending" };
     case "not_qualified":
       return { scheduleState: "scheduled", outcomeState: "not_qualified" };
+    case "mvn":
+      return { scheduleState: "scheduled", outcomeState: "mvn" };
+    case "refused":
+      return { scheduleState: "scheduled", outcomeState: "refused" };
     default:
       return { scheduleState: "scheduled", outcomeState: "pending" };
   }

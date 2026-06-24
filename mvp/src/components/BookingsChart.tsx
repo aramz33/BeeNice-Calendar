@@ -23,6 +23,8 @@ const STATUS_CONFIG = [
   { key: "no_show", label: "No-show", color: "#7C3AED" },
   { key: "cancelled", label: "Annulé", color: "#b73039" },
   { key: "not_qualified", label: "Non qualifié", color: "#9ca3af" },
+  { key: "mvn", label: "MVN", color: "#d97706" },
+  { key: "refused", label: "Refus", color: "#9f1239" },
 ] as const;
 
 type WeekData = {
@@ -33,6 +35,8 @@ type WeekData = {
   no_show: number;
   cancelled: number;
   not_qualified: number;
+  mvn: number;
+  refused: number;
 };
 
 function getWeekKey(dateStr: string): string {
@@ -63,6 +67,8 @@ export function BookingsChart({ bookings }: BookingsChartProps) {
           no_show: 0,
           cancelled: 0,
           not_qualified: 0,
+          mvn: 0,
+          refused: 0,
         });
       }
       const week = weekMap.get(key)!;
@@ -122,7 +128,7 @@ export function BookingsChart({ bookings }: BookingsChartProps) {
             name={label}
             stackId="a"
             fill={color}
-            radius={key === "not_qualified" ? [4, 4, 0, 0] : [0, 0, 0, 0]}
+            radius={key === "refused" ? [4, 4, 0, 0] : [0, 0, 0, 0]}
           />
         ))}
       </BarChart>

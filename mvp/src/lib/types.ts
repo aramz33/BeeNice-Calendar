@@ -5,17 +5,21 @@ export type OutcomeState =
   | "pending"
   | "completed"
   | "no_show"
-  | "not_qualified";
+  | "not_qualified"
+  | "mvn"
+  | "refused";
 export type DisplayStatus =
   | "scheduled"
   | "completed"
   | "no_show"
   | "cancelled"
   | "rescheduled"
-  | "not_qualified";
+  | "not_qualified"
+  | "mvn"
+  | "refused";
 export type BookingStatus = DisplayStatus;
 export type FollowUpTaskStatus = "open" | "done" | "dismissed";
-export type FollowUpTaskTrigger = "no_show" | "cancelled";
+export type FollowUpTaskTrigger = "no_show" | "cancelled" | "mvn";
 
 export interface AssignmentReason {
   routingMode: RoutingMode;

@@ -61,6 +61,8 @@ const DISPLAY_STATUSES = [
   "cancelled",
   "rescheduled",
   "not_qualified",
+  "mvn",
+  "refused",
 ];
 
 const ROUTING_MODES = ["pool_unique", "weighted_seniority"];

@@ -8,7 +8,12 @@ import type {
 } from "@mvp/lib/types";
 
 type AvailabilitySlot = AvailabilityResponse["slots"][number];
-type OutcomeState = "completed" | "no_show" | "not_qualified";
+type OutcomeState =
+  | "completed"
+  | "no_show"
+  | "not_qualified"
+  | "mvn"
+  | "refused";
 
 interface BookingSheetProps {
   open: boolean;
