@@ -10,6 +10,7 @@ import {
     subMinutes,
 } from "date-fns";
 import {getConnection} from "./connections.mjs";
+import {computeEffectiveWeights, selectRep} from "./routing.mjs";
 import {clampDate, maxDate, parseOptionalIso} from "./utils.mjs";
 
 const DEFAULT_BOOKING_WINDOW_WEEKS = 12;
@@ -62,7 +63,7 @@ export function createAvailabilityModule({
                 end: windowEnd,
             };
 
-            const eligibleReps = getEligibleReps(store, bookingLink.id, companySize);
+            const eligibleReps = getEligibleReps(store, bookingLink.id);
             const busyByRep = await getBusyIntervalsForReps(
                 db,
                 store,
@@ -75,7 +76,7 @@ export function createAvailabilityModule({
                 },
             );
             const slots = [];
-            const seniorityPool = getSeniorityPool(store, bookingLink, companySize);
+            const seniorityPool = getSeniorityPool();
 
             for (const day of eachDayOfInterval({start: windowStart, end: windowEnd})) {
                 const weekday = getDay(day);
@@ -171,13 +172,9 @@ function parseSlotStart(value) {
     return slotStart;
 }
 
-function getSeniorityPool(store, bookingLink, companySize) {
-    const client = store.getClient(bookingLink.clientId);
-    const policy = store.getRoutingPolicy(bookingLink.id);
-    return client?.routingMode === "weighted_seniority" &&
-    companySize >= (policy?.companySizeThreshold ?? 200)
-        ? "senior"
-        : "all";
+// ponytail: company size no longer affects routing — every connected rep is eligible.
+function getSeniorityPool() {
+    return "all";
 }
 
 function rangesOverlap(startA, endA, startB, endB) {
@@ -208,39 +205,9 @@ function getRepRollingLoad(db, repId, bookingLinkId, getNow = () => new Date()) 
   return row?.count ?? 0;
 }
 
-function getRollingCounts(db, store, bookingLinkId, getNow = () => new Date()) {
-  const lowerBound = addDays(getNow(), -30).toISOString();
-  const rows = db
-    .prepare(`
-      SELECT assigned_rep_id
-      FROM bookings
-      WHERE booking_link_id = ?
-        AND created_at >= ?
-    `)
-    .all(bookingLinkId, lowerBound);
-
-  const counts = { senior: 0, junior: 0, non_defini: 0 };
-  rows.forEach((row) => {
-    const rep = store.getRep(row.assigned_rep_id);
-    if (rep && Object.hasOwn(counts, rep.seniority)) {
-      counts[rep.seniority] += 1;
-    }
-  });
-  return counts;
-}
-
-function getEligibleReps(store, bookingLinkId, companySize) {
-  const reps = store.getRepsForLink(bookingLinkId);
-  const bookingLink = store.getBookingLinkById(bookingLinkId);
-  const client = bookingLink ? store.getClient(bookingLink.clientId) : null;
-  const policy = store.getRoutingPolicy(bookingLinkId);
-  if (!policy || client?.routingMode !== "weighted_seniority") {
-    return reps;
-  }
-  if (companySize >= policy.companySizeThreshold) {
-    return reps.filter((rep) => rep.seniority === "senior");
-  }
-  return reps;
+// ponytail: company size no longer filters reps — kept the param for call-site stability.
+function getEligibleReps(store, bookingLinkId) {
+  return store.getRepsForLink(bookingLinkId);
 }
 
 function getMaxBookingBuffers(db, bookingLink) {
@@ -342,7 +309,7 @@ async function getBusyIntervalsForReps(db, store, provider, bookingLink, reps, i
 }
 
 async function getAvailableEligibleRepsForSlot(db, store, provider, bookingLink, companySize, slotStart, options = {}) {
-  const eligibleReps = getEligibleReps(store, bookingLink.id, companySize);
+  const eligibleReps = getEligibleReps(store, bookingLink.id);
   const interval = {
     start: subMinutes(slotStart, bookingLink.bufferBeforeMinutes),
     end: addMinutes(
@@ -367,80 +334,23 @@ function assignRep(db, store, bookingLink, companySize, eligibleReps, getNow = (
     throw new Error("Aucun rep disponible pour ce créneau.");
   }
 
-  const client = store.getClient(bookingLink.clientId);
-  const policy = store.getRoutingPolicy(bookingLink.id);
-  if (!policy || client?.routingMode !== "weighted_seniority") {
-    const rep = [...eligibleReps].sort((left, right) => {
-      const loadDelta =
-        getRepRollingLoad(db, left.id, bookingLink.id, getNow) -
-        getRepRollingLoad(db, right.id, bookingLink.id, getNow);
-      if (loadDelta !== 0) {
-        return loadDelta;
-      }
-      if (left.sortOrder !== right.sortOrder) {
-        return left.sortOrder - right.sortOrder;
-      }
-      return left.id.localeCompare(right.id);
-    })[0];
+  const effectiveWeights = computeEffectiveWeights(eligibleReps);
+  const repsWithLoad = eligibleReps.map((rep) => ({
+    ...rep,
+    rollingCount: getRepRollingLoad(db, rep.id, bookingLink.id, getNow),
+    effectiveWeight: effectiveWeights.get(rep.id) ?? 0,
+  }));
 
-    return {
-      rep,
-      reason: {
-        routingMode: client?.routingMode ?? "pool_unique",
-        companySizeThreshold: policy?.companySizeThreshold ?? 0,
-        seniorityPool: "all",
-        chosenRole: "pool_unique",
-        roleDeficits: null,
-        candidateRepIds: eligibleReps.map((candidate) => candidate.id),
-      },
-    };
-  }
-
-  const counts = getRollingCounts(db, store, bookingLink.id, getNow);
-  const total = counts.senior + counts.junior;
-  const deficits = {
-    senior: (total + 1) * policy.seniorWeight - counts.senior,
-    junior: (total + 1) * policy.juniorWeight - counts.junior,
-  };
-
-  const byRole = {
-    senior: eligibleReps.filter((rep) => rep.seniority === "senior"),
-    junior: eligibleReps.filter((rep) => rep.seniority === "junior"),
-    non_defini: eligibleReps.filter((rep) => rep.seniority === "non_defini"),
-  };
-
-  let chosenRole = "senior";
-  if (byRole.senior.length === 0) {
-    chosenRole = byRole.junior.length > 0 ? "junior" : "non_defini";
-  } else if (byRole.junior.length === 0) {
-    chosenRole = "senior";
-  } else if (deficits.junior > deficits.senior) {
-    chosenRole = "junior";
-  }
-
-  const rep = [...byRole[chosenRole]].sort((left, right) => {
-    const loadDelta =
-      getRepRollingLoad(db, left.id, bookingLink.id) -
-      getRepRollingLoad(db, right.id, bookingLink.id);
-    if (loadDelta !== 0) {
-      return loadDelta;
-    }
-    if (left.sortOrder !== right.sortOrder) {
-      return left.sortOrder - right.sortOrder;
-    }
-    return left.id.localeCompare(right.id);
-  })[0];
+  const selection = selectRep(repsWithLoad);
 
   return {
-    rep,
+    rep: selection.rep,
     reason: {
-      routingMode: "weighted_seniority",
-      companySizeThreshold: policy.companySizeThreshold,
-      seniorityPool:
-        companySize >= policy.companySizeThreshold ? "senior" : "all",
-      chosenRole,
-      roleDeficits: deficits,
-      candidateRepIds: eligibleReps.map((candidate) => candidate.id),
+      routingMode: "percentage",
+      seniorityPool: "all",
+      candidateRepIds: selection.reason.candidateRepIds,
+      effectiveWeights: selection.reason.effectiveWeights,
+      rollingCounts: selection.reason.rollingCounts,
     },
   };
 }

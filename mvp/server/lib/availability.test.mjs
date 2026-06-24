@@ -108,15 +108,15 @@ async function bookFirstAvailableSlot(store, overrides = {}) {
     });
 }
 
-test("assignRepForSlot uses the same senior-only routing as displayed availability", async (t) => {
+test("assignRepForSlot routes by percentage across all connected reps", async (t) => {
     const store = withTempStore(t);
     const bookingLink = store.getBookingLinkBySlug("teamstarter-discovery");
     const availability = await store.listAvailability("teamstarter-discovery", "320");
     const slot = availability.slots[0];
 
     assert.ok(bookingLink);
-    assert.ok(slot, "expected at least one senior-only slot");
-    assert.equal(slot.seniorityPool, "senior");
+    assert.ok(slot, "expected at least one slot");
+    assert.equal(slot.seniorityPool, "all", "company size no longer narrows the pool");
 
     const assignment = await store.assignRepForSlot(
         bookingLink,
@@ -124,9 +124,12 @@ test("assignRepForSlot uses the same senior-only routing as displayed availabili
         parseISO(slot.startAt),
     );
 
-    assert.equal(assignment.reason.seniorityPool, "senior");
-    assert.equal(store.getRep(assignment.rep.id).seniority, "senior");
+    assert.equal(assignment.reason.routingMode, "percentage");
     assert.ok(assignment.reason.candidateRepIds.includes(assignment.rep.id));
+    assert.ok(
+        assignment.reason.effectiveWeights[assignment.rep.id] >= 0,
+        "chosen rep carries an effective weight",
+    );
 });
 
 test("assignRepForSlot rejects a displayed slot after every eligible rep becomes busy", async (t) => {

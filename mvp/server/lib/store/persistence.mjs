@@ -129,8 +129,9 @@ export function createPersistenceAdapter(db) {
           seniority,
           timezone,
           active,
-          sort_order
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          sort_order,
+          weight_pct
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
                 rep.id,
                 rep.clientId,
@@ -140,6 +141,7 @@ export function createPersistenceAdapter(db) {
                 rep.timezone,
                 toDbBool(rep.active),
                 rep.sortOrder,
+                rep.weightPct ?? null,
             );
         },
 
@@ -151,7 +153,8 @@ export function createPersistenceAdapter(db) {
             seniority = ?,
             timezone = ?,
             active = ?,
-            sort_order = ?
+            sort_order = ?,
+            weight_pct = ?
         WHERE id = ?
       `).run(
                 patch.name,
@@ -160,6 +163,7 @@ export function createPersistenceAdapter(db) {
                 patch.timezone,
                 toDbBool(patch.active),
                 patch.sortOrder,
+                patch.weightPct ?? null,
                 repId,
             );
         },
@@ -417,6 +421,7 @@ function fromRepRow(row) {
         timezone: row.timezone,
         active: Boolean(row.active),
         sortOrder: row.sort_order,
+        weightPct: row.weight_pct ?? null,
     };
 }
 

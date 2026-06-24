@@ -104,6 +104,11 @@ export function createAdminRouter(store, provider) {
     return c.json(store.updateCaller(c.req.param("id"), body));
   });
 
+  router.patch("/reps/:id/weight", async (c) => {
+    const body = await parseBody(c);
+    return c.json(store.updateRepWeight(c.req.param("id"), body.weightPct));
+  });
+
   router.post("/reps/:id/connect-nylas/start", async (c) => {
     const body = await parseBody(c);
     return c.json(await store.startRepConnection(c.req.param("id"), body));
