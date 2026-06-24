@@ -36,6 +36,9 @@ export interface BookingSummary {
   clientName: string;
   companyName: string;
   companySize: number;
+  salutation?: string | null;
+  prospectFirstName?: string | null;
+  prospectLastName?: string | null;
   prospectName: string;
   prospectEmail: string;
   callerId: string;
@@ -105,6 +108,21 @@ export interface PublicWorkspace {
   timezone: string;
 }
 
+export interface CallerWorkspace {
+  id: string;
+  name: string;
+  slug: string;
+  timezone: string;
+}
+
+export interface CallerWorkspacesResponse {
+  workspaces: CallerWorkspace[];
+}
+
+export interface CallerTasksResponse {
+  tasks: FollowUpTask[];
+}
+
 export interface BookingLinkResponse {
   bookingLink: {
     id: string;
@@ -170,7 +188,11 @@ export interface AdminBookingsResponse {
   clientStats: ClientStat[];
   bookings: BookingSummary[];
   filters: {
-    clients: Array<{ id: string; name: string; connectionInviteToken?: string | null }>;
+    clients: Array<{
+      id: string;
+      name: string;
+      connectionInviteToken?: string | null;
+    }>;
     callers: Array<{ id: string; name: string }>;
     reps: Array<{
       id: string;

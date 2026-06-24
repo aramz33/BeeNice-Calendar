@@ -50,8 +50,20 @@ export async function createBooking(database, db, store, provider, slug, payload
     throw new Error("Caller introuvable.");
   }
 
+  const prospectFirstName = payload.prospectFirstName?.trim() ?? "";
+  const prospectLastName = payload.prospectLastName?.trim() ?? "";
+  const normalizedSalutation =
+    payload.salutation && payload.salutation !== "none"
+      ? payload.salutation.trim()
+      : "";
+  const prospectName =
+    payload.prospectName?.trim() ||
+    [normalizedSalutation, prospectFirstName, prospectLastName]
+      .filter(Boolean)
+      .join(" ");
+
   if (
-    !payload.prospectName ||
+    !prospectName ||
     !payload.prospectEmail ||
     !payload.companyName ||
     !payload.slotStart
@@ -99,7 +111,10 @@ export async function createBooking(database, db, store, provider, slug, payload
         assignedRepId: assignment.rep.id,
         companyName: payload.companyName,
         companySize,
-        prospectName: payload.prospectName,
+        salutation: normalizedSalutation || null,
+        prospectFirstName: prospectFirstName || null,
+        prospectLastName: prospectLastName || null,
+        prospectName,
         prospectEmail: payload.prospectEmail,
         notes: payload.notes ?? "",
         startAt: slotStart.toISOString(),
@@ -130,6 +145,9 @@ export async function createBooking(database, db, store, provider, slug, payload
           assigned_rep_id,
           company_name,
           company_size,
+          salutation,
+          prospect_first_name,
+          prospect_last_name,
           prospect_name,
           prospect_email,
           notes,
@@ -147,7 +165,7 @@ export async function createBooking(database, db, store, provider, slug, payload
           assignment_reason_json,
           sync_state,
           created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         booking.id,
         booking.bookingLinkId,
@@ -156,6 +174,9 @@ export async function createBooking(database, db, store, provider, slug, payload
         booking.assignedRepId,
         booking.companyName,
         booking.companySize,
+        booking.salutation,
+        booking.prospectFirstName,
+        booking.prospectLastName,
         booking.prospectName,
         booking.prospectEmail,
         booking.notes || null,

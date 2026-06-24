@@ -1,38 +1,40 @@
-import { createBrowserRouter, Navigate } from "react-router";
-import { ShellPage } from "@mvp/pages/ShellPage";
-import { BookingWorkspacePage } from "@mvp/pages/BookingWorkspacePage";
+import { createBrowserRouter, Navigate, useParams } from "react-router";
+import { LoginPage } from "@mvp/pages/LoginPage";
+import { CallerPage } from "@mvp/pages/CallerPage";
 import { AdminBookingsPage } from "@mvp/pages/AdminBookingsPage";
 import { AdminConnectionsPage } from "@mvp/pages/AdminConnectionsPage";
 import { AdminSettingsPage } from "@mvp/pages/AdminSettingsPage";
 import { RepConnectPage } from "@mvp/pages/RepConnectPage";
+import { RequireAuth } from "@mvp/components/RequireAuth";
+import { RequireAdmin } from "@mvp/components/RequireAdmin";
+import { RootRedirect } from "@mvp/components/RootRedirect";
+
+function BookSlugRedirect() {
+  const { slug } = useParams<{ slug: string }>();
+  return <Navigate to={`/caller?workspace=${slug ?? ""}`} replace />;
+}
 
 export const router = createBrowserRouter([
+  { path: "/login", Component: LoginPage },
+  { path: "/connect/:inviteToken", Component: RepConnectPage },
+  { path: "/", Component: RootRedirect },
+
   {
-    path: "/",
-    Component: ShellPage,
+    Component: RequireAdmin,
+    children: [
+      { path: "/admin/bookings", Component: AdminBookingsPage },
+      { path: "/admin/settings", Component: AdminSettingsPage },
+      { path: "/admin/settings/connections", Component: AdminConnectionsPage },
+    ],
   },
+
   {
-    path: "/book/:slug",
-    Component: BookingWorkspacePage,
+    Component: RequireAuth,
+    children: [
+      { path: "/caller", Component: CallerPage },
+      { path: "/book/:slug", Component: BookSlugRedirect },
+    ],
   },
-  {
-    path: "/connect/:inviteToken",
-    Component: RepConnectPage,
-  },
-  {
-    path: "/admin/bookings",
-    Component: AdminBookingsPage,
-  },
-  {
-    path: "/admin/settings",
-    Component: AdminSettingsPage,
-  },
-  {
-    path: "/admin/settings/connections",
-    Component: AdminConnectionsPage,
-  },
-  {
-    path: "*",
-    element: <Navigate to="/" replace />,
-  },
+
+  { path: "*", element: <Navigate to="/" replace /> },
 ]);

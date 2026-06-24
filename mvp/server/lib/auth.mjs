@@ -1,14 +1,19 @@
 import { betterAuth } from "better-auth";
 import Database from "better-sqlite3";
 
+const DEFAULT_AUTH_URL = "http://localhost:8787";
+
 export function createAuth(dbPath) {
   if (process.env.NODE_ENV === "production" && !process.env.BETTER_AUTH_SECRET) {
     throw new Error("BETTER_AUTH_SECRET must be set in production.");
   }
 
+  const trustedOrigins = getTrustedOrigins();
+
   return betterAuth({
-    baseURL: process.env.BETTER_AUTH_URL ?? "http://localhost:8787",
+    baseURL: process.env.BETTER_AUTH_URL ?? DEFAULT_AUTH_URL,
     secret: process.env.BETTER_AUTH_SECRET ?? "dev-secret-change-in-production-32ch",
+    trustedOrigins,
     database: new Database(dbPath),
     emailAndPassword: { enabled: true },
     user: {
@@ -32,8 +37,44 @@ export function createAuth(dbPath) {
         },
       },
     },
-    session: { expiresIn: 60 * 60 * 24 * 7 },
+    session: { expiresIn: 60 * 60 * 5 },
   });
+}
+
+export function getTrustedOrigins() {
+  const configuredOrigins = (process.env.BETTER_AUTH_TRUSTED_ORIGINS ?? "")
+    .split(",")
+    .map(normalizeOrigin)
+    .filter(Boolean);
+  const origins = [
+    ...configuredOrigins,
+    normalizeOrigin(process.env.BETTER_AUTH_URL ?? DEFAULT_AUTH_URL),
+  ];
+
+  if (process.env.NODE_ENV !== "production") {
+    const webPort = process.env.MVP_WEB_PORT ?? "5174";
+    const apiPort = process.env.MVP_API_PORT ?? "8787";
+    origins.push(
+      `http://localhost:${webPort}`,
+      `http://127.0.0.1:${webPort}`,
+      `http://localhost:${apiPort}`,
+      `http://127.0.0.1:${apiPort}`,
+    );
+  }
+
+  return [...new Set(origins.filter(Boolean))];
+}
+
+function normalizeOrigin(value) {
+  if (!value?.trim()) {
+    return null;
+  }
+
+  try {
+    return new URL(value.trim()).origin;
+  } catch {
+    return null;
+  }
 }
 
 export function requireAuth(auth) {

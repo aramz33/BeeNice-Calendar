@@ -6,6 +6,8 @@ import path from "node:path";
 import {DatabaseSync} from "node:sqlite";
 import {createStore} from "./state.mjs";
 
+const TEST_NOW = "2030-01-07T09:00:00.000Z";
+
 function createProviderStub(providerMode = "mock") {
     return {
         mode: providerMode,
@@ -32,12 +34,14 @@ function createProviderStub(providerMode = "mock") {
     };
 }
 
-function withTempStore(t, providerMode = "mock") {
-    const provider = createProviderStub(providerMode);
+function withTempStore(t, providerOrMode = "mock") {
+    const provider = typeof providerOrMode === "string"
+        ? createProviderStub(providerOrMode)
+        : providerOrMode;
     const previousDbPath = process.env.MVP_DB_PATH;
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "benice-admin-"));
     process.env.MVP_DB_PATH = path.join(tempDir, "mvp.sqlite");
-    const store = createStore(provider);
+    const store = createStore(provider, { now: TEST_NOW });
 
     t.after(() => {
         store.close();
@@ -133,7 +137,7 @@ test("legacy zero booking link buffers are backfilled to 15 minutes", (t) => {
         fs.rmSync(tempDir, {recursive: true, force: true});
     });
 
-    const initialStore = createStore(provider);
+    const initialStore = createStore(provider, { now: TEST_NOW });
     initialStore.close();
 
     const db = new DatabaseSync(dbPath);
@@ -173,7 +177,7 @@ test("legacy non-zero booking link buffers are preserved", (t) => {
         fs.rmSync(tempDir, {recursive: true, force: true});
     });
 
-    const initialStore = createStore(provider);
+    const initialStore = createStore(provider, { now: TEST_NOW });
     initialStore.close();
 
     const db = new DatabaseSync(dbPath);
@@ -378,6 +382,69 @@ test("handleWebhook with grantId updates connection last_webhook_at", async (t) 
         data: {grant_id: "some-grant"},
     });
     assert.deepEqual(result, {ok: true});
+});
+
+test("handleWebhook event.updated avec prospect 'yes' → prospectRsvpState accepted", async (t) => {
+    const provider = {
+        ...createProviderStub(),
+        async fetchExternalEvent(_s, booking) {
+            return {
+                id: booking.externalEventId,
+                startAt: new Date(booking.startAt),
+                endAt: new Date(booking.endAt),
+                participants: [{email: "jane@example.com", status: "yes"}],
+            };
+        },
+    };
+    const store = withTempStore(t, provider);
+    const {bookingId} = await createTestBooking(store);
+    const booking = store.getBooking(bookingId);
+
+    await store.handleWebhook({type: "event.updated", data: {object: {id: booking.externalEventId}}});
+
+    assert.equal(store.getBooking(bookingId).prospectRsvpState, "accepted");
+});
+
+test("handleWebhook event.updated avec prospect 'no' → prospectRsvpState declined", async (t) => {
+    const provider = {
+        ...createProviderStub(),
+        async fetchExternalEvent(_s, booking) {
+            return {
+                id: booking.externalEventId,
+                startAt: new Date(booking.startAt),
+                endAt: new Date(booking.endAt),
+                participants: [{email: "jane@example.com", status: "no"}],
+            };
+        },
+    };
+    const store = withTempStore(t, provider);
+    const {bookingId} = await createTestBooking(store);
+    const booking = store.getBooking(bookingId);
+
+    await store.handleWebhook({type: "event.updated", data: {object: {id: booking.externalEventId}}});
+
+    assert.equal(store.getBooking(bookingId).prospectRsvpState, "declined");
+});
+
+test("handleWebhook event.updated sans prospect dans participants → prospectRsvpState reste pending", async (t) => {
+    const provider = {
+        ...createProviderStub(),
+        async fetchExternalEvent(_s, booking) {
+            return {
+                id: booking.externalEventId,
+                startAt: new Date(booking.startAt),
+                endAt: new Date(booking.endAt),
+                participants: [{email: "other@example.com", status: "yes"}],
+            };
+        },
+    };
+    const store = withTempStore(t, provider);
+    const {bookingId} = await createTestBooking(store);
+    const booking = store.getBooking(bookingId);
+
+    await store.handleWebhook({type: "event.updated", data: {object: {id: booking.externalEventId}}});
+
+    assert.equal(store.getBooking(bookingId).prospectRsvpState, "pending");
 });
 
 // ─── applyProviderCancellation ────────────────────────────────────────────────

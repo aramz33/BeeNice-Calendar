@@ -3,14 +3,19 @@ export async function apiFetch<T>(
   init?: RequestInit,
 ): Promise<T> {
   const response = await fetch(input, {
+    ...init,
+    credentials: "include",
     headers: {
       ...(init?.headers ?? {}),
       "Content-Type": "application/json",
     },
-    ...init,
   });
 
   if (!response.ok) {
+    if (response.status === 401) {
+      window.location.replace("/login");
+      throw new Error("Session expirée.");
+    }
     const message = await readErrorMessage(response);
     throw new Error(message);
   }

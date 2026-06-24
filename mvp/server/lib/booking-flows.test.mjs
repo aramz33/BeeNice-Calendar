@@ -5,11 +5,13 @@ import os from "node:os";
 import path from "node:path";
 import { createStore } from "./state.mjs";
 
+const TEST_NOW = "2030-01-07T09:00:00.000Z";
+
 function withTempStore(t, provider) {
   const previousDbPath = process.env.MVP_DB_PATH;
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "benice-calendar-"));
   process.env.MVP_DB_PATH = path.join(tempDir, "mvp.sqlite");
-  const store = createStore(provider);
+  const store = createStore(provider, { now: TEST_NOW });
 
   t.after(() => {
     store.close();
@@ -109,6 +111,14 @@ test("createBooking persists the booking and closes the source follow-up task", 
   const completedTask = store.getTask(sourceTask.id);
   assert.equal(completedTask.status, "done");
   assert.equal(completedTask.replacementBookingId, result.bookingId);
+});
+
+test("booking créé → prospectRsvpState vaut 'pending'", async (t) => {
+  const store = withTempStore(t, createProviderStub());
+  const sourceTask = store.listCallerTasks("caller-clotilde", "client-teamstarter").tasks[0];
+  const result = await createBookingFromFirstAvailableSlot(store, { sourceTaskId: sourceTask.id });
+  const detail = store.getBookingDetail(result.bookingId);
+  assert.equal(detail.booking.prospectRsvpState, "pending");
 });
 
 test("admin reschedule updates schedule metadata and preserves provider event ownership", async (t) => {

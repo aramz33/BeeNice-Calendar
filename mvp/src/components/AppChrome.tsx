@@ -1,8 +1,17 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, NavLink, useLocation } from "react-router";
-import { Cable, ChevronDown, LayoutDashboard, Settings2 } from "lucide-react";
+import {
+  Cable,
+  ChevronDown,
+  LayoutDashboard,
+  LogOut,
+  Settings2,
+} from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@mvp/components/ui/button";
 import { BeeNiceLogo } from "@mvp/components/BeeNiceLogo";
+import { signOut } from "@mvp/lib/auth";
+import { useSession } from "@mvp/lib/session";
 
 interface AppChromeProps {
   title: string;
@@ -36,13 +45,38 @@ function NavButton({
 }
 
 export function AppChrome({ title, children }: AppChromeProps) {
+  const { session } = useSession();
+  const [signingOut, setSigningOut] = useState(false);
+
+  const logoHref =
+    session?.user.role === "admin"
+      ? "/admin/bookings"
+      : session?.user.role === "caller"
+        ? "/caller"
+        : "/";
+
+  async function handleSignOut() {
+    setSigningOut(true);
+    try {
+      await signOut();
+      window.location.replace("/login");
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Déconnexion impossible. Réessayez.",
+      );
+      setSigningOut(false);
+    }
+  }
+
   return (
     <div className="min-h-screen">
       <header className="app-shell sticky top-0 z-20 mb-6">
         <div className="flex flex-wrap items-center justify-between gap-4 px-4 py-4 md:px-6">
           <div className="flex min-w-0 items-center gap-4">
             <Link
-              to="/"
+              to={logoHref}
               className="inline-flex shrink-0 items-center text-lg font-semibold tracking-tight"
             >
               <BeeNiceLogo compact theme="amber" />
@@ -52,14 +86,30 @@ export function AppChrome({ title, children }: AppChromeProps) {
             </h1>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <NavButton to="/">Accueil</NavButton>
-            <NavButton to="/admin/bookings">
-              <LayoutDashboard className="h-4 w-4" />
-              Admin
-            </NavButton>
-            <SettingsMenu />
-          </div>
+          {session && (
+            <div className="flex flex-wrap items-center gap-2">
+              {session.user.role === "admin" && (
+                <>
+                  <NavButton to="/admin/bookings">
+                    <LayoutDashboard className="h-4 w-4" />
+                    Admin
+                  </NavButton>
+                  <SettingsMenu />
+                </>
+              )}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="rounded-full border-[#001E5B]/15 bg-transparent text-[#001E5B]/64 hover:bg-[#001E5B]/06 hover:text-[#001E5B]"
+                onClick={handleSignOut}
+                disabled={signingOut}
+              >
+                <LogOut className="h-4 w-4" />
+                {signingOut ? "Déconnexion..." : "Déconnexion"}
+              </Button>
+            </div>
+          )}
         </div>
       </header>
 

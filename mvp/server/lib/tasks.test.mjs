@@ -6,11 +6,13 @@ import path from "node:path";
 import { addDays } from "date-fns";
 import { createStore } from "./state.mjs";
 
+const TEST_NOW = "2030-01-07T09:00:00.000Z";
+
 function withTempStore(t, provider = createProviderStub()) {
   const previousDbPath = process.env.MVP_DB_PATH;
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "benice-tasks-"));
   process.env.MVP_DB_PATH = path.join(tempDir, "mvp.sqlite");
-  const store = createStore(provider);
+  const store = createStore(provider, { now: TEST_NOW });
   t.after(() => {
     store.close();
     if (previousDbPath === undefined) {
@@ -156,6 +158,31 @@ test("getTask returns null for unknown id", (t) => {
   const store = withTempStore(t);
   const result = store.getTask("nonexistent-id");
   assert.equal(result, null);
+});
+
+test("updateTask reassigns caller", async (t) => {
+  const store = withTempStore(t);
+  const { bookingId } = await createTestBooking(store);
+  const task = store.ensureFollowUpTask(bookingId, "cancelled");
+  assert.ok(task);
+  assert.equal(task.callerId, "caller-clotilde");
+
+  store.updateTask(task.id, { assignedCallerId: "caller-florian" });
+
+  const updated = store.getTask(task.id);
+  assert.equal(updated.callerId, "caller-florian");
+});
+
+test("updateTask throws for unknown assignedCallerId", async (t) => {
+  const store = withTempStore(t);
+  const { bookingId } = await createTestBooking(store);
+  const task = store.ensureFollowUpTask(bookingId, "cancelled");
+  assert.ok(task);
+
+  assert.throws(
+    () => store.updateTask(task.id, { assignedCallerId: "caller-nonexistent" }),
+    /Colleur introuvable/,
+  );
 });
 
 test("listCallerTasks filters by clientId when provided", (t) => {

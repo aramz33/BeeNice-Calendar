@@ -77,7 +77,7 @@ const DEFAULT_COMPANY_SIZE_THRESHOLD = 200;
 const DEFAULT_SENIOR_WEIGHT = 0.8;
 const DEFAULT_JUNIOR_WEIGHT = 0.2;
 
-export function createStore(provider) {
+export function createStore(provider, storeConfig = {}) {
   const database = createDatabase(provider.mode);
   const { db } = database;
     const records = createPersistenceAdapter(db);
@@ -295,6 +295,9 @@ export function createStore(provider) {
               "Rendez-vous déplacé côté calendrier client.",
             );
           }
+
+          const rsvpState = extractProspectRsvpState(fresh.participants, booking.prospectEmail);
+          if (rsvpState) this.updateProspectRsvpState(booking.id, rsvpState);
         }
       }
 
@@ -636,6 +639,10 @@ export function createStore(provider) {
         return records.findBookingByExternalEventId(externalEventId);
     },
 
+    updateProspectRsvpState(bookingId, rsvpState) {
+        return records.updateProspectRsvpState(bookingId, rsvpState);
+    },
+
     listAllTasks() {
       return listAllTasksFn(db);
     },
@@ -839,6 +846,7 @@ export function createStore(provider) {
         config: {
             bookingWindowWeeks: BOOKING_WINDOW_WEEKS,
             weekStartsOn: WEEK_STARTS_ON,
+            now: storeConfig.now,
         },
     });
 
@@ -951,4 +959,14 @@ function isDeletionEvent(eventType) {
 
 function isUpdateEvent(eventType) {
   return typeof eventType === "string" && /updated/i.test(eventType);
+}
+
+function extractProspectRsvpState(participants = [], prospectEmail) {
+  const match = participants.find(
+    (p) => p.email?.toLowerCase() === prospectEmail?.toLowerCase(),
+  );
+  if (!match) return null;
+  if (match.status === "yes") return "accepted";
+  if (match.status === "no") return "declined";
+  return "pending";
 }

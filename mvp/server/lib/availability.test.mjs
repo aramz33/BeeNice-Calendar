@@ -8,11 +8,13 @@ import {DatabaseSync} from "node:sqlite";
 import {addMinutes, endOfWeek, parseISO, startOfWeek} from "date-fns";
 import {createStore} from "./state.mjs";
 
+const TEST_NOW = "2030-01-07T09:00:00.000Z";
+
 function withTempStore(t, provider = createProviderStub()) {
     const previousDbPath = process.env.MVP_DB_PATH;
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "benice-calendar-"));
     process.env.MVP_DB_PATH = path.join(tempDir, "mvp.sqlite");
-    const store = createStore(provider);
+    const store = createStore(provider, { now: TEST_NOW });
 
     t.after(() => {
         store.close();
