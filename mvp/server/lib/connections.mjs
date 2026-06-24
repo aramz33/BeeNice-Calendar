@@ -9,6 +9,7 @@ export function fromConnectionRow(row) {
     id: row.id,
     repId: row.rep_id,
     provider: row.provider,
+    providerVendor: row.provider_vendor ?? null,
     providerEmail: row.provider_email ?? null,
     providerGrantId: row.provider_grant_id ?? null,
     providerAccountId: row.provider_account_id ?? null,
@@ -122,6 +123,7 @@ export function upsertConnection(db, provider, repId, patch) {
     id: current?.id ?? `connection-${repId}`,
     repId,
     provider: patch.provider ?? current?.provider ?? provider.mode,
+    providerVendor: pick(patch.providerVendor, current?.provider_vendor),
     providerEmail: pick(patch.providerEmail, current?.provider_email),
     providerGrantId: pick(patch.providerGrantId, current?.provider_grant_id),
     providerAccountId: pick(patch.providerAccountId, current?.provider_account_id),
@@ -138,6 +140,7 @@ export function upsertConnection(db, provider, repId, patch) {
     db.prepare(`
       UPDATE rep_calendar_connections
       SET provider = ?,
+          provider_vendor = ?,
           provider_email = ?,
           provider_grant_id = ?,
           provider_account_id = ?,
@@ -151,6 +154,7 @@ export function upsertConnection(db, provider, repId, patch) {
       WHERE rep_id = ?
     `).run(
       next.provider,
+      next.providerVendor,
       next.providerEmail,
       next.providerGrantId,
       next.providerAccountId,
@@ -169,6 +173,7 @@ export function upsertConnection(db, provider, repId, patch) {
         id,
         rep_id,
         provider,
+        provider_vendor,
         provider_email,
         provider_grant_id,
         provider_account_id,
@@ -179,11 +184,12 @@ export function upsertConnection(db, provider, repId, patch) {
         connected_at,
         last_webhook_at,
         last_error
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       next.id,
       next.repId,
       next.provider,
+      next.providerVendor,
       next.providerEmail,
       next.providerGrantId,
       next.providerAccountId,
@@ -250,6 +256,7 @@ export function claimCalendarConnection(database, db, provider, store, repId, pa
 
     const connection = upsertConnection(db, provider, repId, {
       provider: "nylas",
+      providerVendor: patch.providerVendor ?? null,
       providerEmail: patch.providerEmail ?? null,
       providerGrantId: patch.providerGrantId ?? null,
       providerAccountId: patch.providerAccountId ?? null,

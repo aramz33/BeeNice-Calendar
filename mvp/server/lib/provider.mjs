@@ -212,6 +212,7 @@ function createNylasProvider() {
       const data = payload?.data ?? payload;
 
       const claimed = store.claimCalendarConnection(state.repId, {
+        providerVendor: state.provider ?? null,
         providerEmail: data.email ?? data.grant_email ?? null,
         providerGrantId: data.grant_id ?? payload.grant_id ?? null,
         providerAccountId: data.account_id ?? payload.account_id ?? null,

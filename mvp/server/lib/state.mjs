@@ -969,6 +969,7 @@ function decorateRep(rep, connection, providerMode) {
     businessEmail: rep.email,
     connectionStatus: getEffectiveConnectionStatus(connection, providerMode),
     provider: connection?.provider ?? "mock",
+    providerVendor: connection?.providerVendor ?? null,
     providerEmail: connection?.providerEmail ?? null,
     connectedAt: connection?.connectedAt ?? null,
     lastSyncAt: connection?.lastSyncAt ?? null,
