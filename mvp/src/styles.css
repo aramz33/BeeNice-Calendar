@@ -23,32 +23,6 @@ body {
   border-bottom: 1px solid rgba(0, 30, 91, 0.08);
 }
 
-.slot-grid {
-  display: grid;
-  gap: 1rem;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-}
-
-.slot-column {
-  min-width: 0;
-}
-
-.slot-button {
-  width: 100%;
-  min-width: 0;
-  justify-content: flex-start;
-  border-radius: 1rem;
-  border-width: 2px;
-  border-color: rgba(0, 30, 91, 0.20);
-  background: #fffdf9;
-  color: #001e5b;
-  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.08);
-}
-
-.slot-button:hover {
-  background: #fff7e8;
-}
-
 .status-dot {
   position: relative;
 }
@@ -66,154 +40,6 @@ body {
 
 .metric-value {
   font-feature-settings: "tnum" 1, "ss01" 1;
-}
-
-.agenda-grid {
-  display: grid;
-  gap: 1rem;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-}
-
-.agenda-column {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.agenda-day-head {
-  border-radius: 1.25rem;
-  background: #fff7e8;
-  border: 1px solid rgba(0, 30, 91, 0.08);
-  padding: 0.9rem;
-}
-
-.agenda-day-head-today {
-  background: #ffefcf;
-  border-color: rgba(247, 166, 0, 0.28);
-}
-
-.agenda-card {
-  width: 100%;
-  border-radius: 1rem;
-  border: 1px solid rgba(0, 30, 91, 0.08);
-  background: #fffdf9;
-  padding: 0.9rem;
-  text-align: left;
-  transition: border-color 120ms ease, transform 120ms ease, background-color 120ms ease;
-}
-
-.agenda-card:hover {
-  transform: translateY(-1px);
-  border-color: rgba(247, 166, 0, 0.6);
-  background: #fff7e8;
-}
-
-.agenda-card-selected {
-  border-color: #f7a600;
-  background: #fff7e8;
-  box-shadow: inset 0 0 0 1px rgba(247, 166, 0, 0.16);
-}
-
-@media (max-width: 1100px) {
-  .agenda-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 720px) {
-  .agenda-grid {
-    grid-template-columns: repeat(1, minmax(0, 1fr));
-  }
-}
-
-/* ── Time-grid calendar ── */
-
-.time-grid-container {
-  display: grid;
-}
-
-.time-grid-day-col {
-  position: relative;
-  border-left: 1px solid rgba(0, 30, 91, 0.06);
-}
-
-.time-grid-day-col-today {
-  background: rgba(247, 166, 0, 0.08);
-}
-
-.time-grid-slot-line {
-  position: absolute;
-  left: 0;
-  right: 0;
-  border-top: 1px solid rgba(0, 30, 91, 0.04);
-}
-
-.time-grid-slot-line-hour {
-  border-top-color: rgba(0, 30, 91, 0.08);
-}
-
-.time-grid-event {
-  position: absolute;
-  left: 3px;
-  right: 3px;
-  border-radius: 0.6rem;
-  padding: 0.18rem 0.3rem;
-  border: 1px solid rgba(0, 30, 91, 0.08);
-  background: #fffdf9;
-  overflow: hidden;
-  cursor: pointer;
-  text-align: left;
-  transition: border-color 120ms ease, background 120ms ease;
-  font-size: 0.6875rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.1rem;
-}
-
-.time-grid-event-time {
-  margin: 0;
-  font-size: 0.68rem;
-  font-weight: 700;
-  line-height: 1.05;
-  color: #001e5b;
-}
-
-.time-grid-event-context {
-  margin: 0;
-  font-size: 0.64rem;
-  line-height: 1.05;
-  color: rgba(0, 30, 91, 0.9);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.time-grid-event-badge {
-  max-width: 100%;
-  min-width: 0;
-  padding: 0.05rem 0.28rem;
-  border-radius: 999px;
-  font-size: 0.58rem;
-  line-height: 1;
-}
-
-.time-grid-event-badge .status-dot {
-  display: block;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.time-grid-event:hover {
-  border-color: rgba(247, 166, 0, 0.6);
-  background: #fff7e8;
-}
-
-.time-grid-event-selected {
-  border-color: #f7a600;
-  background: #fff7e8;
 }
 
 @keyframes fadeIn {
@@ -234,4 +60,30 @@ body {
 @keyframes slideOutRight {
   from { transform: translateX(0); }
   to { transform: translateX(100%); }
+}
+
+.sx-react-calendar-wrapper {
+  --sx-color-primary: #001e5b;
+  --sx-color-on-primary: #ffffff;
+  --sx-color-primary-container: #d6e0f5;
+  --sx-color-on-primary-container: #001e5b;
+  --sx-color-surface: #fffdf9;
+  --sx-color-background: #fffdf9;
+  width: 100%;
+  height: 560px;
+  max-height: 72vh;
+}
+
+.sx-react-calendar-wrapper[aria-busy="true"] {
+  opacity: 0.6;
+  transition: opacity 0.15s ease;
+}
+
+.booking-detail-calendar .sx-react-calendar-wrapper {
+  height: 480px;
+  overflow-x: auto;
+}
+
+.booking-detail-calendar .sx__calendar-wrapper {
+  min-width: 460px;
 }

@@ -13,7 +13,7 @@ import {getConnection} from "./connections.mjs";
 import {computeEffectiveWeights, selectRep} from "./routing.mjs";
 import {clampDate, maxDate, parseOptionalIso} from "./utils.mjs";
 
-const DEFAULT_BOOKING_WINDOW_WEEKS = 12;
+const DEFAULT_BOOKING_WINDOW_WEEKS = 260;
 const DEFAULT_WEEK_STARTS_ON = 1;
 
 export function createAvailabilityModule({

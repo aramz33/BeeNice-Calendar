@@ -1,19 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  addDays,
-  addWeeks,
-  endOfDay,
-  parseISO,
-  startOfWeek,
-  subWeeks,
-} from "date-fns";
+import { addDays, endOfDay, parseISO, startOfWeek } from "date-fns";
 import { toast } from "sonner";
 import { apiFetch } from "@mvp/lib/api";
-import {
-  formatDateKeyInTimezone,
-  formatMonthYear,
-  getBusinessWeekDays,
-} from "@mvp/lib/time";
 import type {
   AdminBookingsResponse,
   AdminCalendarResponse,
@@ -52,9 +40,6 @@ export function useAdminBookingsController() {
   const [weekStartIso, setWeekStartIso] = useState(() =>
     startOfWeek(new Date(), { weekStartsOn: 1 }).toISOString(),
   );
-  const [todayDateKey, setTodayDateKey] = useState(() =>
-    formatDateKeyInTimezone(new Date(), "Europe/Paris"),
-  );
   const [filters, setFilters] = useState({
     status: "all",
     clientId: "all",
@@ -69,30 +54,11 @@ export function useAdminBookingsController() {
     () => endOfDay(addDays(weekStart, 4)),
     [weekStart],
   );
-  const weekDays = useMemo(
-    () => getBusinessWeekDays(weekStartIso),
-    [weekStartIso],
-  );
   const agendaTimezone = payload?.timezone ?? "Europe/Paris";
-  const weekLabel = useMemo(() => {
-    const referenceDay = weekDays[0] ?? weekStart;
-    return formatMonthYear(referenceDay.toISOString(), agendaTimezone);
-  }, [agendaTimezone, weekDays, weekStart]);
-  const rescheduleWeekStart = useMemo(
-    () => parseISO(rescheduleWeekStartIso),
-    [rescheduleWeekStartIso],
-  );
   const firstRescheduleWeekStart = useMemo(
     () => startOfWeek(new Date(), { weekStartsOn: 1 }),
     [],
   );
-  const lastRescheduleWeekStart = useMemo(
-    () => addWeeks(firstRescheduleWeekStart, 11),
-    [firstRescheduleWeekStart],
-  );
-  const hasPreviousRescheduleWeek =
-    rescheduleWeekStart > firstRescheduleWeekStart;
-  const hasNextRescheduleWeek = rescheduleWeekStart < lastRescheduleWeekStart;
   const rescheduleSelectedSlot = useMemo(
     () =>
       rescheduleAvailability?.slots.find(
@@ -158,7 +124,7 @@ export function useAdminBookingsController() {
 
   const fetchRescheduleAvailability = async (
     bookingId: string,
-    nextWeekStart: Date = rescheduleWeekStart,
+    nextWeekStart: Date = parseISO(rescheduleWeekStartIso),
     preferredSlot: string | null = selectedRescheduleSlot,
   ) => {
     setLoadingRescheduleAvailability(true);
@@ -221,29 +187,6 @@ export function useAdminBookingsController() {
     setSelectedRescheduleSlot(null);
     void fetchRescheduleAvailability(detail.booking.id, nextWeekStart, null);
   }, [detail?.booking.id, detail?.booking.startAt, firstRescheduleWeekStart]);
-
-  useEffect(() => {
-    const syncToday = () => {
-      setTodayDateKey(formatDateKeyInTimezone(new Date(), agendaTimezone));
-    };
-
-    syncToday();
-
-    let intervalId: number | undefined;
-    const remainder = Date.now() % 60_000;
-    const msUntilNextMinute = remainder === 0 ? 60_000 : 60_000 - remainder;
-    const timeoutId = window.setTimeout(() => {
-      syncToday();
-      intervalId = window.setInterval(syncToday, 60_000);
-    }, msUntilNextMinute);
-
-    return () => {
-      window.clearTimeout(timeoutId);
-      if (intervalId !== undefined) {
-        window.clearInterval(intervalId);
-      }
-    };
-  }, [agendaTimezone]);
 
   useEffect(() => {
     const source = new EventSource("/api/admin/stream");
@@ -350,13 +293,29 @@ export function useAdminBookingsController() {
       await fetchDetail(detail.booking.id);
       await fetchRescheduleAvailability(
         detail.booking.id,
-        rescheduleWeekStart,
+        parseISO(rescheduleWeekStartIso),
         null,
       );
     } catch (error) {
       toast.error((error as Error).message);
     } finally {
       setUpdatingBooking(false);
+    }
+  };
+
+  const handleAgendaWeekChange = (nextWeekStartIso: string) => {
+    setWeekStartIso(nextWeekStartIso);
+  };
+
+  const handleRescheduleWeekChange = (nextWeekStartIso: string) => {
+    if (nextWeekStartIso === rescheduleWeekStartIso) return;
+    setRescheduleWeekStartIso(nextWeekStartIso);
+    if (detail) {
+      void fetchRescheduleAvailability(
+        detail.booking.id,
+        parseISO(nextWeekStartIso),
+        null,
+      );
     }
   };
 
@@ -395,12 +354,11 @@ export function useAdminBookingsController() {
     setSelectedBookingId,
     filters,
     setFilters,
-    weekDays,
     agendaTimezone,
-    todayDateKey,
-    weekLabel,
-    hasPreviousRescheduleWeek,
-    hasNextRescheduleWeek,
+    agendaWeekStartIso: weekStartIso,
+    handleAgendaWeekChange,
+    rescheduleWeekStartIso,
+    handleRescheduleWeekChange,
     rescheduleSelectedSlot,
     liveConnectedCount,
     selectedTaskCount,
@@ -409,33 +367,6 @@ export function useAdminBookingsController() {
     hasNextBooking,
     goToPreviousBooking,
     goToNextBooking,
-    goToPreviousWeek: () =>
-      setWeekStartIso(subWeeks(weekStart, 1).toISOString()),
-    goToCurrentWeek: () =>
-      setWeekStartIso(
-        startOfWeek(new Date(), { weekStartsOn: 1 }).toISOString(),
-      ),
-    goToNextWeek: () => setWeekStartIso(addWeeks(weekStart, 1).toISOString()),
-    goToPreviousRescheduleWeek: () => {
-      if (!detail || !hasPreviousRescheduleWeek) return;
-      const nextWeek = subWeeks(rescheduleWeekStart, 1);
-      setRescheduleWeekStartIso(nextWeek.toISOString());
-      void fetchRescheduleAvailability(
-        detail.booking.id,
-        nextWeek,
-        selectedRescheduleSlot,
-      );
-    },
-    goToNextRescheduleWeek: () => {
-      if (!detail || !hasNextRescheduleWeek) return;
-      const nextWeek = addWeeks(rescheduleWeekStart, 1);
-      setRescheduleWeekStartIso(nextWeek.toISOString());
-      void fetchRescheduleAvailability(
-        detail.booking.id,
-        nextWeek,
-        selectedRescheduleSlot,
-      );
-    },
     updateOutcome,
     cancelBooking,
     rescheduleBooking,

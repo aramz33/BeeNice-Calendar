@@ -1,5 +1,11 @@
+import { useMemo } from "react";
 import { AppChrome } from "@mvp/components/AppChrome";
-import { SlotPicker } from "@mvp/components/SlotPicker";
+import { ScheduleXWeek } from "@mvp/components/calendar/ScheduleXWeek";
+import {
+  currentWeekStartPlainDate,
+  forwardMaxPlainDate,
+  slotsToEvents,
+} from "@mvp/lib/schedule-x";
 import { BookingConfirmDialog } from "./caller/BookingConfirmDialog";
 import { ClientFilter } from "./caller/ClientFilter";
 import { ProspectForm } from "./caller/ProspectForm";
@@ -38,15 +44,18 @@ export function CallerPage() {
     setNotes,
     sourceTask,
     timezone,
-    hasPreviousAvailabilityWeek,
-    hasNextAvailabilityWeek,
+    availabilityWeekStartIso,
     handleWorkspaceSelect,
     handleTaskSelect,
     resetTask,
-    handlePreviousAvailabilityWeek,
-    handleNextAvailabilityWeek,
+    handleAvailabilityWeekChange,
     handleSubmit,
   } = useCallerController();
+
+  const slotEvents = useMemo(
+    () => slotsToEvents(availability, selectedSlot),
+    [availability, selectedSlot],
+  );
 
   return (
     <AppChrome title="Caller">
@@ -100,15 +109,15 @@ export function CallerPage() {
               </p>
             </div>
           ) : (
-            <SlotPicker
-              availability={availability}
-              selectedSlot={selectedSlot}
-              onSelect={setSelectedSlot}
+            <ScheduleXWeek
+              events={slotEvents}
+              timezone={timezone}
+              weekStartIso={availabilityWeekStartIso}
+              onWeekStartChange={handleAvailabilityWeekChange}
+              onEventClick={(event) => setSelectedSlot(String(event.id))}
+              minDate={currentWeekStartPlainDate()}
+              maxDate={forwardMaxPlainDate()}
               loading={loadingAvailability}
-              onPreviousWeek={handlePreviousAvailabilityWeek}
-              onNextWeek={handleNextAvailabilityWeek}
-              hasPreviousWeek={hasPreviousAvailabilityWeek}
-              hasNextWeek={hasNextAvailabilityWeek}
             />
           )}
         </main>

@@ -1,16 +1,16 @@
 ---
 tags: [domaine/pro, projet/beeniche, type/todo, agents]
-updated: 2026-06-24
+updated: 2026-06-25
 ---
 
 # BeeNice Calendar — TODO
 
 ## Resume
 - **Goal:** outil B2B de booking pour les sales reps. **Cible : v0 live début juillet 2026** (Julien, réunion [[LOG|11-06]]). Premier client = **Cozy RH** (avec un Z, Microsoft).
-- **State:** PRs #2→#7 mergées sur `main`. **PR #9** (prep démo : reshape seed + badge provider + titre Caller) + **PR #8** (import `project/` notes → source de vérité repo) **ouvertes, disjointes** — mergeables dans n'importe quel ordre (fichiers séparés). Détail [[LOG|session 7]].
+- **State:** PRs #2→#9 **toutes mergées** sur `main`. #9 (prep démo : reshape seed + badge provider + titre Caller) et #8 (import `project/` notes → source de vérité repo) mergées le 24-06. Détail [[LOG|session 7]].
 - **Next:** **démo Julien + Camille** — connecter MS + Google en live (preuve auth Nylas) sur données seed crédibles. Après démo : **débloquer l'auth Microsoft pour Cozy RH = chemin critique juillet**, consentement admin à faire partir de **Julien/BeeNice** (Adam n'a pas de contact Cozy direct). Brief prêt → [[brief-julien-auth-prod]].
   - ⚠️ DB dev (`mvp/server/data/mvp.sqlite` + WAL) **supprimée** cette session → reconnecter les calendriers (c'est justement la démo live).
-  - **AgendaBoard / `@schedule-x` = choix UX délibéré, ne pas toucher.** (NB : `@schedule-x/react` pas encore dans `package.json`, AgendaBoard actuel est custom — à vérifier avant F3.)
+  - **F3 livré** : les 3 surfaces calendrier (caller, agenda admin, picker reposition) tournent sur `@schedule-x/react` v4. `SlotPicker`/`AgendaBoard`/`lib/calendar.ts` supprimés.
 - **Run:** `npm run dev` (API 8787 + web 5174) · tests : `npm run test:web` et `node --test mvp/server/lib/**/*.test.mjs mvp/server/lib/*.test.mjs mvp/server/lib/http/*.test.mjs`
 - Contexte → [[overview]] · Specs → [[functional-spec]] · Archi → [[ARCHITECTURE]] · wiki → [[wiki/index|wiki]] · Historique → [[LOG]]
 
@@ -44,7 +44,7 @@ updated: 2026-06-24
 - [ ] Assignation manuelle ET auto via Google Sheet — auto = toujours réassigner au **même caller**
 
 ### Frontend restant
-- [ ] F3 — Calendrier semaine avec axe horaire (`@schedule-x/react`, depends F2 ✅)  → verify: rendu créneaux, `npm run test:web` vert
+- [x] **F3 — Calendrier semaine sur `@schedule-x/react` v4** (3 surfaces : caller, agenda admin, picker reposition). Wrapper unique `ScheduleXWeek` + helpers purs `lib/schedule-x.ts` (testés). Fenêtre booking 12→260 sem. (avant + plancher semaine courante côté caller/reposition ; pas de plancher côté admin). Stratégie 30 min + buffer 15 min **inchangée** (100 % serveur). Backend 215/215 + web 40/40 + build verts.
 - [x] **F4a — Badge provider Google/Microsoft sur connexions rep** — [PR #9](https://github.com/aramz33/BeeNice-Calendar/pull/9). Colonne **additive** `provider_vendor` (le champ `provider` reste « nylas »/« mock » car `isConnected` en dépend) ; persistée depuis `state.provider` au callback Nylas ; remontée `fromConnectionRow → upsertConnection → decorateRep → types.ts → ProviderVendorBadge` dans `AdminConnectionsPage`. Vendors seedés pour que les cartes mock affichent aussi un badge. **À vérifier en live (nylas)** : après connexion réelle Google/MS, la carte rep montre le bon badge.
 - [ ] F4b — Bonus timezone côté caller/prospect : permettre au caller de voir les disponibilités depuis le fuseau du prospect appelé  → verify: affichage créneaux lisible dans timezone choisie, sans changer timezone client (`Europe/Paris`)
 - [ ] F4c — Assignation tâche de repositionnement depuis vue admin (depends B4 ✅)
