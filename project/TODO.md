@@ -7,8 +7,8 @@ updated: 2026-06-25
 
 ## Resume
 - **Goal:** outil B2B de booking pour les sales reps. **Cible : v0 live début juillet 2026** (Julien, réunion [[LOG|11-06]]). Premier client = **Cozy RH** (avec un Z, Microsoft).
-- **State:** PRs #2→#9 **toutes mergées** sur `main`. #9 (prep démo : reshape seed + badge provider + titre Caller) et #8 (import `project/` notes → source de vérité repo) mergées le 24-06. Détail [[LOG|session 7]].
-- **Next:** **démo Julien + Camille** — connecter MS + Google en live (preuve auth Nylas) sur données seed crédibles. Après démo : **débloquer l'auth Microsoft pour Cozy RH = chemin critique juillet**, consentement admin à faire partir de **Julien/BeeNice** (Adam n'a pas de contact Cozy direct). Brief prêt → [[brief-julien-auth-prod]].
+- **State:** PRs #2→#9 mergées sur `main`. **PR #10 (F3 — calendriers Schedule-X v4) ouverte**, basée sur `main` à jour, verte (build + web 40/40 + backend 215/215). À review/merger. `backup/f3-preintegration` gardée en local le temps de valider.
+- **Next:** **démo Julien + Camille** — connecter MS + Google en live (preuve auth Nylas) sur données seed crédibles ; vérifier en live le rendu Schedule-X + la **preuve buffer** (book 09:00 → 08:30 & 09:30 disparaissent). Après démo : **débloquer l'auth Microsoft pour Cozy RH = chemin critique juillet**, consentement admin à faire partir de **Julien/BeeNice** (Adam n'a pas de contact Cozy direct). Brief prêt → [[brief-julien-auth-prod]].
   - ⚠️ DB dev (`mvp/server/data/mvp.sqlite` + WAL) **supprimée** cette session → reconnecter les calendriers (c'est justement la démo live).
   - **F3 livré** : les 3 surfaces calendrier (caller, agenda admin, picker reposition) tournent sur `@schedule-x/react` v4. `SlotPicker`/`AgendaBoard`/`lib/calendar.ts` supprimés.
 - **Run:** `npm run dev` (API 8787 + web 5174) · tests : `npm run test:web` et `node --test mvp/server/lib/**/*.test.mjs mvp/server/lib/*.test.mjs mvp/server/lib/http/*.test.mjs`
