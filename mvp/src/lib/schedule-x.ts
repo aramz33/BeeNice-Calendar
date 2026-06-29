@@ -73,7 +73,8 @@ export function slotsToEvents(
   }
 
   return availability.slots.map((slot) => ({
-    id: slot.startAt,
+    id: slot.startAt.replace(/[:.]/g, "-"),
+    slotIso: slot.startAt,
     start: isoToZoned(slot.startAt, availability.timezone),
     end: isoToZoned(slot.endAt, availability.timezone),
     title: `${slot.availableRepCount} rep${

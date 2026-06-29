@@ -71,7 +71,7 @@ export function AppChrome({ title, children }: AppChromeProps) {
   }
 
   return (
-    <div className="min-h-screen">
+    <div className="flex h-screen flex-col">
       <header className="app-shell sticky top-0 z-20 mb-6">
         <div className="flex flex-wrap items-center justify-between gap-4 px-4 py-4 md:px-6">
           <div className="flex min-w-0 items-center gap-4">
@@ -79,7 +79,7 @@ export function AppChrome({ title, children }: AppChromeProps) {
               to={logoHref}
               className="inline-flex shrink-0 items-center text-lg font-semibold tracking-tight"
             >
-              <BeeNiceLogo compact theme="amber" />
+              <BeeNiceLogo compact />
             </Link>
             <h1 className="min-w-0 font-display text-2xl tracking-[-0.08em] text-[#001E5B] md:text-4xl">
               {title}
@@ -113,7 +113,9 @@ export function AppChrome({ title, children }: AppChromeProps) {
         </div>
       </header>
 
-      <main className="px-4 pb-4 md:px-6 md:pb-6">{children}</main>
+      <main className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pb-4 md:px-6 md:pb-6">
+        {children}
+      </main>
     </div>
   );
 }

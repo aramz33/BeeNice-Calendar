@@ -31,17 +31,34 @@ describe("isoToZoned", () => {
 
 describe("slotsToEvents", () => {
   const slots = [
-    { startAt: "2026-06-25T07:00:00.000Z", endAt: "2026-06-25T07:30:00.000Z", availableRepCount: 3, seniorityPool: "all" as const },
-    { startAt: "2026-06-25T08:00:00.000Z", endAt: "2026-06-25T08:30:00.000Z", availableRepCount: 1, seniorityPool: "all" as const },
+    {
+      startAt: "2026-06-25T07:00:00.000Z",
+      endAt: "2026-06-25T07:30:00.000Z",
+      availableRepCount: 3,
+      seniorityPool: "all" as const,
+    },
+    {
+      startAt: "2026-06-25T08:00:00.000Z",
+      endAt: "2026-06-25T08:30:00.000Z",
+      availableRepCount: 1,
+      seniorityPool: "all" as const,
+    },
   ];
 
   it("returns null-safe empty array", () => {
     expect(slotsToEvents(null, null)).toEqual([]);
   });
 
-  it("maps slot startAt to event id and marks selected slot", () => {
-    const events = slotsToEvents(availability(slots), "2026-06-25T08:00:00.000Z");
+  it("maps slot startAt to a querySelector-safe event id and keeps raw iso", () => {
+    const events = slotsToEvents(
+      availability(slots),
+      "2026-06-25T08:00:00.000Z",
+    );
     expect(events.map((e) => e.id)).toEqual([
+      "2026-06-25T07-00-00-000Z",
+      "2026-06-25T08-00-00-000Z",
+    ]);
+    expect(events.map((e) => e.slotIso)).toEqual([
       "2026-06-25T07:00:00.000Z",
       "2026-06-25T08:00:00.000Z",
     ]);

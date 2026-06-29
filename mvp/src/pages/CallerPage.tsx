@@ -59,7 +59,7 @@ export function CallerPage() {
 
   return (
     <AppChrome title="Caller">
-      <div className="flex gap-6">
+      <div className="flex min-h-0 flex-1 gap-6">
         {/* Panel gauche */}
         <aside className="flex w-64 shrink-0 flex-col gap-4 lg:w-72">
           <ClientFilter
@@ -101,7 +101,7 @@ export function CallerPage() {
         </aside>
 
         {/* Zone principale : calendrier */}
-        <main className="min-w-0 flex-1">
+        <main className="caller-calendar flex min-h-0 min-w-0 flex-1 flex-col">
           {!selectedSlug ? (
             <div className="flex h-64 items-center justify-center rounded-2xl border-2 border-dashed border-[#001E5B]/10">
               <p className="text-[#001E5B]/48">
@@ -114,7 +114,7 @@ export function CallerPage() {
               timezone={timezone}
               weekStartIso={availabilityWeekStartIso}
               onWeekStartChange={handleAvailabilityWeekChange}
-              onEventClick={(event) => setSelectedSlot(String(event.id))}
+              onEventClick={(event) => setSelectedSlot(String(event.slotIso))}
               minDate={currentWeekStartPlainDate()}
               maxDate={forwardMaxPlainDate()}
               loading={loadingAvailability}

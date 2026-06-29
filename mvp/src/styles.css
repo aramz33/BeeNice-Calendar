@@ -74,6 +74,11 @@ body {
   max-height: 72vh;
 }
 
+.caller-calendar .sx-react-calendar-wrapper {
+  height: 100%;
+  max-height: none;
+}
+
 .sx-react-calendar-wrapper[aria-busy="true"] {
   opacity: 0.6;
   transition: opacity 0.15s ease;
