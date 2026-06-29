@@ -610,7 +610,7 @@ function normalizeLegacyData(db, providerMode) {
           WHEN 'completed' THEN 'completed'
           WHEN 'no_show' THEN 'no_show'
           WHEN 'not_qualified' THEN 'not_qualified'
-          WHEN 'mvn' THEN 'mvn'
+          WHEN 'mvn' THEN 'not_qualified'
           WHEN 'refused' THEN 'refused'
           ELSE 'pending'
         END
@@ -837,7 +837,8 @@ function normalizeLegacyStatus(status) {
     case "not_qualified":
       return { scheduleState: "scheduled", outcomeState: "not_qualified" };
     case "mvn":
-      return { scheduleState: "scheduled", outcomeState: "mvn" };
+      // mvn disposition retired (now a lead status, not a booking outcome); fold legacy rows into not_qualified
+      return { scheduleState: "scheduled", outcomeState: "not_qualified" };
     case "refused":
       return { scheduleState: "scheduled", outcomeState: "refused" };
     default:

@@ -2,12 +2,7 @@ export type ScheduleState = "scheduled" | "rescheduled" | "cancelled";
 export type Seniority = "senior" | "junior" | "non_defini";
 export type RoutingMode = "pool_unique" | "weighted_seniority";
 export type OutcomeState =
-  | "pending"
-  | "completed"
-  | "no_show"
-  | "not_qualified"
-  | "mvn"
-  | "refused";
+  "pending" | "completed" | "no_show" | "not_qualified" | "refused";
 export type DisplayStatus =
   | "scheduled"
   | "completed"
@@ -15,7 +10,6 @@ export type DisplayStatus =
   | "cancelled"
   | "rescheduled"
   | "not_qualified"
-  | "mvn"
   | "refused";
 export type BookingStatus = DisplayStatus;
 export type FollowUpTaskStatus = "open" | "done" | "dismissed";

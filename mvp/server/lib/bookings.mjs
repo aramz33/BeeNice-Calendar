@@ -6,7 +6,6 @@ export const OUTCOME_STATES = [
   "completed",
   "no_show",
   "not_qualified",
-  "mvn",
   "refused",
 ];
 
@@ -26,9 +25,6 @@ export function getDisplayStatus(booking) {
   }
   if (booking.outcomeState === "not_qualified") {
     return "not_qualified";
-  }
-  if (booking.outcomeState === "mvn") {
-    return "mvn";
   }
   if (booking.outcomeState === "refused") {
     return "refused";
