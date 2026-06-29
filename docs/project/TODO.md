@@ -7,7 +7,7 @@ updated: 2026-06-25
 
 ## Resume
 - **Goal:** outil B2B de booking pour les sales reps. **Cible : v0 live début juillet 2026** (Julien, réunion [[LOG|11-06]]). Premier client = **Cozy RH** (avec un Z, Microsoft).
-- **State:** PRs #2→#9 mergées sur `main`. **PR #10 (F3 — calendriers Schedule-X v4) ouverte**, basée sur `main` à jour, verte (build + web 40/40 + backend 215/215). À review/merger. `backup/f3-preintegration` gardée en local le temps de valider.
+- **State:** PRs #2→#9 mergées sur `main`. **PR #10 (F3 — calendriers Schedule-X v4) ouverte**, basée sur `main` à jour, verte (build + web 40/40 + backend 215/215). À review/merger. `backup/f3-preintegration` gardée en local le temps de valider. **Non committé sur la branche F3** : `BeeNiceLogo` reconstruit avec le **vrai logo** (SVG vectoriel extrait de `docs/Logo_BeeNice_Fond_Jaune.pdf` via `pdftocairo`) — remplace l'approximation CSS faite-main ; props `theme` (navy/amber) supprimées (seul `amber` était utilisé). À committer.
 - **Next:** **démo Julien + Camille** — connecter MS + Google en live (preuve auth Nylas) sur données seed crédibles ; vérifier en live le rendu Schedule-X + la **preuve buffer** (book 09:00 → 08:30 & 09:30 disparaissent). Après démo : **débloquer l'auth Microsoft pour Cozy RH = chemin critique juillet**, consentement admin à faire partir de **Julien/BeeNice** (Adam n'a pas de contact Cozy direct). Brief prêt → [[brief-julien-auth-prod]].
   - ⚠️ DB dev (`mvp/server/data/mvp.sqlite` + WAL) **supprimée** cette session → reconnecter les calendriers (c'est justement la démo live).
   - **F3 livré** : les 3 surfaces calendrier (caller, agenda admin, picker reposition) tournent sur `@schedule-x/react` v4. `SlotPicker`/`AgendaBoard`/`lib/calendar.ts` supprimés.
@@ -50,6 +50,8 @@ updated: 2026-06-25
 - [ ] F4c — Assignation tâche de repositionnement depuis vue admin (depends B4 ✅)
 - [ ] F5 — Affichage statut RSVP dans détail booking (depends B5 ✅)
 - [ ] **Édition contact client** dans `/admin/settings`  → verify: modifier prénom/nom/tel/email d'un client existant
+- [ ] **Admin accède aussi à la vue caller** : le rôle admin a l'app complète — agir comme admin (vue admin + settings) **et** comme caller (vue caller normale).  → verify: connecté en admin, un lien/bascule mène à `/caller` et le booking y fonctionne
+  - état actuel : `/caller` est déjà sous `RequireAuth` (pas `RequireAdmin`) donc la route s'affiche pour un admin ; gaps réels = (1) pas de lien vers la vue caller dans `AppChrome` quand `role === "admin"`, (2) `RootRedirect` envoie l'admin vers `/admin/bookings` (garder, mais ajouter l'accès), (3) vérifier que `/api/caller/*` (guardé `requireAuth`) répond bien pour le rôle admin — sinon élargir le guard.
 
 ### Livraison / déploiement
 - [ ] **Sécu avant VPS** : `BETTER_AUTH_SECRET` — remplacer le fallback hardcodé de `auth.mjs` par un fail-fast au démarrage + provisionner la var (`openssl rand -base64 32`)  → verify: serveur refuse de démarrer sans la var → détail [[beeniceapp-auth-secret-fallback]]

@@ -9,6 +9,12 @@ Historique append-only + rationale des décisions. Newest en haut, jamais rééc
 
 <!-- append newest entries directly below; never rewrite past entries -->
 
+## 2026-06-25 (session 9) — Vrai logo BeeNice (branche F3, non committé)
+- **Constat** : `BeeNiceLogo` était une **approximation CSS faite-main** (barres en `<span>` + lettre « b » en texte), pas le vrai logo.
+- **Fix** : SVG vectoriel extrait du PDF fourni (`docs/Logo_BeeNice_Fond_Jaune.pdf`) via `pdftocairo -svg` → inliné dans `BeeNiceLogo.tsx` (icône carrée ambre, barres ascendantes + « b » navy). Crisp à toute taille, dimensionnable via `className`.
+- **Cleanup** : props `theme` (navy/amber) + la variante navy supprimées — seul `theme="amber"` était utilisé (2 sites : `AppChrome`, `LoginPage`) ; prop retirée des 2 appels. `tsc -p mvp` vert sur les fichiers touchés.
+- **PDF** ajouté au repo (`docs/Logo_BeeNice_Fond_Jaune.pdf`) comme source. **Non committé** — à mettre dans la branche F3. `favicon.svg` non touché (encore l'ancienne marque).
+
 ## 2026-06-25 (session 8) — F3 : 3 calendriers rebâtis sur Schedule-X v4 (PR #10)
 - **Décision** : Adam revient sur le « ne pas toucher F3 » de la session 7 → veut les calendriers refaits sur **Schedule-X** pour que l'UI « ait l'air bien meilleure », risque assumé (filet : `git reset` avant démo). Grilling (`grill-me`) pour verrouiller le plan : v4 (pas v3 — corrigé après coup), **3 surfaces** et pas 2 (le picker de repositionnement réutilise le même `SlotPicker` dans le panneau détail), fenêtre booking **illimitée vers l'avant** (260 sem.), plancher semaine courante côté caller/reposition mais **pas** côté admin (revue du passé).
 - **MCP Schedule-X** ajouté (`.mcp.json`, `npx @schedule-x/mcp`) pour grounder l'API v4 (event-click, `onRangeUpdate`, `events-service.set`, Temporal) ; validé via `validate_event`/`validate_config`.
