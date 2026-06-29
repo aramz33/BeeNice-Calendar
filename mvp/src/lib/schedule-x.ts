@@ -21,10 +21,7 @@ export function isoToZoned(
   return Temporal.Instant.from(iso).toZonedDateTimeISO(timezone);
 }
 
-export function weekStartIsoToPlainDate(
-  weekStartIso: string,
-): Temporal.PlainDate {
-  const date = new Date(weekStartIso);
+function dateToPlainDate(date: Date): Temporal.PlainDate {
   return Temporal.PlainDate.from({
     year: date.getFullYear(),
     month: date.getMonth() + 1,
@@ -32,15 +29,16 @@ export function weekStartIsoToPlainDate(
   });
 }
 
+export function weekStartIsoToPlainDate(
+  weekStartIso: string,
+): Temporal.PlainDate {
+  return dateToPlainDate(new Date(weekStartIso));
+}
+
 export function plainDateWeeksFromNow(weeks: number): Temporal.PlainDate {
-  const date = startOfWeek(addWeeks(new Date(), weeks), {
-    weekStartsOn: WEEK_STARTS_ON,
-  });
-  return Temporal.PlainDate.from({
-    year: date.getFullYear(),
-    month: date.getMonth() + 1,
-    day: date.getDate(),
-  });
+  return dateToPlainDate(
+    startOfWeek(addWeeks(new Date(), weeks), { weekStartsOn: WEEK_STARTS_ON }),
+  );
 }
 
 export function currentWeekStartPlainDate(): Temporal.PlainDate {

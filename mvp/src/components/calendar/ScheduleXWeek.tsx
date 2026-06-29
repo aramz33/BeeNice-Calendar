@@ -21,7 +21,6 @@ interface ScheduleXWeekProps {
   minDate?: Temporal.PlainDate;
   maxDate?: Temporal.PlainDate;
   loading?: boolean;
-  customComponents?: Record<string, React.ComponentType<unknown>>;
 }
 
 function mondayOf(date: Temporal.PlainDate): Temporal.PlainDate {
@@ -37,7 +36,6 @@ export function ScheduleXWeek({
   minDate,
   maxDate,
   loading = false,
-  customComponents,
 }: ScheduleXWeekProps) {
   const eventsService = useRef(createEventsServicePlugin()).current;
   const calendarControls = useRef(createCalendarControlsPlugin()).current;
@@ -94,10 +92,7 @@ export function ScheduleXWeek({
 
   return (
     <div className="sx-react-calendar-wrapper" aria-busy={loading}>
-      <ScheduleXCalendar
-        calendarApp={calendar}
-        customComponents={customComponents}
-      />
+      <ScheduleXCalendar calendarApp={calendar} />
     </div>
   );
 }
