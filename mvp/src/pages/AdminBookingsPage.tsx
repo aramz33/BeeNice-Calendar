@@ -1,12 +1,12 @@
-import {
-  ArrowRightLeft,
-  CalendarRange,
-  ChevronLeft,
-  ChevronRight,
-  ListTodo,
-} from "lucide-react";
+import { useMemo } from "react";
+import { ArrowRightLeft, CalendarRange, ListTodo } from "lucide-react";
 import { Button } from "@mvp/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@mvp/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@mvp/components/ui/card";
 import { Input } from "@mvp/components/ui/input";
 import { Label } from "@mvp/components/ui/label";
 import {
@@ -16,7 +16,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@mvp/components/ui/select";
-import { AgendaBoard } from "@mvp/components/AgendaBoard";
+import { ScheduleXWeek } from "@mvp/components/calendar/ScheduleXWeek";
+import { forwardMaxPlainDate, bookingsToEvents } from "@mvp/lib/schedule-x";
 import { AppChrome } from "@mvp/components/AppChrome";
 import { BookingListItem } from "@mvp/components/BookingListItem";
 import { BookingSheet } from "@mvp/components/BookingSheet";
@@ -40,29 +41,23 @@ export function AdminBookingsPage() {
     selectedRescheduleSlot,
     setSelectedRescheduleSlot,
     loadingRescheduleAvailability,
+    rescheduleWeekStartIso,
+    handleRescheduleWeekChange,
     activeView,
     setActiveView,
     selectedBookingId,
     setSelectedBookingId,
     filters,
     setFilters,
-    weekDays,
     agendaTimezone,
-    todayDateKey,
-    weekLabel,
-    hasPreviousRescheduleWeek,
-    hasNextRescheduleWeek,
+    agendaWeekStartIso,
+    handleAgendaWeekChange,
     rescheduleSelectedSlot,
     liveConnectedCount,
     selectedTaskCount,
     selectedBookingIndex,
     hasPreviousBooking,
     hasNextBooking,
-    goToPreviousWeek,
-    goToCurrentWeek,
-    goToNextWeek,
-    goToPreviousRescheduleWeek,
-    goToNextRescheduleWeek,
     goToPreviousBooking,
     goToNextBooking,
     updateOutcome,
@@ -73,6 +68,11 @@ export function AdminBookingsPage() {
 
   const selectedBooking =
     payload?.bookings.find((b) => b.id === selectedBookingId) ?? null;
+
+  const agendaEvents = useMemo(
+    () => bookingsToEvents(calendar?.entries ?? [], selectedBookingId),
+    [calendar?.entries, selectedBookingId],
+  );
 
   return (
     <AppChrome title="Admin">
@@ -91,7 +91,9 @@ export function AdminBookingsPage() {
           />
           <MetricCard
             label="À replacer"
-            value={(payload?.counts.no_show ?? 0) + (payload?.counts.cancelled ?? 0)}
+            value={
+              (payload?.counts.no_show ?? 0) + (payload?.counts.cancelled ?? 0)
+            }
             helper="No-show + annulations."
           />
           <MetricCard
@@ -126,7 +128,10 @@ export function AdminBookingsPage() {
                 placeholder="Client, société, prospect..."
                 value={filters.query}
                 onChange={(event) =>
-                  setFilters((current) => ({ ...current, query: event.target.value }))
+                  setFilters((current) => ({
+                    ...current,
+                    query: event.target.value,
+                  }))
                 }
               />
             </div>
@@ -226,47 +231,18 @@ export function AdminBookingsPage() {
               label="Tâches"
             />
           </div>
-
-          {activeView === "agenda" && (
-            <div className="flex flex-1 flex-wrap items-center justify-between gap-3">
-              <div className="text-lg font-semibold capitalize text-[#001E5B]">
-                {weekLabel}
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="rounded-full"
-                  onClick={goToPreviousWeek}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <Button variant="outline" className="rounded-full" onClick={goToCurrentWeek}>
-                  Aujourd'hui
-                </Button>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="rounded-full"
-                  onClick={goToNextWeek}
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Contenu des vues */}
         {activeView === "agenda" && (
-          <AgendaBoard
-            loading={loadingDashboard}
-            entries={calendar?.entries ?? []}
-            weekDays={weekDays}
-            onSelect={setSelectedBookingId}
-            selectedBookingId={selectedBookingId}
+          <ScheduleXWeek
+            events={agendaEvents}
             timezone={agendaTimezone}
-            todayDateKey={todayDateKey}
+            weekStartIso={agendaWeekStartIso}
+            onWeekStartChange={handleAgendaWeekChange}
+            onEventClick={(event) => setSelectedBookingId(String(event.id))}
+            maxDate={forwardMaxPlainDate()}
+            loading={loadingDashboard}
           />
         )}
 
@@ -276,25 +252,25 @@ export function AdminBookingsPage() {
               <CardTitle>Liste des rendez-vous</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              {loadingDashboard
-                ? Array.from({ length: 5 }).map((_, index) => (
-                    <div
-                      key={index}
-                      className="h-24 animate-pulse rounded-2xl bg-[#001E5B]/5"
-                    />
-                  ))
-                : payload?.bookings.length
-                  ? payload.bookings.map((booking) => (
-                      <BookingListItem
-                        key={booking.id}
-                        booking={booking}
-                        selected={booking.id === selectedBookingId}
-                        onSelect={setSelectedBookingId}
-                      />
-                    ))
-                  : (
-                    <EmptyState message="Aucun rendez-vous ne correspond à ces filtres." />
-                  )}
+              {loadingDashboard ? (
+                Array.from({ length: 5 }).map((_, index) => (
+                  <div
+                    key={index}
+                    className="h-24 animate-pulse rounded-2xl bg-[#001E5B]/5"
+                  />
+                ))
+              ) : payload?.bookings.length ? (
+                payload.bookings.map((booking) => (
+                  <BookingListItem
+                    key={booking.id}
+                    booking={booking}
+                    selected={booking.id === selectedBookingId}
+                    onSelect={setSelectedBookingId}
+                  />
+                ))
+              ) : (
+                <EmptyState message="Aucun rendez-vous ne correspond à ces filtres." />
+              )}
             </CardContent>
           </Card>
         )}
@@ -315,7 +291,6 @@ export function AdminBookingsPage() {
             </CardContent>
           </Card>
         )}
-
       </div>
 
       {/* Sheet détail — overlay portal */}
@@ -340,10 +315,8 @@ export function AdminBookingsPage() {
         selectedRescheduleSlot={selectedRescheduleSlot}
         onSelectRescheduleSlot={setSelectedRescheduleSlot}
         loadingRescheduleAvailability={loadingRescheduleAvailability}
-        hasPreviousRescheduleWeek={hasPreviousRescheduleWeek}
-        hasNextRescheduleWeek={hasNextRescheduleWeek}
-        onPreviousRescheduleWeek={goToPreviousRescheduleWeek}
-        onNextRescheduleWeek={goToNextRescheduleWeek}
+        rescheduleWeekStartIso={rescheduleWeekStartIso}
+        onRescheduleWeekChange={handleRescheduleWeekChange}
         rescheduleSelectedSlot={rescheduleSelectedSlot}
         onRescheduleBooking={() => void rescheduleBooking()}
       />
@@ -398,7 +371,11 @@ function ViewButton({
   label: string;
 }) {
   return (
-    <Button variant={active ? "default" : "outline"} className="rounded-full" onClick={onClick}>
+    <Button
+      variant={active ? "default" : "outline"}
+      className="rounded-full"
+      onClick={onClick}
+    >
       <Icon className="h-4 w-4" />
       {label}
     </Button>

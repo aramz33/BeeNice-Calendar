@@ -36,10 +36,8 @@ interface BookingSheetProps {
   selectedRescheduleSlot: string | null;
   onSelectRescheduleSlot: (slot: string | null) => void;
   loadingRescheduleAvailability: boolean;
-  hasPreviousRescheduleWeek: boolean;
-  hasNextRescheduleWeek: boolean;
-  onPreviousRescheduleWeek: () => void;
-  onNextRescheduleWeek: () => void;
+  rescheduleWeekStartIso: string;
+  onRescheduleWeekChange: (weekStartIso: string) => void;
   rescheduleSelectedSlot: AvailabilitySlot | null;
   onRescheduleBooking: () => void;
 }

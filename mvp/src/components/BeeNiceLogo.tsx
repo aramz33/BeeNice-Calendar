@@ -2,58 +2,57 @@ import { cn } from "@mvp/components/ui/utils";
 
 interface BeeNiceLogoProps {
   compact?: boolean;
-  theme?: "navy" | "amber";
   className?: string;
 }
 
-export function BeeNiceLogo({ compact = false, theme = "navy", className }: BeeNiceLogoProps) {
-  if (compact) {
-    if (theme === "amber") {
-      return (
-        <div
-          className={cn(
-            "benice-symbol inline-flex h-12 w-12 items-end rounded-[1.1rem] bg-[#F7A600] p-2.5",
-            className,
-          )}
-        >
-          <span className="bar h-2 w-1.5 rounded-full bg-[#001E5B]" />
-          <span className="bar h-4 w-1.5 rounded-full bg-[#001E5B]" />
-          <span className="bar h-6 w-1.5 rounded-full bg-[#001E5B]" />
-          <span className="bar h-8 w-1.5 rounded-full bg-[#001E5B]" />
-          <span className="ml-1 text-3xl font-semibold leading-none tracking-[-0.08em] text-[#001E5B]">
-            b
-          </span>
-        </div>
-      );
-    }
+function LogoMark({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 253 253"
+      role="img"
+      aria-label="BeeNice"
+      className={cn("h-12 w-12", className)}
+    >
+      <path
+        fill="#F7A600"
+        d="M 0 32 C 0 14.328125 14.328125 0 32 0 L 221 0 C 238.671875 0 253 14.328125 253 32 L 253 221 C 253 238.671875 238.671875 253 221 253 L 32 253 C 14.328125 253 0 238.671875 0 221 Z M 0 32 "
+      />
+      <path
+        fill="#FFFFFF"
+        d="M 116.257812 84.304688 L 128.613281 84.304688 L 128.613281 178.578125 L 104.632812 178.578125 L 104.632812 95.929688 C 104.632812 89.515625 109.839844 84.304688 116.257812 84.304688 Z M 116.257812 84.304688 "
+      />
+      <path
+        fill="#FFFFFF"
+        d="M 68.289062 131.433594 L 80.644531 131.433594 L 80.644531 178.578125 L 56.664062 178.578125 L 56.664062 143.058594 C 56.664062 136.640625 61.871094 131.433594 68.289062 131.433594 Z M 68.289062 131.433594 "
+      />
+      <path
+        fill="#001E5B"
+        d="M 151.511719 104.578125 L 152.902344 104.578125 C 157.257812 89.683594 166.484375 81.371094 183.71875 81.371094 C 207.742188 81.371094 220.273438 100.074219 220.273438 127.789062 L 220.273438 132.292969 C 220.273438 160.179688 207.738281 178.71875 183.71875 178.71875 C 166.484375 178.71875 157.257812 170.402344 152.902344 155.503906 L 151.511719 155.503906 M 173.097656 156.546875 C 187.71875 156.546875 193.816406 150.308594 193.816406 133.851562 L 193.816406 126.40625 C 193.816406 109.773438 187.71875 103.542969 173.097656 103.542969 C 157.605469 103.542969 151.511719 109.777344 151.511719 126.0625 L 151.511719 134.894531 C 151.511719 150.308594 157.605469 156.546875 173.097656 156.546875 Z M 173.097656 156.546875 "
+      />
+      <path
+        fill="#001E5B"
+        d="M 92.25 107.867188 L 104.605469 107.867188 L 104.605469 178.578125 L 80.625 178.578125 L 80.625 119.492188 C 80.625 113.078125 85.832031 107.871094 92.246094 107.871094 Z M 92.25 107.867188 "
+      />
+      <path
+        fill="#001E5B"
+        d="M 140.253906 60 L 152.609375 60 L 152.609375 178.578125 L 128.625 178.578125 L 128.625 71.625 C 128.625 65.210938 133.835938 60 140.25 60 Z M 140.253906 60 "
+      />
+      <path
+        fill="#001E5B"
+        d="M 44.300781 154.996094 L 56.65625 154.996094 L 56.65625 178.578125 L 32.675781 178.578125 L 32.675781 166.621094 C 32.675781 160.207031 37.882812 154.996094 44.300781 154.996094 Z M 44.300781 154.996094 "
+      />
+    </svg>
+  );
+}
 
-    return (
-      <div
-        className={cn(
-          "benice-symbol inline-flex h-12 w-12 items-end rounded-[1.1rem] bg-[#001E5B] p-2.5 text-white shadow-[0_12px_30px_rgba(0,30,91,0.16)]",
-          className,
-        )}
-      >
-        <span className="bar h-2 w-1.5 rounded-full bg-white" />
-        <span className="bar h-4 w-1.5 rounded-full bg-[#FFC755]" />
-        <span className="bar h-6 w-1.5 rounded-full bg-[#F7A600]" />
-        <span className="bar h-8 w-1.5 rounded-full bg-white" />
-        <span className="ml-1 text-3xl font-semibold leading-none tracking-[-0.08em]">
-          b
-        </span>
-      </div>
-    );
+export function BeeNiceLogo({ compact = false, className }: BeeNiceLogoProps) {
+  if (compact) {
+    return <LogoMark className={className} />;
   }
 
   return (
-    <div className={cn("inline-flex items-end gap-3 text-[#001E5B]", className)}>
-      <div className="benice-mark inline-flex items-end gap-1">
-        <span className="h-2 w-2 rounded-full bg-white shadow-[0_0_0_1px_rgba(0,30,91,0.08)]" />
-        <span className="h-4 w-2 rounded-full bg-[#FFC755]" />
-        <span className="h-6 w-2 rounded-full bg-[#F7A600]" />
-        <span className="h-8 w-2 rounded-full bg-[#001E5B]" />
-        <span className="text-5xl font-semibold leading-none tracking-[-0.11em]">b</span>
-      </div>
+    <div className={cn("inline-flex items-center gap-3 text-[#001E5B]", className)}>
+      <LogoMark />
       <span className="font-display text-[2rem] leading-none tracking-[-0.08em]">
         bee nice
       </span>

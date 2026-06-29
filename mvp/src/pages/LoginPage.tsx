@@ -42,7 +42,7 @@ export function LoginPage() {
     <div className="flex min-h-screen flex-col items-center justify-center bg-[#FFFDF9] px-4">
       <div className="w-full max-w-sm space-y-8">
         <div className="flex flex-col items-center gap-4">
-          <BeeNiceLogo compact theme="amber" className="h-16 w-16" />
+          <BeeNiceLogo compact className="h-16 w-16" />
           <h1 className="font-display text-3xl tracking-[-0.08em] text-[#001E5B]">
             bee nice
           </h1>

@@ -1,16 +1,16 @@
 ---
 tags: [domaine/pro, projet/beeniche, type/todo, agents]
-updated: 2026-06-24
+updated: 2026-06-29
 ---
 
 # BeeNice Calendar — TODO
 
 ## Resume
 - **Goal:** outil B2B de booking pour les sales reps. **Cible : v0 live début juillet 2026** (Julien, réunion [[LOG|11-06]]). Premier client = **Cozy RH** (avec un Z, Microsoft).
-- **State:** PRs #2→#7 mergées sur `main`. **PR #9** (prep démo : reshape seed + badge provider + titre Caller) + **PR #8** (import `project/` notes → source de vérité repo) **ouvertes, disjointes** — mergeables dans n'importe quel ordre (fichiers séparés). Détail [[LOG|session 7]].
-- **Next:** **démo Julien + Camille** — connecter MS + Google en live (preuve auth Nylas) sur données seed crédibles. Après démo : **débloquer l'auth Microsoft pour Cozy RH = chemin critique juillet**, consentement admin à faire partir de **Julien/BeeNice** (Adam n'a pas de contact Cozy direct). Brief prêt → [[brief-julien-auth-prod]].
+- **State:** PRs #2→#9 mergées sur `main`. **PR #10 (F3 — calendriers Schedule-X v4) ouverte**, à jour, verte. À review/merger. Dernier commit `2c7d344` (cette session) : **2 bugs Schedule-X corrigés** — (1) crash `Event id ... is not a valid id` (l'`id` d'event était l'ISO brut, colonnes/points illégaux en `querySelector`) ; (2) calendrier caller qui ne remplissait pas l'écran. **Non committé sur la branche F3** : `BeeNiceLogo` reconstruit avec le **vrai logo** (SVG vectoriel de `docs/Logo_BeeNice_Fond_Jaune.pdf`) + `LoginPage` + le PDF source — à committer.
+- **Next:** **démo Julien + Camille** — connecter MS + Google en live (preuve auth Nylas) sur données seed crédibles ; vérifier en live le rendu Schedule-X + la **preuve buffer** (book 09:00 → 08:30 & 09:30 disparaissent). Après démo : **débloquer l'auth Microsoft pour Cozy RH = chemin critique juillet**, consentement admin à faire partir de **Julien/BeeNice** (Adam n'a pas de contact Cozy direct). Brief prêt → [[brief-julien-auth-prod]].
   - ⚠️ DB dev (`mvp/server/data/mvp.sqlite` + WAL) **supprimée** cette session → reconnecter les calendriers (c'est justement la démo live).
-  - **AgendaBoard / `@schedule-x` = choix UX délibéré, ne pas toucher.** (NB : `@schedule-x/react` pas encore dans `package.json`, AgendaBoard actuel est custom — à vérifier avant F3.)
+  - **F3 livré** : les 3 surfaces calendrier (caller, agenda admin, picker reposition) tournent sur `@schedule-x/react` v4. `SlotPicker`/`AgendaBoard`/`lib/calendar.ts` supprimés.
 - **Run:** `npm run dev` (API 8787 + web 5174) · tests : `npm run test:web` et `node --test mvp/server/lib/**/*.test.mjs mvp/server/lib/*.test.mjs mvp/server/lib/http/*.test.mjs`
 - Contexte → [[overview]] · Specs → [[functional-spec]] · Archi → [[ARCHITECTURE]] · wiki → [[wiki/index|wiki]] · Historique → [[LOG]]
 
@@ -44,12 +44,14 @@ updated: 2026-06-24
 - [ ] Assignation manuelle ET auto via Google Sheet — auto = toujours réassigner au **même caller**
 
 ### Frontend restant
-- [ ] F3 — Calendrier semaine avec axe horaire (`@schedule-x/react`, depends F2 ✅)  → verify: rendu créneaux, `npm run test:web` vert
+- [x] **F3 — Calendrier semaine sur `@schedule-x/react` v4** (3 surfaces : caller, agenda admin, picker reposition). Wrapper unique `ScheduleXWeek` + helpers purs `lib/schedule-x.ts` (testés). Fenêtre booking 12→260 sem. (avant + plancher semaine courante côté caller/reposition ; pas de plancher côté admin). Stratégie 30 min + buffer 15 min **inchangée** (100 % serveur). Backend 215/215 + web 40/40 + build verts.
 - [x] **F4a — Badge provider Google/Microsoft sur connexions rep** — [PR #9](https://github.com/aramz33/BeeNice-Calendar/pull/9). Colonne **additive** `provider_vendor` (le champ `provider` reste « nylas »/« mock » car `isConnected` en dépend) ; persistée depuis `state.provider` au callback Nylas ; remontée `fromConnectionRow → upsertConnection → decorateRep → types.ts → ProviderVendorBadge` dans `AdminConnectionsPage`. Vendors seedés pour que les cartes mock affichent aussi un badge. **À vérifier en live (nylas)** : après connexion réelle Google/MS, la carte rep montre le bon badge.
 - [ ] F4b — Bonus timezone côté caller/prospect : permettre au caller de voir les disponibilités depuis le fuseau du prospect appelé  → verify: affichage créneaux lisible dans timezone choisie, sans changer timezone client (`Europe/Paris`)
 - [ ] F4c — Assignation tâche de repositionnement depuis vue admin (depends B4 ✅)
 - [ ] F5 — Affichage statut RSVP dans détail booking (depends B5 ✅)
 - [ ] **Édition contact client** dans `/admin/settings`  → verify: modifier prénom/nom/tel/email d'un client existant
+- [ ] **Admin accède aussi à la vue caller** : le rôle admin a l'app complète — agir comme admin (vue admin + settings) **et** comme caller (vue caller normale).  → verify: connecté en admin, un lien/bascule mène à `/caller` et le booking y fonctionne
+  - état actuel : `/caller` est déjà sous `RequireAuth` (pas `RequireAdmin`) donc la route s'affiche pour un admin ; gaps réels = (1) pas de lien vers la vue caller dans `AppChrome` quand `role === "admin"`, (2) `RootRedirect` envoie l'admin vers `/admin/bookings` (garder, mais ajouter l'accès), (3) vérifier que `/api/caller/*` (guardé `requireAuth`) répond bien pour le rôle admin — sinon élargir le guard.
 
 ### Livraison / déploiement
 - [ ] **Sécu avant VPS** : `BETTER_AUTH_SECRET` — remplacer le fallback hardcodé de `auth.mjs` par un fail-fast au démarrage + provisionner la var (`openssl rand -base64 32`)  → verify: serveur refuse de démarrer sans la var → détail [[beeniceapp-auth-secret-fallback]]

@@ -1,5 +1,11 @@
+import { useMemo } from "react";
 import { AppChrome } from "@mvp/components/AppChrome";
-import { SlotPicker } from "@mvp/components/SlotPicker";
+import { ScheduleXWeek } from "@mvp/components/calendar/ScheduleXWeek";
+import {
+  currentWeekStartPlainDate,
+  forwardMaxPlainDate,
+  slotsToEvents,
+} from "@mvp/lib/schedule-x";
 import { BookingConfirmDialog } from "./caller/BookingConfirmDialog";
 import { ClientFilter } from "./caller/ClientFilter";
 import { ProspectForm } from "./caller/ProspectForm";
@@ -38,19 +44,22 @@ export function CallerPage() {
     setNotes,
     sourceTask,
     timezone,
-    hasPreviousAvailabilityWeek,
-    hasNextAvailabilityWeek,
+    availabilityWeekStartIso,
     handleWorkspaceSelect,
     handleTaskSelect,
     resetTask,
-    handlePreviousAvailabilityWeek,
-    handleNextAvailabilityWeek,
+    handleAvailabilityWeekChange,
     handleSubmit,
   } = useCallerController();
 
+  const slotEvents = useMemo(
+    () => slotsToEvents(availability, selectedSlot),
+    [availability, selectedSlot],
+  );
+
   return (
     <AppChrome title="Caller">
-      <div className="flex gap-6">
+      <div className="flex min-h-0 flex-1 gap-6">
         {/* Panel gauche */}
         <aside className="flex w-64 shrink-0 flex-col gap-4 lg:w-72">
           <ClientFilter
@@ -92,7 +101,7 @@ export function CallerPage() {
         </aside>
 
         {/* Zone principale : calendrier */}
-        <main className="min-w-0 flex-1">
+        <main className="caller-calendar flex min-h-0 min-w-0 flex-1 flex-col">
           {!selectedSlug ? (
             <div className="flex h-64 items-center justify-center rounded-2xl border-2 border-dashed border-[#001E5B]/10">
               <p className="text-[#001E5B]/48">
@@ -100,15 +109,15 @@ export function CallerPage() {
               </p>
             </div>
           ) : (
-            <SlotPicker
-              availability={availability}
-              selectedSlot={selectedSlot}
-              onSelect={setSelectedSlot}
+            <ScheduleXWeek
+              events={slotEvents}
+              timezone={timezone}
+              weekStartIso={availabilityWeekStartIso}
+              onWeekStartChange={handleAvailabilityWeekChange}
+              onEventClick={(event) => setSelectedSlot(String(event.slotIso))}
+              minDate={currentWeekStartPlainDate()}
+              maxDate={forwardMaxPlainDate()}
               loading={loadingAvailability}
-              onPreviousWeek={handlePreviousAvailabilityWeek}
-              onNextWeek={handleNextAvailabilityWeek}
-              hasPreviousWeek={hasPreviousAvailabilityWeek}
-              hasNextWeek={hasNextAvailabilityWeek}
             />
           )}
         </main>

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { addWeeks, endOfWeek, parseISO, startOfWeek, subWeeks } from "date-fns";
+import { endOfWeek, parseISO, startOfWeek } from "date-fns";
 import { useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { apiFetch } from "@mvp/lib/api";
@@ -16,7 +16,6 @@ import type {
 } from "@mvp/lib/types";
 
 const WEEK_STARTS_ON = 1;
-const BOOKING_WINDOW_WEEKS = 12;
 
 export function useCallerController() {
   const { session } = useSession();
@@ -61,12 +60,6 @@ export function useCallerController() {
     () => startOfWeek(new Date(), { weekStartsOn: WEEK_STARTS_ON }),
     [],
   );
-  const lastBookableWeekStart = useMemo(
-    () => addWeeks(firstBookableWeekStart, BOOKING_WINDOW_WEEKS - 1),
-    [firstBookableWeekStart],
-  );
-  const hasPreviousAvailabilityWeek = currentWeekStart > firstBookableWeekStart;
-  const hasNextAvailabilityWeek = currentWeekStart < lastBookableWeekStart;
 
   const selectedWorkspace = useMemo(
     () => workspaces.find((w) => w.slug === selectedSlug) ?? null,
@@ -221,14 +214,8 @@ export function useCallerController() {
     setModalDismissed(true);
   };
 
-  const handlePreviousAvailabilityWeek = () => {
-    if (hasPreviousAvailabilityWeek)
-      setAvailabilityWeekStartIso(subWeeks(currentWeekStart, 1).toISOString());
-  };
-
-  const handleNextAvailabilityWeek = () => {
-    if (hasNextAvailabilityWeek)
-      setAvailabilityWeekStartIso(addWeeks(currentWeekStart, 1).toISOString());
+  const handleAvailabilityWeekChange = (weekStartIso: string) => {
+    setAvailabilityWeekStartIso(weekStartIso);
   };
 
   const handleSubmit = async () => {
@@ -314,13 +301,11 @@ export function useCallerController() {
     setNotes,
     sourceTask,
     timezone,
-    hasPreviousAvailabilityWeek,
-    hasNextAvailabilityWeek,
+    availabilityWeekStartIso,
     handleWorkspaceSelect,
     handleTaskSelect,
     resetTask,
-    handlePreviousAvailabilityWeek,
-    handleNextAvailabilityWeek,
+    handleAvailabilityWeekChange,
     handleSubmit,
   };
 }

@@ -9,7 +9,11 @@ mvp/dist/
 mvp/**/server/data/
 
 
-.claude/
+.claude/*
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/beenice-resume/
+!.claude/skills/beenice-handoff/
 Beenice - Charte graphique-2025 (1).pdf
 
 *.srt

@@ -12,27 +12,34 @@ Target: v0 live early July 2026; first client Cosy RH (Microsoft/Azure).
 ## Where are we? / end of session
 
 State, next actions, and decisions are **not** duplicated here — they live in
-`project/` (the source of truth, committed to the repo so the team shares it). An
-Obsidian vault mirror is synced occasionally by Adam, but **`project/` in this repo
+`docs/project/` (the source of truth, committed to the repo so the team shares it). An
+Obsidian vault mirror is synced occasionally by Adam, but **`docs/project/` in this repo
 is authoritative** — read and write it here.
 
-- **Entrypoint** → `project/TODO.md` (`## Resume` = goal, state, next action;
-  `## Checklist` = done vs. remaining). Usually enough on its own.
-- **Depth** → `project/LOG.md` (history + rationale), `project/ARCHITECTURE.md`,
-  `project/wiki/` (routing-design, microsoft-enterprise-auth, nylas-microsoft-oauth,
+**The session flow (always follow it):**
+- **Session start** → activate the **`caveman`** and **`ponytail`** skills, then invoke
+  the **`beenice-resume`** skill. It reads `docs/project/TODO.md`
+  (`## Resume` = goal, state, next action; `## Checklist` = done vs. remaining — usually
+  enough on its own), then `ARCHITECTURE.md` / `LOG.md` / `wiki/` as needed.
+- **End of work** → invoke the **`beenice-handoff`** skill. It rewrites `docs/project/TODO.md`
+  in place, appends one dated `docs/project/LOG.md` entry (newest on top, never rewrite
+  past entries), and updates `docs/project/ARCHITECTURE.md` when the code shape changed.
+
+Both skills defer to one repo-local spec:
+`.claude/skills/beenice-resume/references/project-structure.md`. The global `handoff`
+skill targets the Obsidian vault; these project skills target `docs/project/` — keep them
+separate. Notes use Obsidian-style `[[wikilinks]]` (path-independent; render as plain text
+on GitHub). Never create dated handoff files in `docs/project/`.
+
+- **Depth** → `docs/project/LOG.md`, `docs/project/ARCHITECTURE.md`,
+  `docs/project/wiki/` (routing-design, microsoft-enterprise-auth, nylas-microsoft-oauth,
   brief-julien-auth-prod, …).
 - **Cross-check** → root `CONTEXT.md` (domain terms + decisions) and `git log`.
 
-End a session by updating `project/TODO.md` (rewrite `## Resume` + flip checklist) and
-appending a dated `project/LOG.md` entry (newest on top, never rewrite past entries);
-update `project/ARCHITECTURE.md` when the code shape changes. Notes use Obsidian-style
-`[[wikilinks]]` — kept for vault round-trip; they render as plain text on GitHub.
-Never create dated handoff files at the project root.
-
 ## Workflow guardrails
 
-- **Open work / issues**: no separate folder — checklist items in `project/TODO.md`,
-  design notes for open questions in `project/wiki/`. Triage vocab: see
+- **Open work / issues**: no separate folder — checklist items in `docs/project/TODO.md`,
+  design notes for open questions in `docs/project/wiki/`. Triage vocab: see
   `docs/agents/triage-labels.md`.
 - **Before major decisions** (rewrite vs. continue, new sprint with a deadline,
   scoping a new client): invoke `/delivery-scoping` first — it explores the code

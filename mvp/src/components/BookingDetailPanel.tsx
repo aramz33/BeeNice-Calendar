@@ -15,8 +15,14 @@ import {
 } from "@mvp/components/ui/card";
 import { Input } from "@mvp/components/ui/input";
 import { Label } from "@mvp/components/ui/label";
-import { SlotPicker } from "@mvp/components/SlotPicker";
+import { useMemo } from "react";
+import { ScheduleXWeek } from "@mvp/components/calendar/ScheduleXWeek";
 import { StatusBadge } from "@mvp/components/StatusBadge";
+import {
+  currentWeekStartPlainDate,
+  forwardMaxPlainDate,
+  slotsToEvents,
+} from "@mvp/lib/schedule-x";
 import { formatDateTime, formatRelativeShort } from "@mvp/lib/time";
 import type {
   AvailabilityResponse,
@@ -43,10 +49,8 @@ export function BookingDetailPanel({
   selectedRescheduleSlot,
   onSelectRescheduleSlot,
   loadingRescheduleAvailability,
-  hasPreviousRescheduleWeek,
-  hasNextRescheduleWeek,
-  onPreviousRescheduleWeek,
-  onNextRescheduleWeek,
+  rescheduleWeekStartIso,
+  onRescheduleWeekChange,
   rescheduleSelectedSlot,
   onRescheduleBooking,
   bare = false,
@@ -62,14 +66,17 @@ export function BookingDetailPanel({
   selectedRescheduleSlot: string | null;
   onSelectRescheduleSlot: (slot: string | null) => void;
   loadingRescheduleAvailability: boolean;
-  hasPreviousRescheduleWeek: boolean;
-  hasNextRescheduleWeek: boolean;
-  onPreviousRescheduleWeek: () => void;
-  onNextRescheduleWeek: () => void;
+  rescheduleWeekStartIso: string;
+  onRescheduleWeekChange: (weekStartIso: string) => void;
   rescheduleSelectedSlot: AvailabilitySlot | null;
   onRescheduleBooking: () => void;
   bare?: boolean;
 }) {
+  const rescheduleEvents = useMemo(
+    () => slotsToEvents(rescheduleAvailability, selectedRescheduleSlot),
+    [rescheduleAvailability, selectedRescheduleSlot],
+  );
+
   const content = (
     <div className="space-y-5">
       {loading ? (
@@ -226,16 +233,20 @@ export function BookingDetailPanel({
               </p>
             </div>
 
-            <SlotPicker
-              availability={rescheduleAvailability}
-              selectedSlot={selectedRescheduleSlot}
-              onSelect={onSelectRescheduleSlot}
-              loading={loadingRescheduleAvailability}
-              onPreviousWeek={onPreviousRescheduleWeek}
-              onNextWeek={onNextRescheduleWeek}
-              hasPreviousWeek={hasPreviousRescheduleWeek}
-              hasNextWeek={hasNextRescheduleWeek}
-            />
+            <div className="booking-detail-calendar">
+              <ScheduleXWeek
+                events={rescheduleEvents}
+                timezone={detail.booking.timezone}
+                weekStartIso={rescheduleWeekStartIso}
+                onWeekStartChange={onRescheduleWeekChange}
+                onEventClick={(event) =>
+                  onSelectRescheduleSlot(String(event.id))
+                }
+                minDate={currentWeekStartPlainDate()}
+                maxDate={forwardMaxPlainDate()}
+                loading={loadingRescheduleAvailability}
+              />
+            </div>
 
             {rescheduleSelectedSlot ? (
               <div className="rounded-2xl border border-[#001E5B]/8 bg-white px-4 py-4 text-sm text-[#001E5B]/72">

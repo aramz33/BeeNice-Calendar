@@ -16,6 +16,9 @@ vi.mock("@mvp/lib/session", () => ({
   SessionProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
+vi.mock("@mvp/components/calendar/ScheduleXWeek", () => ({
+  ScheduleXWeek: () => <div data-testid="schedule-x-week" />,
+}));
 
 import { useSession } from "@mvp/lib/session";
 
