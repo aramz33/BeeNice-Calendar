@@ -1,13 +1,13 @@
 ---
 tags: [domaine/pro, projet/beeniche, type/todo, agents]
-updated: 2026-06-25
+updated: 2026-06-29
 ---
 
 # BeeNice Calendar — TODO
 
 ## Resume
 - **Goal:** outil B2B de booking pour les sales reps. **Cible : v0 live début juillet 2026** (Julien, réunion [[LOG|11-06]]). Premier client = **Cozy RH** (avec un Z, Microsoft).
-- **State:** PRs #2→#9 mergées sur `main`. **PR #10 (F3 — calendriers Schedule-X v4) ouverte**, basée sur `main` à jour, verte (build + web 40/40 + backend 215/215). À review/merger. `backup/f3-preintegration` gardée en local le temps de valider. **Non committé sur la branche F3** : `BeeNiceLogo` reconstruit avec le **vrai logo** (SVG vectoriel extrait de `docs/Logo_BeeNice_Fond_Jaune.pdf` via `pdftocairo`) — remplace l'approximation CSS faite-main ; props `theme` (navy/amber) supprimées (seul `amber` était utilisé). À committer.
+- **State:** PRs #2→#9 mergées sur `main`. **PR #10 (F3 — calendriers Schedule-X v4) ouverte**, à jour, verte. À review/merger. Dernier commit `2c7d344` (cette session) : **2 bugs Schedule-X corrigés** — (1) crash `Event id ... is not a valid id` (l'`id` d'event était l'ISO brut, colonnes/points illégaux en `querySelector`) ; (2) calendrier caller qui ne remplissait pas l'écran. **Non committé sur la branche F3** : `BeeNiceLogo` reconstruit avec le **vrai logo** (SVG vectoriel de `docs/Logo_BeeNice_Fond_Jaune.pdf`) + `LoginPage` + le PDF source — à committer.
 - **Next:** **démo Julien + Camille** — connecter MS + Google en live (preuve auth Nylas) sur données seed crédibles ; vérifier en live le rendu Schedule-X + la **preuve buffer** (book 09:00 → 08:30 & 09:30 disparaissent). Après démo : **débloquer l'auth Microsoft pour Cozy RH = chemin critique juillet**, consentement admin à faire partir de **Julien/BeeNice** (Adam n'a pas de contact Cozy direct). Brief prêt → [[brief-julien-auth-prod]].
   - ⚠️ DB dev (`mvp/server/data/mvp.sqlite` + WAL) **supprimée** cette session → reconnecter les calendriers (c'est justement la démo live).
   - **F3 livré** : les 3 surfaces calendrier (caller, agenda admin, picker reposition) tournent sur `@schedule-x/react` v4. `SlotPicker`/`AgendaBoard`/`lib/calendar.ts` supprimés.
