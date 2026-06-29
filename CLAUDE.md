@@ -17,7 +17,8 @@ Obsidian vault mirror is synced occasionally by Adam, but **`docs/project/` in t
 is authoritative** — read and write it here.
 
 **The session flow (always follow it):**
-- **Session start** → invoke the **`beenice-resume`** skill. It reads `docs/project/TODO.md`
+- **Session start** → activate the **`caveman`** and **`ponytail`** skills, then invoke
+  the **`beenice-resume`** skill. It reads `docs/project/TODO.md`
   (`## Resume` = goal, state, next action; `## Checklist` = done vs. remaining — usually
   enough on its own), then `ARCHITECTURE.md` / `LOG.md` / `wiki/` as needed.
 - **End of work** → invoke the **`beenice-handoff`** skill. It rewrites `docs/project/TODO.md`
