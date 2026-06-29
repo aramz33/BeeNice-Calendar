@@ -1,15 +1,15 @@
 ---
 tags: [domaine/pro, projet/beeniche, type/todo, agents]
-updated: 2026-06-29
+updated: 2026-06-29 (session 11)
 ---
 
 # BeeNice Calendar — TODO
 
 ## Resume
 - **Goal:** outil B2B de booking pour les sales reps. **Cible : v0 live début juillet 2026** (Julien, réunion [[LOG|11-06]]). Premier client = **Cozy RH** (avec un Z, Microsoft).
-- **State:** PRs #2→#9 mergées sur `main`. **PR #10 (F3 — calendriers Schedule-X v4) ouverte**, à jour, verte. À review/merger. Dernier commit `2c7d344` (cette session) : **2 bugs Schedule-X corrigés** — (1) crash `Event id ... is not a valid id` (l'`id` d'event était l'ISO brut, colonnes/points illégaux en `querySelector`) ; (2) calendrier caller qui ne remplissait pas l'écran. **Non committé sur la branche F3** : `BeeNiceLogo` reconstruit avec le **vrai logo** (SVG vectoriel de `docs/Logo_BeeNice_Fond_Jaune.pdf`) + `LoginPage` + le PDF source — à committer.
-- **Next:** **démo Julien + Camille** — connecter MS + Google en live (preuve auth Nylas) sur données seed crédibles ; vérifier en live le rendu Schedule-X + la **preuve buffer** (book 09:00 → 08:30 & 09:30 disparaissent). Après démo : **débloquer l'auth Microsoft pour Cozy RH = chemin critique juillet**, consentement admin à faire partir de **Julien/BeeNice** (Adam n'a pas de contact Cozy direct). Brief prêt → [[brief-julien-auth-prod]].
-  - ⚠️ DB dev (`mvp/server/data/mvp.sqlite` + WAL) **supprimée** cette session → reconnecter les calendriers (c'est justement la démo live).
+- **State:** **Démo client faite (25-06, Julien + Camille).** PRs #2→#9 mergées. **PR #10 (F3 — calendriers Schedule-X v4) mergée** sur `main` (`4e586cc`) — F3 livré, vrai logo déjà committé (`732cfbe`). **PR #11 ouverte** (`chore/drop-mvn-status`, `df8f55f`) : **MVN retiré, statuts 6→5** — verte (backend 214 · web 40 · build), à review/merger.
+- **Next:** **cible 1er juillet 2026** (objectif principal), **repli 7 juillet** ; **prochaine réunion 1er juillet 13h**. (a) **Merger PR #11** ; (b) le contrat de statuts est figé → envoyer à Julien la **liste des 5 statuts** à valider/ordonner + les **2 docs prod-auth** (Microsoft + Google) ; (c) chemin critique inchangé = **consentement admin Microsoft pour Cozy RH** via **Julien/BeeNice** (Adam n'a pas de contact Cozy direct). Brief prêt → [[brief-julien-auth-prod]].
+  - ⚠️ DB dev (`mvp/server/data/mvp.sqlite` + WAL) **wipée puis reseedée** cette session → reconnecter les calendriers (c'est justement la démo live).
   - **F3 livré** : les 3 surfaces calendrier (caller, agenda admin, picker reposition) tournent sur `@schedule-x/react` v4. `SlotPicker`/`AgendaBoard`/`lib/calendar.ts` supprimés.
 - **Run:** `npm run dev` (API 8787 + web 5174) · tests : `npm run test:web` et `node --test mvp/server/lib/**/*.test.mjs mvp/server/lib/*.test.mjs mvp/server/lib/http/*.test.mjs`
 - Contexte → [[overview]] · Specs → [[functional-spec]] · Archi → [[ARCHITECTURE]] · wiki → [[wiki/index|wiki]] · Historique → [[LOG]]
@@ -35,6 +35,8 @@ updated: 2026-06-29
   - reset DB : supprimer `mvp/server/data/mvp.sqlite*` puis relancer (seed ne tourne que si `clients` vide)
 
 ### Chemin critique — début juillet
+- [x] **Retirer MVN** — décision Julien (démo 25-06) : MVN est un **statut de lead, pas un statut de RDV**. Statuts **6 → 5**. Fait session 11, **PR #11** (`df8f55f`, branche `chore/drop-mvn-status`, ouverte). Enums + UI + seed nettoyés ; les normaliseurs legacy de `database.mjs` remappent `mvn → not_qualified` (lecture des anciennes lignes tolérée) ; `docs/status-contract.md` → 5 dispositions. Backend 214 · web 40 · build verts ; DB reseedée sans `mvn`. **À merger.**
+- [ ] **Envoyer la liste des 5 statuts à Julien** (Adam, non-code) pour qu'il l'ordonne/valide → contrat figé (PR #11) ; c'est elle qui type le Google Sheet (mapping n8n côté Corentin)
 - [x] **Création client — formulaire v0** — spec [[client-creation-form]], commit `4f95260` (branche `feat/client-creation-form`, pas encore PR). 5 champs requis, contact commercial persisté (`primary_contact_*`), `Europe/Paris` forcé, lien rep absolu copiable par ligne client, doublon email = `window.confirm`. `routingMode` plus envoyé par l'UI (cleanup colonne = TODO séparé ci-dessous). Tests backend 217/217 + web 34/34 + build verts.
 - [ ] **Google Sheets — sync bidirectionnelle** (débloquée, [schéma fourni](https://docs.google.com/spreadsheets/d/1nom9ywiN7NFhVGUPZZ15ZWcqlkIR66D2xTsdZ8vbV0Q/edit))  → verify: statut Sheet → tâche reposition ; tâche faite → push retour Sheet
   - source de vérité = Google Sheet · contrat de statuts app = `docs/status-contract.md` (Julien type son Sheet dessus, n8n mappe) · pont Sheet↔Pipedrive via leur n8n (Hostinger) · coordonner avec **Corentin**
@@ -48,8 +50,12 @@ updated: 2026-06-29
 - [x] **F4a — Badge provider Google/Microsoft sur connexions rep** — [PR #9](https://github.com/aramz33/BeeNice-Calendar/pull/9). Colonne **additive** `provider_vendor` (le champ `provider` reste « nylas »/« mock » car `isConnected` en dépend) ; persistée depuis `state.provider` au callback Nylas ; remontée `fromConnectionRow → upsertConnection → decorateRep → types.ts → ProviderVendorBadge` dans `AdminConnectionsPage`. Vendors seedés pour que les cartes mock affichent aussi un badge. **À vérifier en live (nylas)** : après connexion réelle Google/MS, la carte rep montre le bon badge.
 - [ ] F4b — Bonus timezone côté caller/prospect : permettre au caller de voir les disponibilités depuis le fuseau du prospect appelé  → verify: affichage créneaux lisible dans timezone choisie, sans changer timezone client (`Europe/Paris`)
 - [ ] F4c — Assignation tâche de repositionnement depuis vue admin (depends B4 ✅)
+- [ ] **Étendre la fenêtre agenda admin** au-delà de 09h–18h (démo 25-06 : RDV placés plus tôt/tard doivent être visibles) ; + bugs UI mineurs notés en démo  → verify: un RDV à 08h ou 19h apparaît dans l'agenda admin
+- [ ] **Fix prefill reposition** : le préremplissage du formulaire caller casse sur la forme prénom/nom en DB  → verify: choisir une tâche de repositionnement préremplit nom/email correctement
+- [ ] **Auto-email lien connexion rep à la création client** (optionnel) — mail typé au manager du client avec le lien `/connect/:token`  → verify: créer un client envoie le mail au contact
 - [ ] F5 — Affichage statut RSVP dans détail booking (depends B5 ✅)
 - [ ] **Édition contact client** dans `/admin/settings`  → verify: modifier prénom/nom/tel/email d'un client existant
+- [ ] **Logo dans l'onglet (favicon)** : remplacer le favicon par le vrai logo BeeNice  → verify: l'onglet du navigateur affiche le logo BeeNice
 - [ ] **Admin accède aussi à la vue caller** : le rôle admin a l'app complète — agir comme admin (vue admin + settings) **et** comme caller (vue caller normale).  → verify: connecté en admin, un lien/bascule mène à `/caller` et le booking y fonctionne
   - état actuel : `/caller` est déjà sous `RequireAuth` (pas `RequireAdmin`) donc la route s'affiche pour un admin ; gaps réels = (1) pas de lien vers la vue caller dans `AppChrome` quand `role === "admin"`, (2) `RootRedirect` envoie l'admin vers `/admin/bookings` (garder, mais ajouter l'accès), (3) vérifier que `/api/caller/*` (guardé `requireAuth`) répond bien pour le rôle admin — sinon élargir le guard.
 
@@ -77,6 +83,8 @@ updated: 2026-06-29
 
 ### Actions Adam (non-code)
 - [ ] Obtenir le SIRET → envoyer devis + facture acompte 30 %
+- [ ] **Envoyer les 2 docs prod-auth** (un Microsoft, un Google) à Julien/Camille — étapes côté BeeNice (consentement admin MS ; site + logo + politique de confidentialité + DNS Corentin côté Google)
+- [ ] **Évaluer le devis supplémentaire** pour tout **routing custom par client** (~65 €/h) — round-robin + sync bidirectionnelle Google Sheet déjà **inclus** au devis ; le custom par client est en plus (acté démo 25-06)
 - [ ] Envoyer documentation Nylas (RGPD, sécurité) à Julien + caler RDV tarif volume
 - [ ] Process : créer une ligne/ticket et taguer Julien pour toute question
 - [ ] Accès séparés admin/caller — freelancers hors Clotilde/Florian sans accès complet par défaut

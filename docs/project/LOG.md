@@ -9,10 +9,32 @@ Historique append-only + rationale des décisions. Newest en haut, jamais rééc
 
 <!-- append newest entries directly below; never rewrite past entries -->
 
+## 2026-06-29 (session 11) — PR #10 (F3) mergée + MVN retiré (statuts 6→5, PR #11)
+- **PR #10 mergée** sur `main` (`4e586cc`, squash). F3 — les 3 surfaces calendrier sur Schedule-X v4 — est live. La note « logo non committé » du TODO était **périmée** : le vrai logo était déjà dans `732cfbe`. Plus rien en attente côté F3.
+- **MVN retiré de bout en bout** (PR #11, branche `chore/drop-mvn-status`, commit `df8f55f`) — exécute la décision Julien de la démo 25-06 (MVN = statut de *lead*, pas de RDV). Contrat de statuts **6 → 5** : `completed`, `no_show`, `not_qualified`, `cancelled`, `refused`.
+  - Backend : `OUTCOME_STATES` (`bookings.mjs`), `DISPLAY_STATUSES` (`state.mjs`), branche `getDisplayStatus`. Seed `booking-6` → `not_qualified`.
+  - **Tolérance legacy (décision)** : les 2 normaliseurs de `database.mjs` (backfill `CASE` + `normalizeLegacyStatus`) **remappent** `'mvn' → not_qualified` au lieu de dropper le case — les anciennes lignes restent une disposition valide. Commentaire posé sur le remap.
+  - Frontend : unions (`types.ts`, `BookingDetailPanel`, `BookingSheet`), UI (badge `StatusBadge`, bouton d'action + import `PhoneOff`, série `BookingsChart`, couleur `schedule-x.ts`). Test MVN supprimé (`booking-flows.test.mjs`) — le terminal est déjà couvert par `not_qualified`. Doc `docs/status-contract.md` → 5 dispositions.
+  - **Vérif** : backend 214/214 · web 40/40 · build clean · grep `mvn` = seulement les 2 remaps legacy · DB reseedée → `outcome_state` ∈ {pending, completed, no_show, not_qualified, refused}, aucun `mvn`.
+- **Suite (Adam, non-code)** : le contrat de statuts est figé → envoyer la liste des 5 statuts à Julien pour validation/ordonnancement (c'est elle qui type le Google Sheet, mapping n8n côté Corentin).
+
 ## 2026-06-29 (session 10) — 2 bugs Schedule-X corrigés sur la branche F3 (PR #10, `2c7d344`)
 - **Bug 1 — crash au rendu du calendrier caller** : `[Schedule-X error]: Event id 2026-06-29T12:00:00.000Z is not a valid id`. Cause : `slotsToEvents` (`mvp/src/lib/schedule-x.ts`) posait `id: slot.startAt` (ISO brut) ; Schedule-X passe l'`id` à `document.querySelector` → les `:` et `.` sont illégaux. **Fix** : `id` dérivé safe (`startAt.replace(/[:.]/g, "-")`) + on transporte l'ISO brut dans un champ custom `slotIso` ; `CallerPage` lit `event.slotIso` au clic (et non plus `event.id`) pour rester aligné sur la comparaison `slot.startAt === selectedSlotIso`. Les bookings gardent `booking.id` (uuid, déjà valide). Test `schedule-x.test.ts` mis à jour (6/6).
 - **Bug 2 — le calendrier caller ne remplissait pas la page** : il s'affichait en bande fixe (`560px` / `72vh`) avec du vide en dessous. Itération en deux temps (cf. `grill-me`) : (a) première passe `min-h-screen` → débordait sous l'écran car `height:100%` sur le wrapper Schedule-X n'a pas de parent à hauteur **définie** et retombe sur la hauteur du contenu (grille 9h). (b) **Fix retenu** : `AppChrome` = shell **`h-screen flex-col`** (hauteur définie) + `<main>` `flex-1 min-h-0 overflow-y-auto` ; `CallerPage` met sa rangée en `flex-1 min-h-0` et le `<main>` calendrier en `flex-col` + classe `caller-calendar` ; CSS `.caller-calendar .sx-react-calendar-wrapper { height:100%; max-height:none }`. Le calendrier remplit donc l'espace restant et scrolle **en interne**. **Décision (grill)** : scope viewport-pin pensé « caller-only », mais comme `overflow-y-auto` sur `<main>` empêche tout clipping, les pages admin scrollent juste *dans* `<main>` au lieu de la fenêtre — comportement préservé, pas de page coupée.
 - Reste non committé sur la branche : `BeeNiceLogo`/`LoginPage`/`docs/Logo_BeeNice_Fond_Jaune.pdf` (vrai logo, session 9) — pas inclus dans `2c7d344`.
+
+## 2026-06-25 — Démo client (Julien + Camille)
+Source : `transcript_04/meeting-25-06`. Première démo de la plateforme ; **Camille rejoint le projet** (nouvelle opératrice/admin côté BeeNice). Overview montré admin → caller → flux client/connexion.
+- **Statut MVN supprimé (décision Julien — renverse la session 2/2b)** : « MVN, c'est un statut de **lead**, pas un statut de rendez-vous, je te l'enlève. » Les statuts passent de **6 → 5**. À retirer de bout en bout (contrat + code + seed + tests) — repris en item TODO, pas fait dans cette passe doc.
+- **Liste de statuts à envoyer à Julien** pour qu'il l'ordonne/valide → c'est cette liste typée qui pilotera le Google Sheet (et le mapping n8n côté Corentin).
+- **Routing confirmé** : priorité n°1 = **disponibilité** ; si plusieurs reps libres, répartition par **historique** des RDV pour rééquilibrer (le rep le moins servi passe devant). Recalcul auto. Conforme au modèle % livré (PR #4).
+- **Périmètre devis** : round-robin **et** sync bidirectionnelle Google Sheet des statuts sont **inclus** dans le devis. Tout **routing custom par client** = **devis supplémentaire** (~65 €/h, à évaluer par Adam). Posé clairement en réunion pour éviter le scope creep.
+- **Agenda admin** : fenêtre 09h–18h à **étendre** (RDV placés plus tôt/tard) ; quelques bugs UI mineurs notés. Schedule-X caller a buggé en live → **déjà corrigé session 10**, pas d'action neuve.
+- **Vue caller accessible en admin** — reconfirmé (déjà en TODO).
+- **Auth prod** : Adam envoie **2 docs** (un Microsoft, un Google) listant ce que BeeNice doit faire. Microsoft = consentement admin (0 €, 3 j–2 sem., ~1h de travail réel ; ~1 client sur 10 peut refuser quand même ; vérification éditeur = bonus badge bleu). Google = publier + faire vérifier (la **page politique de confidentialité** est le point lent/juridique ; vérif DNS via **Corentin** ; **3–7 sem.** réalistes). Réaffirme le TODO existant + ajoute l'action « envoyer les 2 docs ».
+- **Idée d'automatisation (optionnelle)** : à la création d'un client, auto-envoyer un mail typé au manager avec le lien de connexion rep.
+- **Bug prefill reposition** : le préremplissage du formulaire caller casse sur la forme prénom/nom en DB → petit fix.
+- **Deadline** : cible **1er juillet 2026** (objectif principal), repli **7 juillet**. Prochaine réunion **1er juillet, 13h**.
 
 ## 2026-06-25 (session 9) — Vrai logo BeeNice (branche F3, non committé)
 - **Constat** : `BeeNiceLogo` était une **approximation CSS faite-main** (barres en `<span>` + lettre « b » en texte), pas le vrai logo.
