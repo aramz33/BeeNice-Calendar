@@ -9,6 +9,16 @@ Historique append-only + rationale des décisions. Newest en haut, jamais rééc
 
 <!-- append newest entries directly below; never rewrite past entries -->
 
+## 2026-06-30 (session 12) — PR #11 mergée · fenêtre booking 08-20 + fix prefill reposition (PR #12)
+- **PR #11 mergée** sur `main` (`dff791c`, squash, branche supprimée) — MVN retiré, statuts 6→5 livré. Adam a aussi **envoyé à Julien** la liste des 5 statuts + les 2 docs prod-auth (MS + Google). TODO mis à jour en conséquence.
+- **PR #12 ouverte** (`feat/widen-booking-window`, `bf2dc9b`) — deux fixes démo, plan grillé avant exécution (`/grill-me`).
+  - **Fenêtre de booking élargie 08-20** : le grilling a révélé que la génération de créneaux serveur était hardcodée `for (hour = 9; hour < 18)` (`availability.mjs:87`). **Décision** : élargir seulement la vue admin aurait été cosmétique (bandes vides, aucun RDV ne peut tomber hors 9-18) → élargissement **de bout en bout**. `availability.mjs` → `8 < 20` (créneaux 08:00→19:30). `ScheduleXWeek` reçoit une prop optionnelle `dayBoundaries`, **défaut changé à 08-20** (hérité par caller + picker reposition sans toucher leurs call-sites). `AdminBookingsPage` override **07-21** (marge visuelle). gridStep 30 min inchangé.
+  - **Décision horaires (08-20)** : amplitude choisie comme compromis tôt/tard vs hauteur de grille ; **à confirmer par Julien** (décision métier, non bloquante pour coder).
+  - **Bug latent identifié, non corrigé (hors scope)** : `slot.setHours()` utilise l'heure **locale serveur**, pas `Europe/Paris` explicite → sur VPS UTC, 08-20 local = 10-22 Paris. Noté en Resume TODO, à traiter avant déploiement.
+  - **Fix prefill reposition** : sélectionner une tâche injectait le nom complet dans le champ *prénom*, laissait *nom* vide, ne remplissait jamais *email*. **Décision (lazy)** : la tâche transporte seulement `prospect_email` (`tasks.mjs` query + `fromTaskRow` + `FollowUpTask` type) ; `handleTaskSelect` splitte `prospectName` sur l'espace → prénom = 1er mot, nom = reste, + remplit l'email. **Pas** de plomberie `prospect_first_name/last_name` structurée : le seed les laisse NULL (`seed.mjs:38`), donc en démo le split donne le même résultat ; seul edge case sacrifié = prénom composé d'un booking réel.
+  - **Vérif** : backend 215/215 (+1 test `tasks.test.mjs` sur `prospectEmail`) · web 40/40 · build clean. Vérif live mock (DB fraîche) : availability **08:00→19:30**, 120 slots, 3 reps éligibles. Vérif visuelle Adam OK (créneaux tôt/tard + prefill).
+  - **Cleanup repo** : `graphify-out/` (artefact généré, 36k lignes) ajouté au `.gitignore` — sortait du scope du commit.
+
 ## 2026-06-29 (session 11) — PR #10 (F3) mergée + MVN retiré (statuts 6→5, PR #11)
 - **PR #10 mergée** sur `main` (`4e586cc`, squash). F3 — les 3 surfaces calendrier sur Schedule-X v4 — est live. La note « logo non committé » du TODO était **périmée** : le vrai logo était déjà dans `732cfbe`. Plus rien en attente côté F3.
 - **MVN retiré de bout en bout** (PR #11, branche `chore/drop-mvn-status`, commit `df8f55f`) — exécute la décision Julien de la démo 25-06 (MVN = statut de *lead*, pas de RDV). Contrat de statuts **6 → 5** : `completed`, `no_show`, `not_qualified`, `cancelled`, `refused`.
