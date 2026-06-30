@@ -185,6 +185,15 @@ test("updateTask throws for unknown assignedCallerId", async (t) => {
   );
 });
 
+test("tasks carry prospect email and name for reposition prefill", async (t) => {
+  const store = withTempStore(t);
+  const { bookingId } = await createTestBooking(store);
+  const task = store.ensureFollowUpTask(bookingId, "cancelled");
+  assert.ok(task);
+  assert.equal(task.prospectEmail, "test@example.com");
+  assert.equal(task.prospectName, "Test Prospect");
+});
+
 test("listCallerTasks filters by clientId when provided", (t) => {
   const store = withTempStore(t);
   const allTasks = store.listCallerTasks("caller-clotilde").tasks;

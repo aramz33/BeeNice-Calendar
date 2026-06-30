@@ -20,3 +20,6 @@ Beenice - Charte graphique-2025 (1).pdf
 transcript_*/
 
 enlè
+
+# graphify generated knowledge graph (regenerable, AST-only)
+graphify-out/

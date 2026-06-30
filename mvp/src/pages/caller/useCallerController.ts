@@ -194,8 +194,10 @@ export function useCallerController() {
     setSourceTask(task);
     setCompanyName(task.companyName);
     setSalutation("");
-    setProspectFirstName(task.prospectName);
-    setProspectLastName("");
+    const parts = task.prospectName.trim().split(/\s+/);
+    setProspectFirstName(parts[0] ?? "");
+    setProspectLastName(parts.slice(1).join(" "));
+    setProspectEmail(task.prospectEmail ?? "");
     setNotes(task.notes ?? "");
     toast.success("Contexte de repositionnement chargé.");
   };

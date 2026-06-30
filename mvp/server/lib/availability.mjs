@@ -84,7 +84,7 @@ export function createAvailabilityModule({
                     continue;
                 }
 
-                for (let hour = 9; hour < 18; hour += 1) {
+                for (let hour = 8; hour < 20; hour += 1) {
                     for (
                         let minute = 0;
                         minute < 60;

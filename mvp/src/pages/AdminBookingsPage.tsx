@@ -243,6 +243,7 @@ export function AdminBookingsPage() {
             onEventClick={(event) => setSelectedBookingId(String(event.id))}
             maxDate={forwardMaxPlainDate()}
             loading={loadingDashboard}
+            dayBoundaries={{ start: "07:00", end: "21:00" }}
           />
         )}
 

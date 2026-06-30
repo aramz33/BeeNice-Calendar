@@ -74,6 +74,7 @@ export interface FollowUpTask {
   replacementBookingId?: string | null;
   companyName: string;
   prospectName: string;
+  prospectEmail: string;
   notes?: string;
   sourceStartAt: string;
 }

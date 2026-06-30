@@ -21,6 +21,7 @@ interface ScheduleXWeekProps {
   minDate?: Temporal.PlainDate;
   maxDate?: Temporal.PlainDate;
   loading?: boolean;
+  dayBoundaries?: { start: string; end: string };
 }
 
 function mondayOf(date: Temporal.PlainDate): Temporal.PlainDate {
@@ -36,6 +37,7 @@ export function ScheduleXWeek({
   minDate,
   maxDate,
   loading = false,
+  dayBoundaries,
 }: ScheduleXWeekProps) {
   const eventsService = useRef(createEventsServicePlugin()).current;
   const calendarControls = useRef(createCalendarControlsPlugin()).current;
@@ -49,7 +51,7 @@ export function ScheduleXWeek({
     views: [createViewWeek()],
     timezone,
     firstDayOfWeek: 1,
-    dayBoundaries: { start: "09:00", end: "18:00" },
+    dayBoundaries: dayBoundaries ?? { start: "08:00", end: "20:00" },
     weekOptions: { nDays: 5, gridStep: 30 },
     isResponsive: false,
     selectedDate: weekStartIsoToPlainDate(weekStartIso),
