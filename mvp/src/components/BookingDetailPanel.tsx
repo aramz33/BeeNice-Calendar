@@ -1,11 +1,4 @@
-import {
-  Ban,
-  CheckCheck,
-  Clock3,
-  PhoneOff,
-  Settings2,
-  XCircle,
-} from "lucide-react";
+import { Ban, CheckCheck, Clock3, Settings2, XCircle } from "lucide-react";
 import { Button } from "@mvp/components/ui/button";
 import {
   Card,
@@ -30,12 +23,7 @@ import type {
 } from "@mvp/lib/types";
 
 type AvailabilitySlot = AvailabilityResponse["slots"][number];
-type OutcomeState =
-  | "completed"
-  | "no_show"
-  | "not_qualified"
-  | "mvn"
-  | "refused";
+type OutcomeState = "completed" | "no_show" | "not_qualified" | "refused";
 
 export function BookingDetailPanel({
   loading,
@@ -193,15 +181,6 @@ export function BookingDetailPanel({
             >
               <Settings2 className="h-4 w-4" />
               Non qualifié
-            </Button>
-            <Button
-              variant="outline"
-              className="rounded-full"
-              disabled={updatingBooking}
-              onClick={() => onUpdateOutcome("mvn")}
-            >
-              <PhoneOff className="h-4 w-4" />
-              MVN
             </Button>
             <Button
               variant="outline"

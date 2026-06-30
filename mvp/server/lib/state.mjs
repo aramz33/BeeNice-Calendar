@@ -60,7 +60,6 @@ const DISPLAY_STATUSES = [
   "cancelled",
   "rescheduled",
   "not_qualified",
-  "mvn",
   "refused",
 ];
 

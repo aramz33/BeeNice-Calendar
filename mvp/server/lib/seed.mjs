@@ -279,11 +279,11 @@ export function createSeedState(providerMode = "mock") {
       companySize: 110,
       prospectName: "Karim Benali",
       prospectEmail: "karim@spendesk.com",
-      notes: "Mauvais numéro, à recontacter via LinkedIn.",
+      notes: "Hors cible après découverte, à recontacter via LinkedIn.",
       dayOffset: 1,
       hour: 11,
       minute: 0,
-      status: "mvn",
+      status: "not_qualified",
       assignmentReason: {
         ...assignmentBase,
         chosenRole: "senior",
@@ -331,7 +331,7 @@ export function createSeedState(providerMode = "mock") {
       "Lead non qualifié après call de découverte.",
     ),
     history("history-10", "booking-6", null, "booked", "Workspace caller"),
-    history("history-11", "booking-6", "booked", "mvn", "Admin Be Nice", "Mauvais numéro."),
+    history("history-11", "booking-6", "booked", "not_qualified", "Admin Be Nice", "Hors cible après découverte."),
     history("history-12", "booking-7", null, "booked", "Workspace caller"),
     history("history-13", "booking-7", "booked", "refused", "Admin Be Nice", "Prospect refuse."),
   ];

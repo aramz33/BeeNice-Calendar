@@ -123,7 +123,6 @@ const STATUS_COLORS: Record<DisplayStatus, CalendarColors["lightColors"]> = {
     container: "#F5F5F4",
     onContainer: "#44403C",
   },
-  mvn: { main: "#D97706", container: "#FEF3C7", onContainer: "#92400E" },
   refused: { main: "#BE123C", container: "#FECDD3", onContainer: "#881337" },
 };
 

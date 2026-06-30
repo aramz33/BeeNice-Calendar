@@ -332,7 +332,7 @@ erDiagram
 |---|---|---|
 | `booking_status_history` | historique immutable from/to display status | conserve l'audit des changements |
 | `booking_timeline_events` | timeline lisible UI admin | `booking_created`, `schedule_set`, `outcome_set`, `task_created`, etc. |
-| `follow_up_tasks` | taches de repositionnement | creees sur no-show, MVN, annulation admin/provider |
+| `follow_up_tasks` | taches de repositionnement | creees sur no-show, refus, annulation admin/provider |
 | `calendar_events` | busy cache local par rep | source complementaire a Nylas |
 | `provider_webhook_events` | journal brut webhooks provider | utile pour debug sync |
 
@@ -508,8 +508,7 @@ Le booking a deux axes : `schedule_state` pour le calendrier, `outcome_state` po
 | `cancelled`     | schedule   | oui selon chemin admin/provider | RDV annule                   |
 | `completed`     | outcome    | non                             | Honore                       |
 | `no_show`       | outcome    | oui                             | Prospect absent              |
-| `not_qualified` | outcome    | non                             | Non qualifie                 |
-| `mvn`           | outcome    | non                             | Mauvais numero (terminal)    |
+| `not_qualified` | outcome    | non                             | Non qualifie (terminal)      |
 | `refused`       | outcome    | oui                             | Pas dispo a ce creneau       |
 
 ```mermaid
@@ -528,8 +527,6 @@ stateDiagram-v2
     Rescheduled --> NoShow: outcome no_show
     Scheduled --> NotQualified: outcome not_qualified
     Rescheduled --> NotQualified: outcome not_qualified
-    Scheduled --> Mvn: outcome mvn
-    Rescheduled --> Mvn: outcome mvn
     Scheduled --> Refused: outcome refused
     Rescheduled --> Refused: outcome refused
 
@@ -541,7 +538,6 @@ stateDiagram-v2
 
     Completed --> [*]
     NotQualified --> [*]
-    Mvn --> [*]
     Rebooked --> [*]
     Dismissed --> [*]
 ```

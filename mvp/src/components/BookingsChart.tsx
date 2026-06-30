@@ -23,7 +23,6 @@ const STATUS_CONFIG = [
   { key: "no_show", label: "No-show", color: "#7C3AED" },
   { key: "cancelled", label: "Annulé", color: "#b73039" },
   { key: "not_qualified", label: "Non qualifié", color: "#9ca3af" },
-  { key: "mvn", label: "MVN", color: "#d97706" },
   { key: "refused", label: "Refus", color: "#9f1239" },
 ] as const;
 
@@ -35,7 +34,6 @@ type WeekData = {
   no_show: number;
   cancelled: number;
   not_qualified: number;
-  mvn: number;
   refused: number;
 };
 
@@ -67,7 +65,6 @@ export function BookingsChart({ bookings }: BookingsChartProps) {
           no_show: 0,
           cancelled: 0,
           not_qualified: 0,
-          mvn: 0,
           refused: 0,
         });
       }

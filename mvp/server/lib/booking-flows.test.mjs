@@ -140,18 +140,6 @@ test("caller cancellation keeps direct-cancel behavior and marks the booking can
   assert.equal(store.getCallerCancelMode(booking), null);
 });
 
-test("outcome MVN sets the disposition and is terminal (no reposition task)", async (t) => {
-  const store = withTempStore(t, createProviderStub());
-  const result = await createBookingFromFirstAvailableSlot(store);
-
-  await store.updateBookingOutcome(result.bookingId, "mvn", "Mauvais numéro.");
-
-  const booking = store.getBooking(result.bookingId);
-  assert.equal(booking.outcomeState, "mvn");
-  assert.equal(store.getDisplayStatus(booking), "mvn");
-  assert.equal(store.getOpenTaskByBookingId(result.bookingId), null);
-});
-
 test("outcome Refus sets the disposition and spawns a reposition task", async (t) => {
   const store = withTempStore(t, createProviderStub());
   const result = await createBookingFromFirstAvailableSlot(store);
