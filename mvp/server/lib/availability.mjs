@@ -9,6 +9,7 @@ import {
     startOfWeek,
     subMinutes,
 } from "date-fns";
+import {fromZonedTime} from "date-fns-tz";
 import {getConnection} from "./connections.mjs";
 import {computeEffectiveWeights, selectRep} from "./routing.mjs";
 import {clampDate, maxDate, parseOptionalIso} from "./utils.mjs";
@@ -90,8 +91,11 @@ export function createAvailabilityModule({
                         minute < 60;
                         minute += Math.max(bookingLink.intervalMinutes, 1)
                     ) {
-                        const slot = new Date(day);
-                        slot.setHours(hour, minute, 0, 0);
+                        const dateStr = `${day.getFullYear()}-${pad2(day.getMonth() + 1)}-${pad2(day.getDate())}`;
+                        const slot = fromZonedTime(
+                            `${dateStr}T${pad2(hour)}:${pad2(minute)}:00`,
+                            bookingLink.timezone,
+                        );
 
                         if (slot < interval.start) {
                             continue;
@@ -156,6 +160,10 @@ export function createAvailabilityModule({
             return assignRep(db, store, bookingLink, companySize, availableEligibleReps, getNow);
         },
     };
+}
+
+function pad2(value) {
+    return String(value).padStart(2, "0");
 }
 
 function parseCompanySize(value) {
