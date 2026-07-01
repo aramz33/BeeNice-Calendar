@@ -47,6 +47,19 @@ on GitHub). Never create dated handoff files in `docs/project/`.
 - **Before adding domain terms, routes, or data models**: invoke `/grill-with-docs`
   to challenge the new concept against `CONTEXT.md` and the schema.
 
+## Knowledge graph (save tokens — use before grepping)
+
+`graphify-out/` holds a prebuilt knowledge graph of the whole repo (code AST + docs).
+**For any "where/how/what-connects" question about the codebase, query the graph first** —
+it returns a scoped subgraph, far cheaper than reading files or broad grep:
+
+- `graphify query "<question>"` — broad context (BFS traversal)
+- `graphify explain "<concept>"` — plain-language explanation of one node
+- `graphify path "<A>" "<B>"` — how two concepts connect
+
+Only read raw source after the graph has oriented you, or to edit/debug specific lines.
+Rebuild after code changes: `graphify update .` (AST-only, free). Applies to subagents too.
+
 ## Commands
 
 ```bash
@@ -119,3 +132,13 @@ in-memory, Nylas mode uses the real Hosted OAuth flow. Persistence is SQLite via
   re-expose it without an explicit instruction.
 </content>
 </invoke>
+
+## graphify
+
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+
+Rules:
+- For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
+- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
+- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).

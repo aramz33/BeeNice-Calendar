@@ -18,6 +18,7 @@ export function fromTaskRow(row) {
     replacementBookingId: row.replacement_booking_id ?? null,
     companyName: row.company_name,
     prospectName: row.prospect_name,
+    prospectEmail: row.prospect_email,
     notes: row.notes ?? null,
     sourceStartAt: row.start_at,
   };
@@ -25,7 +26,7 @@ export function fromTaskRow(row) {
 
 function taskBaseQuery(db, whereClause = "") {
   return db.prepare(`
-    SELECT t.*, b.company_name, b.prospect_name, b.start_at, c.name AS client_name, u.name AS caller_name
+    SELECT t.*, b.company_name, b.prospect_name, b.prospect_email, b.start_at, c.name AS client_name, u.name AS caller_name
     FROM follow_up_tasks t
     JOIN bookings b ON b.id = t.source_booking_id
     JOIN clients c ON c.id = t.client_id
