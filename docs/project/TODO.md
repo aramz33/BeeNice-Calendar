@@ -1,6 +1,6 @@
 ---
 tags: [domaine/pro, projet/beeniche, type/todo, agents]
-updated: 2026-06-30 (session 12)
+updated: 2026-07-01 (session 13)
 ---
 
 # BeeNice Calendar — TODO
@@ -14,6 +14,7 @@ updated: 2026-06-30 (session 12)
   - ⚠️ DB dev (`mvp/server/data/mvp.sqlite` + WAL) **wipée puis reseedée** cette session → reconnecter les calendriers (c'est justement la démo live).
   - **F3 livré** : les 3 surfaces calendrier (caller, agenda admin, picker reposition) tournent sur `@schedule-x/react` v4. `SlotPicker`/`AgendaBoard`/`lib/calendar.ts` supprimés.
 - **Run:** `npm run dev` (API 8787 + web 5174) · tests : `npm run test:web` et `node --test mvp/server/lib/**/*.test.mjs mvp/server/lib/*.test.mjs mvp/server/lib/http/*.test.mjs`
+- **Aparté (session 13) :** graphify knowledge graph construit (`graphify-out/`, 749 nodes / 43 communautés). 5 questions d'exploration à reprendre → [[LOG|session 13]]. Lancer via `graphify query "<q>"`. N'a pas touché au code produit.
 - Contexte → [[overview]] · Specs → [[functional-spec]] · Archi → [[ARCHITECTURE]] · wiki → [[wiki/index|wiki]] · Historique → [[LOG]]
 
 ## Checklist
