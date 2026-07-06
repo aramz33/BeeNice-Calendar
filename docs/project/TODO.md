@@ -1,16 +1,15 @@
 ---
 tags: [domaine/pro, projet/beeniche, type/todo, agents]
-updated: 2026-07-01 (session 13)
+updated: 2026-07-01 (session 14)
 ---
 
 # BeeNice Calendar — TODO
 
 ## Resume
 - **Goal:** outil B2B de booking pour les sales reps. **Cible : v0 live début juillet 2026** (Julien, réunion [[LOG|11-06]]). Premier client = **Cozy RH** (avec un Z, Microsoft).
-- **State:** **Démo client faite (25-06, Julien + Camille).** PRs #2→#11 mergées sur `main` (`dff791c`). **PR #12 ouverte** (`feat/widen-booking-window`, `bf2dc9b`) : fenêtre de booking élargie **08h–20h** de bout en bout + **fix prefill reposition** (prénom/nom/email) — verte (backend 215 · web 40 · build), **à review/merger**. **Liste des 5 statuts + les 2 docs prod-auth (MS + Google) envoyés à Julien** (Adam, fait).
-- **Next:** **cible 1er juillet 2026** (objectif principal), **repli 7 juillet** ; **prochaine réunion 1er juillet 13h**. (a) **Merger PR #12** ; (b) en attente externe : **consentement admin Microsoft pour Cozy RH** via **Julien/BeeNice** (brief prêt → [[brief-julien-auth-prod]]) + retour Julien sur l'ordre des 5 statuts (fige le mapping Google Sheet côté Corentin). Prochain chantier code = **Google Sheets sync bidirectionnelle** (coord. Corentin) ou autres fixes UI démo restants.
+- **State:** **Démo client faite (25-06, Julien + Camille).** PRs #2→#12 mergées sur `main` (`0c65647`). **Bug TZ corrigé** (branche `fix/availability-paris-tz`, **non commitée**) : `availability.mjs` générait les créneaux en heure **locale serveur** → décalés sur VPS UTC ; fix via `fromZonedTime(..., bookingLink.timezone)` (pattern `seed.mjs`, dep déjà là), + test régression `availability-timezone.test.mjs` (RED→GREEN vérifié). Serveur **218/218** · web **40/40** · build verts. **Liste des 5 statuts + les 2 docs prod-auth (MS + Google) envoyés à Julien** (Adam, fait).
+- **Next:** **cible 1er juillet 2026** (objectif principal), **repli 7 juillet** ; **prochaine réunion 1er juillet 13h**. (a) **Commit + PR de `fix/availability-paris-tz`** (fix TZ, prêt, tests verts) ; (b) en attente externe : **consentement admin Microsoft pour Cozy RH** via **Julien/BeeNice** (brief prêt → [[brief-julien-auth-prod]]) + retour Julien sur l'ordre des 5 statuts (fige le mapping Google Sheet côté Corentin). Prochain chantier code = **Google Sheets sync bidirectionnelle** (coord. Corentin) ou autres fixes UI démo restants.
   - ⚠️ **À confirmer à Julien** (métier) : amplitude bookable codée **08h–20h** — valider que c'est la bonne plage d'ouverture.
-  - ⚠️ **Bug latent noté** (hors scope PR #12) : `availability.mjs` génère les créneaux en **heure locale serveur**, pas `Europe/Paris` explicite → sur VPS UTC, 08-20 local = 10-22 Paris. À traiter avant déploiement.
   - ⚠️ DB dev (`mvp/server/data/mvp.sqlite` + WAL) **wipée puis reseedée** cette session → reconnecter les calendriers (c'est justement la démo live).
   - **F3 livré** : les 3 surfaces calendrier (caller, agenda admin, picker reposition) tournent sur `@schedule-x/react` v4. `SlotPicker`/`AgendaBoard`/`lib/calendar.ts` supprimés.
 - **Run:** `npm run dev` (API 8787 + web 5174) · tests : `npm run test:web` et `node --test mvp/server/lib/**/*.test.mjs mvp/server/lib/*.test.mjs mvp/server/lib/http/*.test.mjs`
@@ -63,6 +62,7 @@ updated: 2026-07-01 (session 13)
   - état actuel : `/caller` est déjà sous `RequireAuth` (pas `RequireAdmin`) donc la route s'affiche pour un admin ; gaps réels = (1) pas de lien vers la vue caller dans `AppChrome` quand `role === "admin"`, (2) `RootRedirect` envoie l'admin vers `/admin/bookings` (garder, mais ajouter l'accès), (3) vérifier que `/api/caller/*` (guardé `requireAuth`) répond bien pour le rôle admin — sinon élargir le guard.
 
 ### Livraison / déploiement
+- [x] **Fix TZ génération créneaux** (bloquant VPS) — branche `fix/availability-paris-tz`, non commitée. `availability.mjs` construit désormais les créneaux via `fromZonedTime(\`${date}T${hh}:${mm}:00\`, bookingLink.timezone)` (pattern `seed.mjs`, dep déjà là) → 08-20 = wall-clock Paris quel que soit le TZ serveur. Frontend inchangé (déjà `isoToZoned`). Test `availability-timezone.test.mjs` (process `TZ=UTC`, été+hiver+weekends), RED→GREEN vérifié. Serveur 218/218 · web 40/40 · build. → détail [[LOG|session 14]]. **Reste : commit + PR.**
 - [ ] **Sécu avant VPS** : `BETTER_AUTH_SECRET` — remplacer le fallback hardcodé de `auth.mjs` par un fail-fast au démarrage + provisionner la var (`openssl rand -base64 32`)  → verify: serveur refuse de démarrer sans la var → détail [[beeniceapp-auth-secret-fallback]]
 - [ ] **Cleanup routingMode** : retirer/déprécier la colonne/API `routingMode` devenue inutile après routing %  → verify: plus aucune UI/API métier n'en dépend, migration sans casse des données existantes
   - pour l'implémentation formulaire client, ne pas exposer/envoyer `routingMode`; le backend peut ignorer un payload legacy en attendant ce cleanup

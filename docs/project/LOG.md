@@ -9,6 +9,17 @@ Historique append-only + rationale des décisions. Newest en haut, jamais rééc
 
 <!-- append newest entries directly below; never rewrite past entries -->
 
+## 2026-07-01 (session 14) — PR #12 mergée · fix bug TZ génération de créneaux
+- **PR #12 mergée** sur `main` (`0c65647`, squash, branche supprimée) — fenêtre booking 08-20 + fix prefill reposition livrés. CodeRabbit + Devin verts.
+- **Bug TZ corrigé** (le latent noté session 12) — branche `fix/availability-paris-tz`, **non commitée**. Plan grillé (`/grill-me`) avant exécution.
+  - **Problème** : `availability.mjs` construisait les créneaux via `new Date(day); slot.setHours(hour, ...)` = heure **locale serveur**. Sur le VPS Hostinger (UTC), `setHours(8)` = 08:00 UTC = **10:00 Paris** → tous les créneaux décalés de +1h/+2h. Correct par accident sur la machine dev (Paris). **Bloquant déploiement.**
+  - **Fix** : `fromZonedTime(\`${dateStr}T${hh}:${mm}:00\`, bookingLink.timezone)` — wall-clock Paris → instant UTC correct, indépendant du TZ serveur. **Réutilise le pattern déjà présent dans `seed.mjs`** (dep `date-fns-tz@3.2.0` déjà installée, aucune nouvelle dep). Ajout helper local `pad2`.
+  - **Frontend inchangé** : `slotsToEvents` fait déjà `isoToZoned(slot.startAt, availability.timezone)` (Temporal) → rendait fidèlement l'instant erroné ; corrige tout seul une fois le serveur correct. **App single-TZ** : création client force `Europe/Paris`, `bookingLink.timezone` toujours cette valeur.
+  - **Décision scope** : fix limité à la construction du créneau (L93-94). Test de régression prouve que weekday-skip + fenêtre restent corrects sous UTC → pas besoin d'élargir à `getDay`/`eachDayOfInterval` (l'offset UTC→Paris +1/+2h préserve la date calendaire).
+  - **Test** : nouveau fichier `availability-timezone.test.mjs`, process isolé `process.env.TZ = "UTC"` en tête (V8 relit TZ à la réassignation ; fichier séparé pour ne pas casser les tests Paris-assumants de `availability.test.mjs`). Assert 08-20 Paris été + hiver (offset non hardcodé) + weekends exclus. **Vérifié RED→GREEN** (stash du fix → 2 fails, restore → verts).
+  - **Vérif** : serveur **218/218** (+2), web **40/40**, build ✓. `graphify update .` lancé (1351 nodes).
+- **À confirmer Julien** (inchangé) : amplitude bookable 08-20 = bonne plage métier ?
+
 ## 2026-07-01 (session 13) — graphify knowledge graph construit (`graphify-out/`)
 - Build graphify complet du repo : **749 nodes, 1215 edges, 43 communautés** (594 code via AST + 155 docs via extraction sémantique sur les 52 docs/PDF/SVG). Sorties dans `graphify-out/` (`graph.html`, `GRAPH_REPORT.md`, `graph.json`). Pas de touche au code produit cette session.
   - 2 passes nécessaires (limite de session a tué 2 chunks d'extraction doc à la 1re passe) ; relancé, les 52 docs sont maintenant tous couverts et cachés (`--update` futur ne re-extrait que les fichiers changés).
